@@ -1118,3 +1118,54 @@ The older intermittent direction-basis validation issue remains open without a
 claimed cause or fix. This release establishes no additional gameplay coverage,
 performance gain, animation fix or complete game-code conversion. Entry counts
 are not a reliable conversion percentage.
+
+## Pinned ReXGlue and N3 fork review
+
+On 2 November 2026, the exact Forza Horizon 1: ReImagined `a27387e4`,
+Recompiled Halo Reach `329148bb`, pgr4-native `89705a9b`, and Donelys N3
+`c408ddfe` revisions were reviewed. The installed ReXGlue nightly
+`0.10.0.24-dev.gbd833a2` remains newer than upstream `main`, so the SDK pin was
+retained.
+
+The project-built Xenos plugin now applies three title-independent BSD ReIGlue
+fixes before N3's live-resolution extension: texture-watch validity, the
+shared-memory valid-range fast path, and independent D3D12 fence HRESULT checks.
+Generated PCH/init headers are declared as codegen outputs to avoid a
+stale-header Ninja race. Corresponding-source packaging includes each patch,
+its source commit, and the ReIGlue notice.
+
+N3 now has a PAL text-language setting for the five languages already present
+on the supported disc. Two verified call sites return the configured Xbox
+language code so the game selects its original text and matching font table.
+A separate setting validates and mounts a complete alternate `SoundRes`
+directory supplied from another user-owned edition. The case-insensitive file
+set, XACT wave-bank structure and formats, sound-bank payloads, and preload bank
+list must match before a read-only VFS overlay is installed. No voice files are
+copied or bundled, and alternate executables remain unsupported. Explicit
+`fullscreen=true` provenance is retained when saving profile settings. The
+optional frame-pacing trace now reports effective FPS, mean, p95, p99, maximum,
+and long-interval counts instead of presentation totals.
+
+No Donelys GPL launcher/native module or all-rights-reserved branding was
+copied. Its Electron launcher, F5 keyboard overlay, fullscreen/60 FPS defaults,
+and duplicate graphics UI were not adopted. PGR4's title-specific native
+renderer and the remaining Forza/Halo title or Vulkan patches likewise remain
+reference material rather than speculative N3 changes.
+
+Validation used the repository-pinned Clang 20.1.8, portable MSVC 14.44/Windows
+SDK 10.0.26100.0, CMake 3.31.8, and Ninja. The corresponding-source bundle
+completed, and `tools/prepare-gpu.py` applied all three patches plus the
+live-resolution extension to the exact `bd833a2` source. A RelWithDebInfo
+portable build compiled and linked successfully; all 23 CTest tests passed,
+including the new voice-pack, text-language, and frame-pacing tests. An
+out-of-tree pinned-SDK probe compiled and linked `text_language.cpp`,
+`voice_override.cpp`, and `voice_pack.cpp`; the profile configuration regression
+test also passed with real ReXGlue cvar source tracking. Modified Python and
+PowerShell tooling parsed successfully, and `git diff --check` passed.
+
+`private/game/default.xex` was not available in this checkout. Strict game
+codegen, the full `tools/build.ps1` runtime/GPU build, callback-equivalence
+tests that require generated code, and process startup therefore remain
+unverified for this milestone. No alternate voice directory was mounted, and no
+claim is made about audible Japanese voices, visual correctness, or gameplay
+correctness.

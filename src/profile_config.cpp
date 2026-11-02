@@ -39,6 +39,14 @@ void SaveProfileConfig(const std::filesystem::path& path) {
       values.insert(name, *scalar.get("value"));
     }
   }
+  // The SDK default is fullscreen=true. Preserve an explicit true from the
+  // config, command line, environment, or settings UI even though its value
+  // equals that compiled-in default and ListModifiedFlags omits it.
+  if (!values.contains("fullscreen") &&
+      rex::cvar::GetFlagSource("fullscreen") != rex::cvar::Source::kDefault) {
+    const auto scalar = toml::parse("value = " + rex::cvar::GetFlagByName("fullscreen"));
+    values.insert("fullscreen", *scalar.get("value"));
+  }
   Write(path, values);
 }
 

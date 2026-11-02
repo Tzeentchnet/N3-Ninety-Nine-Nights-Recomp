@@ -106,6 +106,31 @@ choices. Saved display settings apply on the next launch; explicit launcher
 The new menu is derived locally from the player's own data into the profile's
 `ui/` cache. Original game files are read only; no menu assets are bundled.
 
+## Text language and alternate voices
+
+The supported USA/Europe disc contains English, French, German, Italian, and
+Spanish text and fonts. ReXGlue's pinned `XGetLanguage` import always reports
+English, so N3 now intercepts the game's two language queries and returns
+`n3_text_language`. Set it to `english`, `french`, `german`, `italian`, or
+`spanish`; the game then uses the matching original PAL resources, including
+the European font table needed for accented glyphs. A restart is required.
+
+An optional `n3_voice_directory` can point to a complete extracted `SoundRes`
+directory from another user-owned edition, such as the Japanese disc. At
+startup N3 compares its file set, XACT wave-bank metadata, sound-bank payloads,
+and preload list with the supported disc, then mounts compatible files read
+only over `data\Sound\ENG\SoundRes`. The supported game folder and alternate
+voice files are not changed or copied. The Japanese and UNDUB executables remain
+unsupported; only compatible voice resources can be overlaid on the verified
+USA/Europe executable. No text, voice, or other game assets are bundled.
+
+For persistent settings, add values to the profile's `n3.toml`:
+
+```toml
+n3_text_language = "spanish"
+n3_voice_directory = 'D:\Games\N3-Japanese\data\Sound\SoundRes'
+```
+
 For a single launch, development overrides remain available:
 
 ```powershell
@@ -113,6 +138,8 @@ pwsh -NoProfile -File tools/launch.ps1 -FrameRate 30
 pwsh -NoProfile -File tools/launch.ps1 -FrameRate 40
 pwsh -NoProfile -File tools/launch.ps1 -FrameRate 60
 pwsh -NoProfile -File tools/launch.ps1 -FrameRate Original
+pwsh -NoProfile -File tools/launch.ps1 -TextLanguage Spanish
+pwsh -NoProfile -File tools/launch.ps1 -VoiceDirectory 'D:\Games\N3-Japanese\data\Sound\SoundRes'
 ```
 
 **Development caveat:** higher frame-rate modes remain experimental. Initial
@@ -166,8 +193,10 @@ countdown/scalar/bit tests, plus callback floating-point, disc importer, game-pa
 crash-report, frame-rate, menu-layout, profile persistence, and host presentation
 regression tests. The Xenos GPU
 plugin is rebuilt from the pinned SDK source with the local live-resolution
-extension in `tools/gpu/`. The first build downloads the corresponding SDK sources
-when necessary; `-Python` selects the Python executable for preparation.
+extension and three title-independent BSD ReIGlue corrections in `tools/gpu/`:
+stale-texture watch prevention, a valid-range shared-memory fast path, and
+correct D3D12 fence error checks. The first build downloads the corresponding
+SDK sources when necessary; `-Python` selects the Python executable for preparation.
 For an isolated developer profile, `--graphics_audit --graphics_trace
 --frame_pacing_trace` cycles controls without saving. After at least 50 seconds,
 `python tools/verify-graphics-audit.py path/to/the-log` checks actual window,
@@ -214,4 +243,7 @@ game remains Windows-only. See the [native code and porting roadmap](docs/PORTIN
 [LostOdysseyRecomp](https://github.com/freefrank/LostOdysseyRecomp) and
 [UnleashedRecomp](https://github.com/hedge-dev/UnleashedRecomp) are the reference
 projects for development practices and the longer-term port experience.
+Forza Horizon 1: ReImagined, Recompiled Halo Reach, pgr4-native, and the Donelys
+N3 fork were also reviewed at pinned revisions for ReXGlue integration,
+renderer, language, and user-data practices.
 See [reference notes](docs/REFERENCES.md) and [third-party notices](THIRD_PARTY.md).

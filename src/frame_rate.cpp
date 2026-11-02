@@ -1,5 +1,6 @@
 #include "frame_rate.h"
 #include "frame_rate_policy.h"
+#include "frame_pacing_stats.h"
 #include "guest_frame_clock.h"
 #include <rex/ppc.h>
 #include <rex/runtime.h>
@@ -35,16 +36,35 @@ void Write32(uint8_t* base, uint32_t address, uint32_t value) {
   rex::memory::store_and_swap<uint32_t>(n3::guest::GuestHostAddress(base, address), value);
 }
 void TracePresent() {
-  if (!REXCVAR_GET(frame_pacing_trace)) return;
-  thread_local uint64_t frames = 0;
+  thread_local bool tracing = false;
+  if (!REXCVAR_GET(frame_pacing_trace)) {
+    tracing = false;
+    return;
+  }
+  thread_local n3::frames::PacingWindow intervals;
   thread_local auto start = std::chrono::steady_clock::now();
+  thread_local std::chrono::steady_clock::time_point previous{};
   const auto now = std::chrono::steady_clock::now();
-  ++frames;
+  if (!tracing) {
+    intervals.Clear();
+    start = now;
+    previous = now;
+    tracing = true;
+    return;
+  }
+  intervals.Add(std::chrono::duration_cast<std::chrono::microseconds>(now - previous).count());
+  previous = now;
   const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - start).count();
   if (elapsed >= 2000000) {
-    REXLOG_INFO("N3 frame pacing: {} presentations in {} us", frames, elapsed);
+    const auto summary = intervals.Summarize();
+    REXLOG_INFO(
+        "N3 frame pacing: target {} | {} intervals, {:.1f} fps | mean {:.2f} ms, "
+        "p95 {:.2f} ms, p99 {:.2f} ms, max {:.2f} ms | >2x mean {}",
+        ConfiguredFrameRate(), summary.samples, summary.frames_per_second,
+        summary.mean_ms, summary.p95_ms, summary.p99_ms, summary.maximum_ms,
+        summary.long_intervals);
+    intervals.Clear();
     start = now;
-    frames = 0;
   }
 }
 void PacePresent() {

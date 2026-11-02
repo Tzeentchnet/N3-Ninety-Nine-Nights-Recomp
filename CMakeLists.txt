@@ -45,6 +45,8 @@ elseif(NOT APPLE)
 endif()
 add_library(n3_menu_assets STATIC src/graphics_menu_assets.cpp)
 target_include_directories(n3_menu_assets PUBLIC src)
+add_library(n3_voice_data STATIC src/voice_pack.cpp)
+target_include_directories(n3_voice_data PUBLIC src)
 add_executable(n3_import tools/import_main.cpp)
 target_link_libraries(n3_import PRIVATE n3_game_data)
 if(BUILD_TESTING)
@@ -108,6 +110,17 @@ if(BUILD_TESTING)
     add_executable(n3_graphics_menu_test tests/graphics_menu_test.cpp)
     target_link_libraries(n3_graphics_menu_test PRIVATE n3_menu_assets)
     add_test(NAME graphics_menu_assets COMMAND n3_graphics_menu_test)
+    add_executable(n3_voice_pack_test tests/voice_pack_test.cpp)
+    target_link_libraries(n3_voice_pack_test PRIVATE n3_voice_data)
+    add_test(NAME voice_pack_validation COMMAND n3_voice_pack_test)
+    add_executable(n3_frame_pacing_stats_test tests/frame_pacing_stats_test.cpp)
+    target_include_directories(n3_frame_pacing_stats_test PRIVATE src)
+    add_test(NAME frame_pacing_statistics COMMAND n3_frame_pacing_stats_test)
+    add_executable(n3_text_language_test tests/text_language_test.cpp)
+    target_include_directories(n3_text_language_test PRIVATE src)
+    target_compile_definitions(n3_text_language_test PRIVATE
+        N3_MANIFEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/n3_manifest.toml")
+    add_test(NAME text_language_policy COMMAND n3_text_language_test)
 endif()
 if(NOT N3_BUILD_GAME)
     message(STATUS "Building portable native components only; no game runtime")
@@ -149,6 +162,7 @@ set(N3_SOURCES
     src/graphics_notification.cpp
     src/graphics_settings.cpp
     src/graphics_audit.cpp
+    src/voice_override.cpp
 )
 
 if(WIN32)
@@ -162,8 +176,17 @@ endif()
 
 add_subdirectory(tools/gpu)
 rexglue_setup_target(n3 GPU_PLUGINS xenos)
+# Generated mid-assembly hooks reference this implementation. Keep it on the
+# recompiled object target so equivalence tests link it too. A clean configure
+# before codegen has no such target yet, so leave the implementation on the host.
+if(TARGET n3_recomp)
+    target_sources(n3_recomp PRIVATE src/text_language.cpp)
+else()
+    target_sources(n3 PRIVATE src/text_language.cpp)
+endif()
 
-target_link_libraries(n3 PRIVATE n3_native n3_game_data n3_menu_assets comdlg32 ole32 uuid shell32)
+target_link_libraries(n3 PRIVATE n3_native n3_game_data n3_menu_assets n3_voice_data
+    comdlg32 ole32 uuid shell32)
 if(BUILD_TESTING)
     add_executable(n3_fp_policy_test tests/fp_policy_test.cpp)
     target_include_directories(n3_fp_policy_test PRIVATE src)

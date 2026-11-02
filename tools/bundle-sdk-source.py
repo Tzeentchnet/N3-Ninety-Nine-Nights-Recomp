@@ -79,7 +79,10 @@ def main():
     destination = OUT / "ReXGlue-bd833a2-corresponding-source.zip"
     extension_files = ["tools/prepare-gpu.py", "tools/gpu/CMakeLists.txt",
                        "tools/gpu/d3d12_live_resolution.inc", "tools/gpu/d3d12_sampler_audit.inc",
-                       "tools/build.ps1", "src/graphics_policy.h"]
+                       "tools/build.ps1", "src/graphics_policy.h", "LICENSES/ReIGlue.txt"]
+    extension_files += sorted(path.relative_to(ROOT).as_posix()
+                              for path in (ROOT / "tools/gpu/patches").glob("*")
+                              if path.is_file())
     extension_manifest = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
                           for name in extension_files}
     with zipfile.ZipFile(destination, "w", compresslevel=6) as archive:
@@ -96,9 +99,9 @@ SDK commit bd833a2ab69d305f99ddf57418fc38ffec8af93d; upstream sources preserved.
 The N3 GPU extension and preparation/build scripts are in n3-gpu-extension/.
 They rebuild the Xenos plugin with live render-resolution support. To reproduce
 the application build, use the matching N3 project release tag and its
-tools/build.ps1; it applies these sources to the pinned SDK. The supplied runtime
-and supporting libraries remain the pinned SDK builds. Extension file hashes
-are recorded in n3-gpu-extension/SHA256.json.
+tools/build.ps1; it applies these sources and the listed BSD ReIGlue fixes to the
+pinned SDK. The supplied runtime and supporting libraries remain the pinned SDK
+builds. Extension file hashes are recorded in n3-gpu-extension/SHA256.json.
 Non-Vulkan dependencies are included at the SDK's pinned commits. License texts
 and build scripts are preserved in each source directory. No game material is
 included. FFmpeg and libmspack are LGPL components; see their COPYING files.

@@ -113,10 +113,14 @@ endmacro()
 # Listing the sources as outputs orders any target that compiles them after
 # codegen, including one a project assembles itself rather than taking the
 # library rexglue_setup_target() builds. The stamp comes first: the DEPFILE
-# names it.
+# names it. The headers are outputs too: sources and the PCH depend on them
+# through compiler depfiles, so Ninja must not consider them current before
+# codegen has had an opportunity to rewrite them.
 add_custom_command(
     OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.build.stamp"
            ${REXGLUE_ENTRYPOINT_GENERATED_SOURCES}
+           "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/n3_pch.h"
+           "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/n3_init.h"
     COMMAND $<TARGET_FILE:rex::rexglue> codegen ${CMAKE_CURRENT_SOURCE_DIR}/n3_manifest.toml
     DEPFILE "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.d"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

@@ -11,20 +11,32 @@ The project's disc extractor implements the XDVDFS structure documented by
 Xenia's disc image reader. ReXGlue's own dependency notices remain applicable to
 downloaded libraries and any future packaged binary distribution.
 
+The project-built Xenos plugin applies three title-independent changes from
+[ReIGlue](https://github.com/FH1-ReImagined/ReIGlue/tree/330770d17b64bdf17fcff975b82789418c230db5),
+the BSD 3-Clause ReXGlue fork used by Forza Horizon 1: ReImagined. They correct
+texture-watch validity, add a shared-memory valid-range fast path first carried
+by Recompiled Halo Reach, and fix D3D12 fence HRESULT checks. Exact source
+commits are listed under `tools/gpu/patches/`; the applicable notice and licence
+are in `LICENSES/ReIGlue.txt` and the corresponding-source archive.
+
 Bootstrap downloads official LLVM, CMake, Ninja, and Microsoft development tools.
 Their respective licences apply. The pinned portable Microsoft-tool downloader
 is by mmozeiko: https://gist.github.com/mmozeiko/7f3162ec2988e81e56d5c4e22cde9977.
 
 LostOdysseyRecomp and UnleashedRecomp were consulted as architectural references;
-their source is not included here. Original Ninety-Nine Nights material is not
-included in the tracked project or release asset files.
+their source is not included here. The GPL Donelys N3 fork was consulted for
+language/voice behavior, and pgr4-native for renderer architecture; none of
+their code, branding, or artwork is included. Original Ninety-Nine Nights
+material is not included in the tracked project or release asset files.
 
 ## Binary releases
 
 The first Windows alpha includes the unmodified ReXGlue runtime and Xenos GPU DLLs
-from the pinned SDK. Alpha 2 and development builds retain that runtime and rebuild the Xenos
-plugin with the live-resolution extension in `tools/gpu/`; `tools/prepare-gpu.py`
-applies the extension to the pinned source without modifying the installed SDK.
+from the pinned SDK. Alpha 2 and later development builds retain that runtime and
+rebuild the Xenos plugin with the live-resolution extension in `tools/gpu/`.
+Current development also applies the three ReIGlue corrections described above;
+`tools/prepare-gpu.py` applies the extension and patches to a separate ignored
+source tree without modifying the installed SDK.
 Alpha 3 also builds a project presenter from the SDK's D3D12 presenter sources to
 provide host VSync, retaining the shared SDK callback types and provider/runtime.
 Its third-party components include SDL3, FFmpeg, libmspack,

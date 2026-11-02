@@ -15,6 +15,7 @@
 #include "profile_config.h"
 #include "graphics_notification.h"
 #include "graphics_audit.h"
+#include "voice_override.h"
 #include <rex/ui/flags.h>
 class N3App : public rex::ReXApp {
  public:
@@ -44,7 +45,12 @@ class N3App : public rex::ReXApp {
   void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
     graphics_notification_ = CreateGraphicsNotification(drawer);
   }
-  void OnShutdown() override { ShutdownGraphicsAudit(); graphics_notification_.reset(); ShutdownDisplaySettings(); }
+  void OnShutdown() override {
+    ShutdownVoiceOverride();
+    ShutdownGraphicsAudit();
+    graphics_notification_.reset();
+    ShutdownDisplaySettings();
+  }
   void OnWindowPixelSizeChanged(uint32_t width, uint32_t height) override {
     RecordDisplayOutputSize(width, height);
   }
@@ -54,6 +60,7 @@ class N3App : public rex::ReXApp {
   void OnPostLoadXexImage() override {
     InstallRuntimeFixes(*runtime());
     InitializeFrameRate();
+    InstallVoiceOverride(*runtime(), game_data_root());
     InstallGraphicsMenu(*runtime(), game_data_root(), user_data_root());
   }
 

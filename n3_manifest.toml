@@ -22,3 +22,18 @@ includes = []
 # Runtime dispatch reaches this previously undiscovered entry during the
 # opening cutscene. Keep the original implementation through code generation.
 0x8215B150 = {}
+
+# The pinned SDK reports English from XGetLanguage regardless of user_language.
+# These are the game's two call sites; return the configured PAL language so it
+# selects the matching text and font resources without modifying game files.
+[[entrypoint.midasm_hook]]
+address = 0x8211019C
+name = "N3GetTextLanguage"
+registers = ["r3"]
+jump_address = 0x821101A0
+
+[[entrypoint.midasm_hook]]
+address = 0x8252FBDC
+name = "N3GetTextLanguage"
+registers = ["r3"]
+jump_address = 0x8252FBE0

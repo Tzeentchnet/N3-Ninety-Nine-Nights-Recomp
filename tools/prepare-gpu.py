@@ -1,6 +1,7 @@
 """Prepare the pinned SDK plugin source and apply the local renderer extension."""
 from pathlib import Path
 import hashlib
+import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -9,17 +10,27 @@ archive = ROOT / 'out/release/ReXGlue-bd833a2-corresponding-source.zip'
 if not archive.is_file():
     raise SystemExit('Run tools/bundle-sdk-source.py to obtain the pinned SDK sources first.')
 extension = ROOT / 'tools/gpu/d3d12_live_resolution.inc'
-fingerprint = hashlib.sha256(Path(__file__).read_bytes() + b''.join(p.read_bytes() for p in sorted((ROOT / 'tools/gpu').glob('*.inc'))) +
+patches = sorted((ROOT / 'tools/gpu/patches').glob('*.patch'))
+fingerprint = hashlib.sha256(Path(__file__).read_bytes() +
+    b''.join(p.read_bytes() for p in sorted((ROOT / 'tools/gpu').glob('*.inc'))) +
+    b''.join(p.read_bytes() for p in patches) +
     str(archive.stat().st_mtime_ns).encode()).hexdigest()
 marker = source / '.n3-extension'
 if marker.is_file() and marker.read_text() == fingerprint:
     print('Pinned GPU extension is up to date')
     raise SystemExit(0)
+
+patch_targets = set()
+for patch in patches:
+    for line in patch.read_text(encoding='utf-8').splitlines():
+        if line.startswith('+++ b/'):
+            patch_targets.add(line.removeprefix('+++ b/'))
 with zipfile.ZipFile(archive) as z:
     # Refresh only files modified by the extension when already extracted.
-    names = ['src/graphics/CMakeLists.txt', 'src/graphics/d3d12/command_processor.cpp',
-             'include/rex/graphics/d3d12/command_processor.h', 'src/graphics/graphics_system.cpp',
-             'src/graphics/d3d12/texture_cache.cpp', 'include/rex/graphics/d3d12/texture_cache.h']
+    names = sorted(patch_targets | {
+        'src/graphics/CMakeLists.txt', 'src/graphics/d3d12/command_processor.cpp',
+        'include/rex/graphics/d3d12/command_processor.h', 'src/graphics/graphics_system.cpp',
+        'src/graphics/d3d12/texture_cache.cpp', 'include/rex/graphics/d3d12/texture_cache.h'})
     if not (source / 'src/graphics/plugin_main.cpp').is_file():
         names = [n.removeprefix('rexglue-sdk/') for n in z.namelist()
                  if n.startswith('rexglue-sdk/') and not n.endswith('/')]
@@ -29,6 +40,14 @@ with zipfile.ZipFile(archive) as z:
         target = source / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(z.read('rexglue-sdk/' + name))
+
+patch_directory = source.relative_to(ROOT).as_posix()
+for patch in patches:
+    arguments = ['git', 'apply', '--whitespace=nowarn',
+                 '--ignore-space-change', '--ignore-whitespace',
+                 f'--directory={patch_directory}', str(patch)]
+    subprocess.run(arguments[:2] + ['--check'] + arguments[2:], cwd=ROOT, check=True)
+    subprocess.run(arguments, cwd=ROOT, check=True)
 
 def replace(name, before, after):
     file = source / name
@@ -164,4 +183,4 @@ replace('src/graphics/d3d12/command_processor.cpp',
   system::X_VIDEO_MODE video_mode;
   kernel::xboxkrnl::VdQueryVideoMode(&video_mode);''')
 marker.write_text(fingerprint)
-print('Pinned GPU source prepared with live-resolution extension')
+print(f'Pinned GPU source prepared with live-resolution extension and {len(patches)} ReIGlue fixes')

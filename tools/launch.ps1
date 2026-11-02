@@ -3,7 +3,9 @@ param(
     [ValidateSet('Debug','Release','RelWithDebInfo')][string]$Configuration = 'RelWithDebInfo',
     [ValidateRange(320,7680)][int]$Width = 1280,
     [ValidateRange(240,4320)][int]$Height = 720,
-    [ValidateSet('Configured','Original','30','40','60')][string]$FrameRate = 'Configured'
+    [ValidateSet('Configured','Original','30','40','60')][string]$FrameRate = 'Configured',
+    [ValidateSet('Configured','English','German','French','Spanish','Italian')][string]$TextLanguage = 'Configured',
+    [string]$VoiceDirectory
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -21,6 +23,18 @@ try {
     if ($FrameRate -ne 'Configured') {
         $info.ArgumentList.Add('--n3_frame_rate')
         $info.ArgumentList.Add($(if ($FrameRate -eq 'Original') { '0' } else { $FrameRate }))
+    }
+    if ($TextLanguage -ne 'Configured') {
+        $info.ArgumentList.Add('--n3_text_language')
+        $info.ArgumentList.Add($TextLanguage.ToLowerInvariant())
+    }
+    if ($VoiceDirectory) {
+        $voicePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($VoiceDirectory)
+        if (!(Test-Path -LiteralPath $voicePath -PathType Container)) {
+            throw "VoiceDirectory is not a directory: $voicePath"
+        }
+        $info.ArgumentList.Add('--n3_voice_directory')
+        $info.ArgumentList.Add($voicePath)
     }
     if ($PSBoundParameters.ContainsKey('Width') -or $PSBoundParameters.ContainsKey('Height')) {
         foreach ($a in @('--window_width', "$Width", '--window_height', "$Height")) { $info.ArgumentList.Add($a) }

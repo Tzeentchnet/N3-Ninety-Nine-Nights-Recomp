@@ -24,9 +24,13 @@ int main() {
     rex::cvar::SetFlagByName("config_probe_path", path);
     rex::cvar::SetFlagByName("config_probe_fps", "60");
     rex::cvar::SetFlagByName("config_probe_enabled", "true");
+    rex::cvar::ResetToDefault("fullscreen");
+    Require(rex::cvar::SetFlagByName("fullscreen", "true"), "Could not set explicit fullscreen default");
     SaveProfileConfig(file);
     auto saved = toml::parse_file(file.string());
     Require(saved["config_probe_path"].value_or(std::string{}) == path, "String escaping changed a saved value");
+    Require(saved["fullscreen"].value_or(false), "Explicit fullscreen=true was omitted because it matched the SDK default");
+    rex::cvar::ResetToDefault("fullscreen");
     for (const auto* name : {"config_probe_path", "config_probe_fps", "config_probe_enabled"}) rex::cvar::ResetToDefault(name);
     rex::cvar::LoadConfig(file);
     Require(rex::cvar::GetFlagByName("config_probe_path") == path && rex::cvar::GetFlagByName("config_probe_fps") == "60" && rex::cvar::GetFlagByName("config_probe_enabled") == "true", "Saved settings did not reload");
@@ -43,8 +47,10 @@ int main() {
     Require(!RepairLegacyProfileConfig(file) && Read(file) == malformed, "Unknown malformed config was altered");
     // Replacing a nonempty config with defaults must remove the old settings.
     for (const auto* name : {"config_probe_path", "config_probe_fps", "config_probe_enabled"}) rex::cvar::ResetToDefault(name);
+    rex::cvar::ResetToDefault("fullscreen");
     SaveProfileConfig(file);
     Require(!toml::parse_file(file.string()).contains("config_probe_fps"), "Reset-to-default left an old value on disk");
+    Require(!toml::parse_file(file.string()).contains("fullscreen"), "Reset fullscreen default remained on disk");
     std::filesystem::remove_all(folder);
     std::cout << "Configuration escaping, reload, legacy repair and default reset passed\n";
   } catch (const std::exception& error) {
