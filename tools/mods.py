@@ -198,6 +198,17 @@ def load_enabled_mods(mods_root: Path, order_path: Path) -> tuple[Mod, ...]:
     )
 
 
+def discover_mods(mods_root: Path) -> tuple[Mod, ...]:
+    if not mods_root.is_dir() or _is_link_or_reparse(mods_root):
+        raise ModError(f"Mods folder is missing or unsafe: {mods_root}")
+    discovered = []
+    for candidate in sorted(mods_root.iterdir(), key=lambda path: path.name.casefold()):
+        if not candidate.is_dir():
+            continue
+        discovered.append(load_mod(candidate))
+    return tuple(discovered)
+
+
 def _scan_base_files(
     game: Path,
 ) -> dict[str, tuple[PurePosixPath, Path]]:
@@ -428,6 +439,32 @@ def _validate_command(args: argparse.Namespace) -> None:
         print(f"{mod.id} {mod.version}: {len(mod.files)} files")
 
 
+def _list_command(args: argparse.Namespace) -> None:
+    discovered = discover_mods(args.mods.absolute())
+    records = [
+        {
+            "id": mod.id,
+            "name": mod.name,
+            "version": mod.version,
+            "description": mod.description,
+            "files": len(mod.files),
+        }
+        for mod in discovered
+    ]
+    if args.json:
+        print(json.dumps({"schemaVersion": 1, "mods": records}, indent=2))
+        return
+    if not records:
+        print("No mods found")
+        return
+    for record in records:
+        description = f" - {record['description']}" if record["description"] else ""
+        print(
+            f"{record['id']} {record['version']}: {record['name']} "
+            f"({record['files']} files){description}"
+        )
+
+
 def _stage_command(args: argparse.Namespace) -> None:
     report = stage_mods(
         args.game,
@@ -441,7 +478,9 @@ def _stage_command(args: argparse.Namespace) -> None:
         f"Staged {report['baseFiles']} base files and {len(report['overrides'])} overrides "
         f"from {len(report['loadOrder'])} mods"
     )
-    if report["copiedBaseFiles"]:
+    if args.copy_base:
+        print(f"Copied {report['copiedBaseFiles']} base files as requested")
+    elif report["copiedBaseFiles"]:
         print(
             f"Hardlinks were unavailable for {report['copiedBaseFiles']} base files; "
             "those files were copied"
@@ -462,6 +501,13 @@ def _build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--mods", type=Path, default=default_mods)
     validate.add_argument("--order", type=Path, default=default_order)
     validate.set_defaults(run=_validate_command)
+
+    list_command = commands.add_parser(
+        "list", help="list every discovered mod package"
+    )
+    list_command.add_argument("--mods", type=Path, default=default_mods)
+    list_command.add_argument("--json", action="store_true")
+    list_command.set_defaults(run=_list_command)
 
     stage = commands.add_parser("stage", help="build a merged game tree")
     stage.add_argument("--game", type=Path, default=PROJECT_ROOT / "private" / "game")

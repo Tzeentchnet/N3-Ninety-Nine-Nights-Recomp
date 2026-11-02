@@ -180,6 +180,26 @@ class ModTests(unittest.TestCase):
             b"base-texture",
         )
 
+    def test_discovers_all_mods_in_stable_order(self) -> None:
+        make_mod(
+            self.mods,
+            "zeta.model",
+            {"data/Prop/sample.bm": b"model"},
+        )
+        make_mod(
+            self.mods,
+            "alpha.texture",
+            {"data/interface/sample.36t": b"texture"},
+        )
+
+        discovered = mods.discover_mods(self.mods)
+
+        self.assertEqual(
+            [mod.id for mod in discovered],
+            ["alpha.texture", "zeta.model"],
+        )
+        self.assertEqual([len(mod.files) for mod in discovered], [1, 1])
+
     def test_copied_base_can_be_modified_without_changing_original(self) -> None:
         order = self.mods / "enabled.txt"
         order.write_text("", encoding="utf-8")
@@ -275,10 +295,14 @@ class ModTests(unittest.TestCase):
         (self.root / "private").mkdir()
         (self.root / "private-game").rename(self.root / "private" / "game")
         self.assertEqual(mods.main(["validate"]), 0)
-        self.assertEqual(
-            mods.main(["stage", "--copy-base"]),
-            0,
-        )
+        with mock.patch("builtins.print") as output:
+            self.assertEqual(
+                mods.main(["stage", "--copy-base"]),
+                0,
+            )
+        messages = [str(call.args[0]) for call in output.call_args_list]
+        self.assertIn("Copied 3 base files as requested", messages)
+        self.assertFalse(any("unavailable" in message for message in messages))
         self.assertTrue((self.output / mods.REPORT_NAME).is_file())
 
     def test_rejects_executable_override(self) -> None:

@@ -92,6 +92,21 @@ Tests use synthetic fixtures; CI never needs or uploads game files.
 The portable-components workflow checks Windows, Linux, and an Apple Silicon
 macOS runner. Passing these tests does not mean the game runs on those platforms.
 
+## Development launcher boundary
+
+The PowerShell [development launcher](LAUNCHER.md) is a Windows game-running
+tool, not a portable runtime layer. It now centralizes one-launch graphics
+overrides, isolated local profiles, explicit user/cache/log roots, native ISO/XEX
+setup, remembered-path reset, and offline mod staging. Direct packaged
+executables retain their native `%LOCALAPPDATA%\N3Recompiled` behavior.
+
+Launcher mod selection calls the existing Python stager and still publishes only
+to the disposable `out/game/` tree. It does not add runtime hot loading, asset
+codecs, or a platform-independent game-data API. Future platform launchers should
+preserve the same profile isolation, setup validation, immutable base extraction,
+and deterministic mod-order semantics without treating PowerShell argument
+construction as an engine interface.
+
 ## Vulkan migration
 
 The pinned [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk/tree/bd833a2ab69d305f99ddf57418fc38ffec8af93d)

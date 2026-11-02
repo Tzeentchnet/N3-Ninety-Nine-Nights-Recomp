@@ -1310,3 +1310,35 @@ No add-on code, parser, importer, exporter, synthetic fixture, private-corpus
 test suite, Blender background run, asset round trip, staged output, game
 launch, visual comparison, or gameplay route was completed for this milestone.
 The separate add-on project was not scaffolded or modified.
+
+## Development launcher expansion
+
+The Windows development launcher now exposes normal, borderless, exclusive, and
+profile-configured window modes; monitor selection; frame-rate, text-language,
+voice, anisotropic, display, render-resolution, and VSync overrides; named
+profiles; explicit user/cache/log roots; native ISO/XEX setup and remembered-path
+reset; and dry-run JSON plans. The normal default remains a 1280 x 720 window
+using local ignored development paths.
+
+Mod manifests can be listed without a build or extraction. The launcher can
+stage `mods/enabled.txt` or a comma-separated ordered ID list into the fixed
+disposable `out/game/` tree, optionally copy the base instead of hardlinking,
+launch the stage, or stop after staging. It retains the stager's immutable-base,
+path-containment, reparse-point, reserved-name, and executable-override
+protections. Native setup and mod staging are deliberately mutually exclusive.
+
+PowerShell parser checks pass for the launcher and its regression script. The
+launcher suite passes 73 checks covering defaults, fullscreen mappings, every
+graphics mapping, named profile paths, ordered mod plans, and rejected option
+combinations. The expanded Python mod suite passes 15 synthetic tests, including
+stable manifest discovery and actual fixture staging. Manual dry runs exercised
+native setup, the complete graphics override set, profile resolution, and
+explicit mod ordering; mod listing also completed successfully. A
+launcher-driven synthetic `-StageOnly` run copied a two-file base, applied one
+override, and produced the expected ordered staging report before its disposable
+output was removed.
+
+These checks establish option construction and offline staging behavior only.
+No launcher-driven visual run, native picker interaction, imported-game reset,
+real-mod compatibility check, gameplay route, or performance comparison was
+performed for this milestone.

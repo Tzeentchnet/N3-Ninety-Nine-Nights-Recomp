@@ -57,10 +57,22 @@ then restage instead of editing `out/game/`.
 The defaults use `private/game/`, `mods/`, `mods/enabled.txt`, and `out/game/`:
 
 ```powershell
-python tools/mods.py validate
-python tools/mods.py stage --replace
-pwsh -NoProfile -File tools/launch.ps1 -GameDirectory out\game
+pwsh -NoProfile -File tools\launch.ps1 -ListMods
+pwsh -NoProfile -File tools\launch.ps1 -UseEnabledMods
 ```
+
+The launcher validates and stages the enabled mods into `out/game/`, then passes
+that disposable tree to the game. Stage without launching, or choose an explicit
+low-to-high priority list without editing `enabled.txt`:
+
+```powershell
+pwsh -NoProfile -File tools\launch.ps1 -UseEnabledMods -StageOnly
+pwsh -NoProfile -File tools\launch.ps1 `
+  -Mod author.base,author.compatibility,author.personal
+```
+
+See the [development launcher guide](LAUNCHER.md) for custom game/mod paths,
+profile isolation, `-CopyModBase`, dry-run planning, and option conflicts.
 
 Use an explicit owned extraction when it is stored elsewhere:
 

@@ -23,6 +23,12 @@ jobs:
         run: test "$(uname -m)" = arm64
       - name: Validate pinned SDK metadata
         run: python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test tools.package_release_test
+      - name: Test mod staging
+        run: python -m unittest tools.mods_test
+      - name: Test Windows launcher
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/launch_test.ps1
       - name: Configure without SDK or game data
         run: cmake -S . -B out/portable-core -DN3_BUILD_GAME=OFF -DCMAKE_BUILD_TYPE=Release
       - name: Build

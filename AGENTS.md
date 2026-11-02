@@ -17,7 +17,8 @@ README.md and docs/STATUS.md before changing its toolchain or runtime.
 - Run checks appropriate to each change. Native runtime fixes use tools/build.ps1,
   which runs the callback FP regression test. Disc extractor changes use
   `node --test tools/disc.test.mjs`. Mod stager changes use
-  `python -m unittest tools.mods_test`. SDK lock or bootstrap changes use
+  `python -m unittest tools.mods_test`. Launcher changes also use
+  `pwsh -NoProfile -File tools/launch_test.ps1`. SDK lock or bootstrap changes use
   `python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test
   tools.package_release_test` and
   `python tools/check-sdk.py`.

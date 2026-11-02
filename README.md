@@ -68,6 +68,10 @@ pwsh -NoProfile -File tools/launch.ps1
 
 The launcher defaults to a **1280 x 720 window**, keeps fullscreen off, and stores saves,
 profile data, and caches under `private/`. Runtime logs go under `logs/`.
+It also supports window/fullscreen modes, graphics overrides, isolated named
+profiles, native ISO/XEX setup and reset, custom data paths, and launcher-driven
+mod discovery/staging. See the [development launcher guide](docs/LAUNCHER.md)
+for the complete option table, precedence rules, and examples.
 The shortcut follows the stable launcher and build path, so rebuilding updates
 what it launches. Refresh the shortcut after moving the project folder:
 
@@ -155,19 +159,20 @@ comparisons against unmodified game pacing. The Graphics menu was introduced in 
 ## Loose-file mods
 
 The offline mod stager builds a complete, disposable game view without changing
-the owned extraction. Add each mod ID to `mods/enabled.txt`, then stage and
-launch the merged tree:
+the owned extraction. Discover available manifests, add each enabled ID to
+`mods/enabled.txt`, then let the launcher stage and run the merged tree:
 
 ```powershell
-python tools/mods.py stage
-pwsh -NoProfile -File tools/launch.ps1 -GameDirectory out/game
+pwsh -NoProfile -File tools/launch.ps1 -ListMods
+pwsh -NoProfile -File tools/launch.ps1 -UseEnabledMods
 ```
 
 Mods may replace only files under `data/`; executable, update, and system-file
 overrides are rejected. Later entries in the load order win conflicts. Unchanged
 base files are hardlinked where possible, so never edit `out/game` by hand;
-restage it instead. Use `python tools/mods.py stage --copy-base` when physical
-separation from `private/game` is required. See the [modding guide](docs/MODDING.md)
+restage it instead. Add `-CopyModBase` when physical separation from
+`private/game` is required, or use `-StageOnly` to stage without launching.
+See the [modding guide](docs/MODDING.md)
 for manifests, safety rules, current format limits, and planned runtime hooks.
 The separate [Blender authoring roadmap](docs/BLENDER-MODDING.md) defines the
 read-only-first `.skin` / `.bm` plan, later `.36t` preview, writer gates, and
@@ -207,6 +212,7 @@ a SHA-256 hash in the local disc manifest. Build/codegen verifies the expected
 ```powershell
 node --test tools/disc.test.mjs
 python -m unittest tools.mods_test
+pwsh -NoProfile -File tools/launch_test.ps1
 python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test tools.package_release_test
 python tools/check-sdk.py
 pwsh -NoProfile -File tools/codegen.ps1 -Regenerate
