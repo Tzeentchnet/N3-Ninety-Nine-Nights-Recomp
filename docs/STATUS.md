@@ -1249,8 +1249,11 @@ The pinned Clang 20.1.8 / MSVC 14.44 / Windows SDK 26100 RelWithDebInfo and
 Release builds completed after strict codegen. CMake found the exact SDK and
 the explicitly selected Python interpreter. All 47 CTest suites passed in each
 configuration. A separate SDK-independent portable build passed all 23
-component suites. Twenty-three Python lock, generated-CMake, and mod-stager
-tests passed; modified Python, PowerShell, and JSON parsed successfully.
+component suites. Twenty-six Python lock, generated-CMake, release-scanner, and
+mod-stager tests passed; modified Python, PowerShell, and JSON parsed
+successfully. The release binary privacy scan also passed all four allowlisted
+executables after excluding username substrings embedded inside longer API
+symbols while retaining bounded narrow- and wide-string detection.
 Deliberately corrupting the local SDK marker caused bootstrap to replace the
 SDK from the verified archive and restore the complete marker. Simulated
 interrupted-replacement recovery also passed. The online latest-release check

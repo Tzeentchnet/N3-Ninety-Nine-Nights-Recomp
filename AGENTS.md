@@ -18,7 +18,8 @@ README.md and docs/STATUS.md before changing its toolchain or runtime.
   which runs the callback FP regression test. Disc extractor changes use
   `node --test tools/disc.test.mjs`. Mod stager changes use
   `python -m unittest tools.mods_test`. SDK lock or bootstrap changes use
-  `python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test` and
+  `python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test
+  tools.package_release_test` and
   `python tools/check-sdk.py`.
 - Update docs/STATUS.md with observed milestones and their validation limits.
   A successful build or a surviving process does not establish gameplay correctness.

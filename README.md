@@ -204,7 +204,7 @@ a SHA-256 hash in the local disc manifest. Build/codegen verifies the expected
 ```powershell
 node --test tools/disc.test.mjs
 python -m unittest tools.mods_test
-python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test
+python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test tools.package_release_test
 python tools/check-sdk.py
 pwsh -NoProfile -File tools/codegen.ps1 -Regenerate
 pwsh -NoProfile -File tools/build.ps1 -Configuration RelWithDebInfo -Jobs 4

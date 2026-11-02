@@ -23,15 +23,47 @@ def zip_entry(archive, name, data):
     archive.writestr(entry, data)
 
 
+def contains_identifier(data, identifier, token_boundaries=False):
+    haystack = data.lower()
+    for spelling in {identifier, identifier.replace("\\", "/")}:
+        for encoding, width in (("utf-8", 1), ("utf-16le", 2)):
+            needle = spelling.lower().encode(encoding)
+            offset = 0
+            while (index := haystack.find(needle, offset)) >= 0:
+                if not token_boundaries:
+                    return True
+                before = haystack[max(0, index - width):index]
+                after = haystack[index + len(needle):index + len(needle) + width]
+
+                def is_word_unit(unit):
+                    return (
+                        len(unit) == width
+                        and (width == 1 or unit[1] == 0)
+                        and (
+                            ord("0") <= unit[0] <= ord("9")
+                            or ord("a") <= unit[0] <= ord("z")
+                            or unit[0] == ord("_")
+                        )
+                    )
+
+                if not is_word_unit(before) and not is_word_unit(after):
+                    return True
+                offset = index + 1
+    return False
+
+
 def check_binary(name, data):
     # Inspect both narrow and wide strings without putting identifiers in output.
-    identifiers = {str(ROOT), str(Path.home()), os.environ.get("USERNAME", "")}
-    for identifier in identifiers:
+    identifiers = [
+        (str(ROOT), False),
+        (str(Path.home()), False),
+        (os.environ.get("USERNAME", ""), True),
+    ]
+    for identifier, token_boundaries in identifiers:
         if len(identifier) < 4:
             continue
-        for spelling in {identifier, identifier.replace("\\", "/")}:
-            if spelling.lower().encode() in data.lower() or spelling.lower().encode("utf-16le") in data.lower():
-                raise ValueError(f"Build-machine identifier found in {name}")
+        if contains_identifier(data, identifier, token_boundaries):
+            raise ValueError(f"Build-machine identifier found in {name}")
     if re.search(rb"(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|sk-proj-[A-Za-z0-9_-]{30,})", data):
         raise ValueError(f"Credential-like string found in {name}")
 
