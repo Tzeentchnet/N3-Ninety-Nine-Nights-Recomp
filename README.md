@@ -2,304 +2,110 @@
 
 <img src="resources/n3-icon.png" width="128" height="128" alt="N3 Recompiled icon">
 
-A native Windows recompilation project for **N3: Ninety-Nine Nights**, built from
-the Xbox 360 executable with [ReXGlue](https://github.com/rexglue/rexglue-sdk).
-PowerPC game code is translated to C++ ahead of time. ReXGlue supplies the Xbox
-runtime and its Xenos GPU plugin uses Direct3D 12.
+A native Windows recompilation of **N3: Ninety-Nine Nights** using
+[ReXGlue](https://github.com/rexglue/rexglue-sdk). PowerPC game code is
+translated ahead of time and runs through a native Windows host with a
+Direct3D 12 Xenos renderer.
 
-The generated game code is already C++. Development replaces its register and
-guest-memory operations with readable, typed engine interfaces and explicit
-state. Python remains part of build/release tooling, separate from game logic.
+> [!IMPORTANT]
+> This repository is the maintained
+> [Tzeentchnet fork](https://github.com/Tzeentchnet/N3-Ninety-Nine-Nights-Recomp)
+> of [WK2D/N3-Ninety-Nine-Nights-Recomp](https://github.com/WK2D/N3-Ninety-Nine-Nights-Recomp).
+> Upstream remains the source of the published Alpha 12 binary. Fork releases
+> and upstream releases are separate and do not contain the same changes.
 
-**Windows alpha:** the opening mission has been completed, the following
-cutscene played, and saving and loading progress work on the tested opening route.
-Full-game coverage remains unvalidated. See [development status](docs/STATUS.md).
-The [documentation index](docs/README.md) separates active engineering material
-from archived upstream release records.
+No game assets, executable, generated game translations, or downloaded
+toolchains are included. You must supply your own supported game data.
 
-No game assets, original executable, generated game translations, or downloaded
-toolchain binaries are tracked. Supply your own game data. The supported executable
-is identified in [game-build.json](docs/game-build.json).
+## Fork status
 
-## Play the Windows alpha
+| | Repository |
+| --- | --- |
+| Maintained fork | [Tzeentchnet/N3-Ninety-Nine-Nights-Recomp](https://github.com/Tzeentchnet/N3-Ninety-Nine-Nights-Recomp) |
+| Upstream project | [WK2D/N3-Ninety-Nine-Nights-Recomp](https://github.com/WK2D/N3-Ninety-Nine-Nights-Recomp) |
+| Upstream baseline | [`d1416e5`](https://github.com/WK2D/N3-Ninety-Nine-Nights-Recomp/commit/d1416e56cf3066e4b07d0bd50fa8dbd1bd1e590d) |
+| Fork releases | [Releases](https://github.com/Tzeentchnet/N3-Ninety-Nine-Nights-Recomp/releases) |
+| Upstream Alpha 12 | [Release and downloads](https://github.com/WK2D/N3-Ninety-Nine-Nights-Recomp/releases/tag/v0.1.0-alpha.12) |
 
-**[Download for Windows (x64)](https://github.com/WK2D/N3-Ninety-Nine-Nights-Recomp/releases/download/v0.1.0-alpha.12/N3-Recompiled-v0.1.0-alpha.12-windows-x64.zip)**
+The fork is currently based directly on upstream `main`. See
+[fork relationship and differences](docs/FORK.md) for the exact divergence and
+release relationship.
 
-Extract the whole ZIP and run **n3.exe**. Select an ISO made from your own
-disc, or `default.xex` in your own extracted game folder with `data/` beside it.
-Setup checks the executable's SHA-256 and remembers the local folder. Importing
-an ISO needs about 5.8 GB of free space; the original image stays unchanged.
+## Differences from upstream
 
-The supported USA/Europe executable is version **0.0.0.3**. Other revisions are
-rejected. Windows 10/11 x64, Direct3D 12, and an Xbox-compatible controller are
-the current target. No Node.js, Python, or build tools are needed to play.
+This fork adds:
 
-The app defaults to a **1280 x 720 window**. Saves, settings, imported data,
-caches, and logs default to `%LOCALAPPDATA%\N3Recompiled`. Keep this profile
-folder when updating; replace the application folder with the new release.
-An existing extracted game folder is linked in place. The package contains
-no game assets or original executable. See the archived
-[Alpha 12 package guide](docs/releases/upstream/v0.1.0-alpha.12-package-readme.txt).
+- hardened, provenance-checked ReXGlue SDK installation, code generation,
+  GPU-source preparation, builds, and release packaging;
+- selected ReIGlue renderer fixes, PAL text-language selection, validated
+  alternate voice overlays, and additional profile/frame-pacing work;
+- an expanded development launcher with window modes, graphics overrides,
+  isolated profiles, native setup/reset, custom paths, dry runs, and mod staging;
+- deterministic offline loose-file mods plus a Blender-oriented asset-authoring
+  and handoff plan;
+- expanded engineering, release, and historical documentation; and
+- a project-level BSD 3-Clause license.
 
-[Release notes, checksums, and optional developer sources](https://github.com/WK2D/N3-Ninety-Nine-Nights-Recomp/releases/tag/v0.1.0-alpha.12)
-are available separately. Only the Windows ZIP is needed to play.
+Detailed evidence and validation limits are recorded in
+[development status](docs/STATUS.md). A newer fork commit is not, by itself,
+evidence of broader gameplay compatibility.
 
-Alpha 12 converts fourteen related state-query entries, bringing development to
-60 native C++ entry points. Eleven share a kind-bit lookup; the others preserve
-identity/category gates and byte-valued overrides. Explicit flags and identities
-can be inspected and edited in native code while unused memory reads stay skipped.
-All 58 memory-backed typed entries have mapped-address checks and high-address
-fixtures; two use only scalar registers. Full game-code conversion remains in progress.
-Filtering uses numeric 1x/2x/4x/8x/16x choices. Windows still uses
-Direct3D 12. This engine work does not claim a speedup or fix higher-FPS animation timing.
+## Current status
 
-The emerald N3 icon is embedded in `n3.exe` and appears on the application window
-and Windows shortcuts made from it. To add a desktop shortcut, right-click
-`n3.exe`, choose **Show more options** on Windows 11, then **Send to → Desktop
-(create shortcut)**. Keep the extracted application folder in its chosen location.
+- **Platform:** Windows 10/11 x64 with Direct3D 12.
+- **Supported game:** USA/Europe executable `0.0.0.3`, identified in
+  [game-build.json](docs/game-build.json).
+- **Validated route:** opening mission, following cutscene, and save/load on the
+  tested opening path.
+- **Known limitation:** full-game coverage is incomplete, and higher frame-rate
+  modes can accelerate animation.
 
-## Run a development build
+## Build and run
 
-Double-click **N3 Recompiled** on the desktop, or run:
-
-```powershell
-pwsh -NoProfile -File tools/launch.ps1
-```
-
-The launcher defaults to a **1280 x 720 window**, keeps fullscreen off, and stores saves,
-profile data, and caches under `private/`. Runtime logs go under `logs/`.
-It also supports window/fullscreen modes, graphics overrides, isolated named
-profiles, native ISO/XEX setup and reset, custom data paths, and launcher-driven
-mod discovery/staging. See the [development launcher guide](docs/LAUNCHER.md)
-for the complete option table, precedence rules, and examples.
-The shortcut follows the stable launcher and build path, so rebuilding updates
-what it launches. Refresh the shortcut after moving the project folder:
+Requirements are PowerShell 7, Node.js 18+, Python 3.10+, and 7-Zip on Windows
+x64. From a fresh checkout:
 
 ```powershell
-pwsh -NoProfile -File tools/install-shortcut.ps1
+pwsh -NoProfile -File tools\bootstrap.ps1 -AcceptVisualStudioLicense -Python python
+node tools\disc.mjs extract "path\to\your-disc.iso" private\game private\disc-manifest.json
+pwsh -NoProfile -File tools\build.ps1
+pwsh -NoProfile -File tools\launch.ps1
 ```
 
-## Graphics
+The launcher defaults to a 1280 x 720 window and keeps development profiles,
+caches, logs, and game data in ignored local paths. See
+[development and build](docs/DEVELOPMENT.md) for prerequisites, validation
+commands, source boundaries, and release tooling, and the
+[launcher guide](docs/LAUNCHER.md) for all runtime options.
 
-Select **Graphics** below **Tutorial** on the main menu. This opens a separate
-page using the game's Options layout, fonts, arrows, and controller navigation.
-Use up/down to select a row and left/right to change its value. **B** returns.
-Changes apply immediately and are saved to the local profile.
+This fork does not currently publish a binary release. The linked
+[upstream Alpha 12 release](https://github.com/WK2D/N3-Ninety-Nine-Nights-Recomp/releases/tag/v0.1.0-alpha.12)
+predates and does not include the fork-only changes listed above.
 
-- **Frame rate:** 30, 40, or 60 FPS; 30 is the default.
-- **Anisotropic filtering:** 1x, 2x, 4x, 8x, or 16x.
-- **Display resolution:** 720p, 1080p, 1440p, or 4K window/output size.
-- **Render resolution:** 720p (1x), 1440p (2x), or 4K (3x) internal rendering.
-- **VSync:** On or Off, applied live to Windows presentation.
-  On synchronizes presentation without blocking menu input; Off allows tearing
-  when supported. This is separate from the game's vblank clock.
+## Documentation
 
-Filtering overrides apply to eligible mipmapped textures. The renderer retains
-the game's filtering for textures outside that policy. The original Options
-page continues to provide the existing audio, camera, vibration, and contrast
-settings. No restart is needed for the Graphics controls. Render changes rebuild
-the scale-dependent GPU caches at a completed frame boundary; a brief pause while
-resources and shaders are prepared is possible. Unsupported changes retain the
-previous render scale. A short confirmation reports when settings are saved.
+| Document | Contents |
+| --- | --- |
+| [Fork relationship](docs/FORK.md) | Upstream baseline, fork-only changes, remotes, and release ownership |
+| [Development status](docs/STATUS.md) | Verified milestones, unresolved issues, and validation limits |
+| [Development and build](docs/DEVELOPMENT.md) | Bootstrap, extraction, builds, tests, and release workflow |
+| [Development launcher](docs/LAUNCHER.md) | Graphics, profiles, setup, custom paths, and mod staging |
+| [Modding](docs/MODDING.md) | Safe loose-file staging, manifests, load order, and format limits |
+| [Blender authoring](docs/BLENDER-MODDING.md) | Read-only-first asset roadmap and versioned handoff |
+| [Native conversion](docs/NATIVE-CODE.md) | Typed native modules and translated-code equivalence |
+| [Porting roadmap](docs/PORTING.md) | SDK baseline, renderer/platform work, and portability boundaries |
+| [Documentation index](docs/README.md) | Complete active and archived documentation |
 
-Display size and internal rendering are independent. The app restores
-maximized/fullscreen windows when a display preset is selected and apply exact
-physical client dimensions. A large window can extend beyond the desktop when
-its client size plus borders will not fit. The renderer supports
-integer scales, so 1080p is available as a display size, with 720p/1440p/4K render
-choices. Saved display settings apply on the next launch; explicit launcher
-`-Width`/`-Height` arguments override them for that launch.
-
-The new menu is derived locally from the player's own data into the profile's
-`ui/` cache. Original game files are read only; no menu assets are bundled.
-
-## Text language and alternate voices
-
-The supported USA/Europe disc contains English, French, German, Italian, and
-Spanish text and fonts. ReXGlue's pinned `XGetLanguage` import always reports
-English, so N3 now intercepts the game's two language queries and returns
-`n3_text_language`. Set it to `english`, `french`, `german`, `italian`, or
-`spanish`; the game then uses the matching original PAL resources, including
-the European font table needed for accented glyphs. A restart is required.
-
-An optional `n3_voice_directory` can point to a complete extracted `SoundRes`
-directory from another user-owned edition, such as the Japanese disc. At
-startup N3 compares its file set, XACT wave-bank metadata, sound-bank payloads,
-and preload list with the supported disc, then mounts compatible files read
-only over `data\Sound\ENG\SoundRes`. The supported game folder and alternate
-voice files are not changed or copied. The Japanese and UNDUB executables remain
-unsupported; only compatible voice resources can be overlaid on the verified
-USA/Europe executable. No text, voice, or other game assets are bundled.
-
-For persistent settings, add values to the profile's `n3.toml`:
-
-```toml
-n3_text_language = "spanish"
-n3_voice_directory = 'D:\Games\N3-Japanese\data\Sound\SoundRes'
-```
-
-For a single launch, development overrides remain available:
-
-```powershell
-pwsh -NoProfile -File tools/launch.ps1 -FrameRate 30
-pwsh -NoProfile -File tools/launch.ps1 -FrameRate 40
-pwsh -NoProfile -File tools/launch.ps1 -FrameRate 60
-pwsh -NoProfile -File tools/launch.ps1 -FrameRate Original
-pwsh -NoProfile -File tools/launch.ps1 -TextLanguage Spanish
-pwsh -NoProfile -File tools/launch.ps1 -VoiceDirectory 'D:\Games\N3-Japanese\data\Sound\SoundRes'
-```
-
-**Development caveat:** higher frame-rate modes remain experimental. Initial
-60 FPS testing is smooth, but animations appear accelerated. Animation/combat
-timing is still under investigation; a requested limit does not guarantee that
-all scenes achieve it. Movie/audio clocks remain unchanged and prerecorded
-videos can retain their original rate. Use the Original override for timing
-comparisons against unmodified game pacing. The Graphics menu was introduced in alpha 2; VSync and the audit corrections are included from alpha 3.
-
-## Loose-file mods
-
-The offline mod stager builds a complete, disposable game view without changing
-the owned extraction. Discover available manifests, add each enabled ID to
-`mods/enabled.txt`, then let the launcher stage and run the merged tree:
-
-```powershell
-pwsh -NoProfile -File tools/launch.ps1 -ListMods
-pwsh -NoProfile -File tools/launch.ps1 -UseEnabledMods
-```
-
-Mods may replace only files under `data/`; executable, update, and system-file
-overrides are rejected. Later entries in the load order win conflicts. Unchanged
-base files are hardlinked where possible, so never edit `out/game` by hand;
-restage it instead. Add `-CopyModBase` when physical separation from
-`private/game` is required, or use `-StageOnly` to stage without launching.
-See the [modding guide](docs/MODDING.md)
-for manifests, safety rules, current format limits, and planned runtime hooks.
-The separate [Blender authoring roadmap](docs/BLENDER-MODDING.md) defines the
-read-only-first `.skin` / `.bm` plan, later `.36t` preview, writer gates, and
-versioned export receipt. No Blender codec or exporter is implemented yet.
-
-## Build from a fresh checkout
-
-Windows x64 is the platform tested so far. Setup needs PowerShell 7, Node.js 18+
-for disc extraction, Python 3.10+ for portable Microsoft tools, and 7-Zip for
-unpacking the LLVM installer. Setup extracts tools locally; it does not install
-Visual Studio globally. Download sizes total roughly 1 GB, plus extracted tools
-and approximately 5.8 GB of game files.
-
-```powershell
-# AcceptVisualStudioLicense accepts Microsoft's development-tool licence.
-pwsh -NoProfile -File tools/bootstrap.ps1 -AcceptVisualStudioLicense -Python python
-
-node tools/disc.mjs extract "path/to/your-disc.iso" private/game private/disc-manifest.json
-pwsh -NoProfile -File tools/build.ps1
-pwsh -NoProfile -File tools/launch.ps1
-```
-
-Alternatively, supply an existing VS 2022 x64 development environment and use
-`bootstrap.ps1 -ToolsOnly`. Tool versions, download URLs, and archive checksums
-are in [toolchain.lock.json](tools/toolchain.lock.json). The Microsoft downloader
-pins VS 2022 / MSVC 14.44 / Windows SDK 26100; Microsoft's servicing manifests can
-update the patch versions within those selections. Bootstrap validates the exact
-ReXGlue version and records its full commit and release-asset digest; a changed
-lock cannot silently reuse an older extracted SDK.
-
-Extraction refuses an existing output directory. Each extracted file receives
-a SHA-256 hash in the local disc manifest. Build/codegen verifies the expected
-`default.xex` hash before using the build-specific function hints.
-
-## Development commands
-
-```powershell
-node --test tools/disc.test.mjs
-python -m unittest tools.mods_test
-pwsh -NoProfile -File tools/launch_test.ps1
-python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test tools.package_release_test
-python tools/check-sdk.py
-pwsh -NoProfile -File tools/codegen.ps1 -Regenerate
-pwsh -NoProfile -File tools/build.ps1 -Configuration RelWithDebInfo -Jobs 4
-pwsh -NoProfile -File tools/smoke.ps1 -Seconds 30
-pwsh -NoProfile -File tools/symbolize-fault.ps1
-```
-
-The build runs native clock, geometry, vector, delay/mixing/feedback,
-table-derived value, percentage/modifier, capped accumulation, handle lookup,
-payload transfer/installation, direction normalization/accumulation/basis and
-countdown/scalar/bit tests, plus callback floating-point, disc importer, game-path,
-crash-report, frame-rate, menu-layout, profile persistence, and host presentation
-regression tests. The Xenos GPU
-plugin is rebuilt from the pinned SDK source with the local live-resolution
-extension and three title-independent BSD ReIGlue corrections in `tools/gpu/`:
-stale-texture watch prevention, a valid-range shared-memory fast path, and
-correct D3D12 fence error checks. The first build downloads the corresponding
-SDK sources when necessary; `-Python` selects the Python executable for preparation.
-That same interpreter is pinned into CMake's incremental codegen command.
-For an isolated developer profile, `--graphics_audit --graphics_trace
---frame_pacing_trace` cycles controls without saving. After at least 50 seconds,
-`python tools/verify-graphics-audit.py path/to/the-log` checks actual window,
-render-source, sampler, and presentation evidence. Use a separate test profile;
-the probe deliberately changes live settings. Prerecorded videos retain their
-own frame rate, so gameplay pacing needs a separate check.
-Smoke tests stop
-their own child process at the deadline and record the result under `logs/`;
-survival alone does not establish correct rendering or gameplay. Smoke runs use
-the same local profile as the launcher, so use separate profile copies for future
-save regression testing.
-
-FP fault reports live in the active profile's `logs/` folder and contain module
-basenames and offsets. The symbolizer defaults to the local RelWithDebInfo build;
-pass `-Executable` when resolving a report against a different binary/PDB.
-
-Analysis hints belong in `n3_manifest.toml`, and runtime fixes belong in `src/`.
-Do not hand-edit generated translations. `generated/rexglue.cmake` is SDK build
-integration boilerplate and is the only tracked file in `generated/`.
-
-For a Windows release, commit the exact source, build the `Release`
-configuration, run `python tools/bundle-sdk-source.py`, then
-`python tools/package-release.py --version <tag>`.
-The packaging tool admits an explicit set of runtime files, carries third-party
-notices, scans binaries for local identifiers, and writes ZIP checksums under
-`out/release/`. Its manifest records the exact source commit, SDK version,
-SDK commit, release tag, binary-archive digest, corresponding-source archive,
-and every packaged file hash. Inspect and test that package before publishing.
-Current release authoring conventions are in
-[docs/releases/README.md](docs/releases/README.md).
+Report fork-specific problems through the
+[fork issue tracker](https://github.com/Tzeentchnet/N3-Ninety-Nine-Nights-Recomp/issues).
+Include the commit, active profile/mod configuration, logs, and reproduction
+steps, but never upload game files, disc images, saves, or private paths.
 
 ## License
 
-Project-authored source code and documentation are available under the
-[BSD 3-Clause License](LICENSE). Third-party components and adapted work retain
-their own terms as described in the [third-party notices](THIRD_PARTY.md) and
-the files under [`LICENSES/`](LICENSES/).
+Project-authored source and documentation are available under the
+[BSD 3-Clause License](LICENSE). Third-party and adapted work retain their own
+terms; see [third-party notices](THIRD_PARTY.md) and [`LICENSES/`](LICENSES/).
 
-This license does not grant rights to **N3: Ninety-Nine Nights**, its original
-executable, game data, artwork, audio, trademarks, or other proprietary
-material. Those materials are not included in this repository or its release
-packages and must be supplied lawfully by the user.
-
-## References
-
-Start with the [documentation index](docs/README.md) for active implementation,
-status, porting, modding, release, and attribution material.
-
-The [native engine module notes](docs/NATIVE-CODE.md) describe the typed frame
-clock, geometry, vector, delay/mixing/feedback, table-value, handle, payload,
-direction normalization/accumulation/basis, countdown, scalar and bit-field routines,
-guest-memory boundaries, and comparisons against the translated game code.
-
-The [game-code conversion plan](docs/CONVERSION-PLAN.md) tracks the typed
-interfaces and remaining subsystem work separately from generated translations
-and development tooling. Development includes 60 typed native entry points,
-checked against the retained translations and included in Alpha 12.
-See [status](docs/STATUS.md) for the checks and their limits.
-
-The next platform work targets Vulkan and Apple Silicon. Portable native
-components can already build without game data or the Xbox runtime; the full
-game remains Windows-only. See the [native code and porting roadmap](docs/PORTING.md).
-
-[LostOdysseyRecomp](https://github.com/freefrank/LostOdysseyRecomp) and
-[UnleashedRecomp](https://github.com/hedge-dev/UnleashedRecomp) are the reference
-projects for development practices and the longer-term port experience.
-Forza Horizon 1: ReImagined, Recompiled Halo Reach, pgr4-native, and the Donelys
-N3 fork were also reviewed at pinned revisions for ReXGlue integration,
-renderer, language, and user-data practices.
-See [reference notes](docs/REFERENCES.md) and [third-party notices](THIRD_PARTY.md).
+The license does not grant rights to **N3: Ninety-Nine Nights**, its executable,
+game data, artwork, audio, trademarks, or other proprietary material.

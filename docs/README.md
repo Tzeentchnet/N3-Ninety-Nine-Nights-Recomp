@@ -7,7 +7,9 @@ a section explicitly says otherwise.
 
 | Document | Contents |
 | --- | --- |
+| [Fork relationship](FORK.md) | Upstream baseline, fork-only changes, remotes, and release ownership |
 | [Development status](STATUS.md) | Observed milestones, validation evidence, unresolved issues, and explicit limits |
+| [Development and build](DEVELOPMENT.md) | Bootstrap, game extraction, builds, targeted checks, and release workflow |
 | [Development launcher](LAUNCHER.md) | Window and graphics overrides, profiles, native setup, paths, and mod staging |
 | [Native engine modules](NATIVE-CODE.md) | Typed C++ replacements, guest adapters, equivalence boundaries, and test coverage |
 | [Game-code conversion plan](CONVERSION-PLAN.md) | Converted domains, remaining generated code, and criteria for future native modules |
