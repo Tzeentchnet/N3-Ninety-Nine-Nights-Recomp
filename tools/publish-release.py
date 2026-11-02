@@ -10,8 +10,6 @@ import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
-REPO = "WK2D/N3-Ninety-Nine-Nights-Recomp"
-API = "https://api.github.com/repos/" + REPO
 
 
 def asset_label(name):
@@ -26,18 +24,31 @@ def asset_label(name):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--version", default="v0.1.0-alpha.12")
+    parser.add_argument("--version", required=True)
+    parser.add_argument("--repo", default="Tzeentchnet/N3-Ninety-Nine-Nights-Recomp")
+    parser.add_argument("--remote", default="private")
     args = parser.parse_args()
     import re
     if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9.]+)?", args.version):
         raise RuntimeError("Invalid release version")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo):
+        raise RuntimeError("Invalid GitHub repository")
     tag = args.version
+    api = "https://api.github.com/repos/" + args.repo
+    notes = ROOT / "docs" / "releases" / f"{tag}.md"
+    if not notes.is_file():
+        raise RuntimeError(f"Create release notes before publishing: {notes}")
     if subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT).strip():
         raise RuntimeError("Commit source changes before publishing")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    remote = subprocess.check_output(["git", "ls-remote", "origin", "refs/heads/main"], cwd=ROOT, text=True).split()[0]
+    remote_heads = subprocess.check_output(
+        ["git", "ls-remote", args.remote, "refs/heads/main"], cwd=ROOT, text=True
+    ).split()
+    if not remote_heads:
+        raise RuntimeError(f"Remote {args.remote} has no main branch")
+    remote = remote_heads[0]
     if remote != commit:
-        raise RuntimeError("Push the exact source commit before publishing")
+        raise RuntimeError(f"Push the exact source commit to {args.remote}/main before publishing")
     folder = ROOT / "out/release"
     sums = (folder / "SHA256SUMS.txt").read_text(encoding="ascii").splitlines()
     assets = []
@@ -79,15 +90,15 @@ def main():
             return json.load(response)
 
     try:
-        release = request("GET", API + "/releases/tags/" + tag)
+        release = request("GET", api + "/releases/tags/" + tag)
         if not release["draft"]:
             raise RuntimeError("This release is already public; no assets were changed")
     except urllib.error.HTTPError as error:
         if error.code != 404:
             raise RuntimeError(f"GitHub release lookup failed (HTTP {error.code})") from None
-        release = request("POST", API + "/releases", {
+        release = request("POST", api + "/releases", {
             "tag_name": tag, "target_commitish": commit, "name": "N3 Recompiled " + tag,
-            "body": (ROOT / f"docs/RELEASE-{tag}.md").read_text(encoding="utf-8"),
+            "body": notes.read_text(encoding="utf-8"),
             "draft": True, "prerelease": True})
     uploaded = {asset["name"]: asset for asset in release["assets"]}
     for path in assets:
@@ -101,10 +112,10 @@ def main():
         if asset.get("digest") != expected:
             raise RuntimeError("GitHub asset digest mismatch; draft was not published")
         print(f"Uploaded and verified {path.name}")
-    release = request("GET", API + "/releases/" + str(release["id"]))
+    release = request("GET", api + "/releases/" + str(release["id"]))
     if {asset["name"] for asset in release["assets"]} != {path.name for path in assets}:
         raise RuntimeError("Draft has unexpected assets; inspect it before publishing")
-    public = request("PATCH", API + "/releases/" + str(release["id"]), {"draft": False, "prerelease": True})
+    public = request("PATCH", api + "/releases/" + str(release["id"]), {"draft": False, "prerelease": True})
     print("Published " + public["html_url"])
 
 

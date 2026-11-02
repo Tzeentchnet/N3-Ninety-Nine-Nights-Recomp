@@ -62,7 +62,9 @@ hooks do not establish correct animation speed. Extract understood routines into
 typed native modules with explicit guest-memory adapters, units and ownership;
 compare outputs against the retained translated implementation before switching.
 
-Use that boundary to introduce gameplay settings, asset overrides and mod hooks.
+Offline loose-file staging now provides the first asset-override boundary; see
+[Modding](MODDING.md). Future runtime or gameplay hooks should build on typed
+interfaces and verified archive lookups rather than patching generated code.
 Keep save formats and original data compatible until a migration is deliberately
 implemented and tested. Profiles, traces and original assets stay local.
 

@@ -34,7 +34,7 @@ def check_binary(name, data):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--version", default="v0.1.0-alpha.12")
+    parser.add_argument("--version", required=True)
     args = parser.parse_args()
     if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9.]+)?", args.version):
         raise ValueError("Invalid release version")
@@ -59,7 +59,7 @@ def main():
             raise ValueError("Missing release C/C++ runtime")
     for name, data in files.items():
         check_binary(name, data)
-    files["README.txt"] = (ROOT / "docs/RELEASE-README.txt").read_bytes()
+    files["README.txt"] = (ROOT / "docs/releases/PACKAGE-README.txt").read_bytes()
     files["THIRD_PARTY.md"] = (ROOT / "THIRD_PARTY.md").read_bytes()
     files["supported-game.json"] = (ROOT / "docs/game-build.json").read_bytes()
     # Preserve all separately supplied upstream notices, including nested libraries.

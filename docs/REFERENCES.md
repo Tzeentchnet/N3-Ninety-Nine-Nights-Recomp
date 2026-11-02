@@ -84,6 +84,24 @@ The renderer itself assumes PGR4 command streams and shaders and disables the
 stock draw/present path, so it is not transplanted into N3 without equivalent
 title-specific captures and image comparisons.
 
+## N3-ReGPU sibling project
+
+- Reviewed local revision: `c03c26e7b80851a391ffb5f19bbc499c0f84fb5c`
+- License: MIT; preserved in [the N3-ReGPU notice](../LICENSES/N3-ReGPU.txt)
+
+The user's separate same-title XenonRecomp/ReGPU project verified the supported
+disc inventory and developed an immutable-extraction mod model: validate
+manifests and paths, build a disposable merged tree, unlink before replacing a
+hardlinked base file, record deterministic conflict winners, and keep the
+runtime's writable data outside the game tree. That stager and its synthetic
+regression tests were adapted for this repository.
+
+Its custom kernel/XAM host, generated translation, ReGPU renderer, and runtime
+status are not transplanted. This project retains ReXGlue and its working D3D12
+path. ReGPU's architecture and format observations remain cross-checks unless
+they are independently reproduced here; the ISO identity and extension counts
+listed in [Modding](MODDING.md) were reproduced during this audit.
+
 ## Donelys N3 fork
 
 - [Repository at `c408ddfe`](https://github.com/donelysentretenimiento/Donelys-N3recomp/tree/c408ddfe25e2bd07809841f6cb92446415c8a693)

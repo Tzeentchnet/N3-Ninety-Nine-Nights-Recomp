@@ -16,7 +16,8 @@ README.md and docs/STATUS.md before changing its toolchain or runtime.
   build path. Use tools/install-shortcut.ps1 to refresh it after a path change.
 - Run checks appropriate to each change. Native runtime fixes use tools/build.ps1,
   which runs the callback FP regression test. Disc extractor changes use
-  `node --test tools/disc.test.mjs`.
+  `node --test tools/disc.test.mjs`. Mod stager changes use
+  `python -m unittest tools.mods_test`.
 - Update docs/STATUS.md with observed milestones and their validation limits.
   A successful build or a surviving process does not establish gameplay correctness.
 - At coherent, verified milestones, commit the intended source/documentation

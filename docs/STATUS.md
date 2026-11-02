@@ -1169,3 +1169,44 @@ tests that require generated code, and process startup therefore remain
 unverified for this milestone. No alternate voice directory was mounted, and no
 claim is made about audible Japanese voices, visual correctness, or gameplay
 correctness.
+
+## Documentation archive and offline mod staging
+
+On 2 November 2026, the user's local MIT-licensed N3-ReGPU project at
+`c03c26e7b80851a391ffb5f19bbc499c0f84fb5c` was audited for same-title
+documentation, format evidence, and modding design. Its safe offline stager was
+adapted to ReXGlue conventions; its generated translation, ReGPU renderer,
+kernel/XAM host, and unverified runtime conclusions were not transplanted. The
+original notice and reviewed revision are retained under `LICENSES/`.
+
+Historical WK2D Alpha 1 through Alpha 12 release notes and the Alpha 12 package
+guide now live in `docs/releases/upstream/`. Active docs have a separate index,
+evidence labels, current package guide, and release-authoring directory.
+Packaging and publishing require an explicit version and no longer consume
+archived Alpha 12 files implicitly. Publishing defaults to the private fork and
+its `private/main` remote; alternate repository and remote names must be
+explicit.
+
+The mod stager accepts deterministic manifests only beneath `data/`, records
+providers and conflict winners, rejects executable/system overrides and unsafe
+Windows paths, and builds a temporary complete tree before replacing
+`out/game`. Unchanged base files are hardlinked when possible; each winning
+override is unlinked and copied. `--copy-base` provides physical separation.
+The launcher now accepts a validated `-GameDirectory`, allowing the staged tree
+to run without changing the default `private/game` path.
+
+Fourteen synthetic Python tests pass. They cover load order, conflict winners,
+copy and hardlink behavior, repeat staging, defaults, executable rejection,
+duplicate IDs, arbitrary output, source/output overlap, links/reparse points,
+and report-name collisions. Modified Python files compile; the PowerShell
+launcher parses; `game-build.json` parses; local Markdown links and
+`git diff --check` pass.
+
+The owned ISO hash was recomputed and the sibling Python XDVDFS reader reproduced
+the checked-in partition, file-count, and extracted-byte totals plus the
+documented extension inventory. Node.js was unavailable, so this repository's
+JavaScript reader was not rerun. No 5.8 GB extraction or real-game mod tree was
+created, no packed-resource format was decoded, and no game build, launch,
+visual check, or gameplay route was exercised for this milestone. The stager
+currently enables opaque whole-file replacement, not archive-member editing or
+a stable runtime gameplay-mod API.

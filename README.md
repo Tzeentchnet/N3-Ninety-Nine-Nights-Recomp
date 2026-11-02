@@ -14,6 +14,8 @@ state. Python remains part of build/release tooling, separate from game logic.
 **Windows alpha:** the opening mission has been completed, the following
 cutscene played, and saving and loading progress work on the tested opening route.
 Full-game coverage remains unvalidated. See [development status](docs/STATUS.md).
+The [documentation index](docs/README.md) separates active engineering material
+from archived upstream release records.
 
 No game assets, original executable, generated game translations, or downloaded
 toolchain binaries are tracked. Supply your own game data. The supported executable
@@ -36,7 +38,8 @@ The app defaults to a **1280 x 720 window**. Saves, settings, imported data,
 caches, and logs default to `%LOCALAPPDATA%\N3Recompiled`. Keep this profile
 folder when updating; replace the application folder with the new release.
 An existing extracted game folder is linked in place. The package contains
-no game assets or original executable. See the [release guide](docs/RELEASE-README.txt).
+no game assets or original executable. See the archived
+[Alpha 12 package guide](docs/releases/upstream/v0.1.0-alpha.12-package-readme.txt).
 
 [Release notes, checksums, and optional developer sources](https://github.com/WK2D/N3-Ninety-Nine-Nights-Recomp/releases/tag/v0.1.0-alpha.12)
 are available separately. Only the Windows ZIP is needed to play.
@@ -149,6 +152,24 @@ all scenes achieve it. Movie/audio clocks remain unchanged and prerecorded
 videos can retain their original rate. Use the Original override for timing
 comparisons against unmodified game pacing. The Graphics menu was introduced in alpha 2; VSync and the audit corrections are included from alpha 3.
 
+## Loose-file mods
+
+The offline mod stager builds a complete, disposable game view without changing
+the owned extraction. Add each mod ID to `mods/enabled.txt`, then stage and
+launch the merged tree:
+
+```powershell
+python tools/mods.py stage
+pwsh -NoProfile -File tools/launch.ps1 -GameDirectory out/game
+```
+
+Mods may replace only files under `data/`; executable, update, and system-file
+overrides are rejected. Later entries in the load order win conflicts. Unchanged
+base files are hardlinked where possible, so never edit `out/game` by hand;
+restage it instead. Use `python tools/mods.py stage --copy-base` when physical
+separation from `private/game` is required. See the [modding guide](docs/MODDING.md)
+for manifests, safety rules, current format limits, and planned runtime hooks.
+
 ## Build from a fresh checkout
 
 Windows x64 is the platform tested so far. Setup needs PowerShell 7, Node.js 18+
@@ -180,6 +201,7 @@ a SHA-256 hash in the local disc manifest. Build/codegen verifies the expected
 
 ```powershell
 node --test tools/disc.test.mjs
+python -m unittest tools.mods_test
 pwsh -NoProfile -File tools/codegen.ps1 -Regenerate
 pwsh -NoProfile -File tools/build.ps1 -Configuration RelWithDebInfo -Jobs 4
 pwsh -NoProfile -File tools/smoke.ps1 -Seconds 30
@@ -218,12 +240,17 @@ Do not hand-edit generated translations. `generated/rexglue.cmake` is SDK build
 integration boilerplate and is the only tracked file in `generated/`.
 
 For a Windows release, build the `Release` configuration, run
-`python tools/bundle-sdk-source.py`, then `python tools/package-release.py`.
+`python tools/bundle-sdk-source.py`, then
+`python tools/package-release.py --version <tag>`.
 The packaging tool admits an explicit set of runtime files, carries third-party
 notices, scans binaries for local identifiers, and writes ZIP checksums under
-`out/release/`. Inspect and test that package before publishing.
+`out/release/`. Inspect and test that package before publishing. Current release
+authoring conventions are in [docs/releases/README.md](docs/releases/README.md).
 
 ## References
+
+Start with the [documentation index](docs/README.md) for active implementation,
+status, porting, modding, release, and attribution material.
 
 The [native engine module notes](docs/NATIVE-CODE.md) describe the typed frame
 clock, geometry, vector, delay/mixing/feedback, table-value, handle, payload,

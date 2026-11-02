@@ -29,6 +29,14 @@ language/voice behavior, and pgr4-native for renderer architecture; none of
 their code, branding, or artwork is included. Original Ninety-Nine Nights
 material is not included in the tracked project or release asset files.
 
+The offline loose-file mod stager and its tests were adapted from the user's
+MIT-licensed N3-ReGPU project at commit
+`c03c26e7b80851a391ffb5f19bbc499c0f84fb5c`. Its immutable-extraction,
+deterministic-load-order, copy-on-override, and path-safety model was retained
+while defaults and launch integration were adapted for this repository. The
+complete notice is in `LICENSES/N3-ReGPU.txt`. No N3-ReGPU generated game code,
+runtime, renderer, or original game data is included.
+
 ## Binary releases
 
 The first Windows alpha includes the unmodified ReXGlue runtime and Xenos GPU DLLs

@@ -5,7 +5,8 @@ param(
     [ValidateRange(240,4320)][int]$Height = 720,
     [ValidateSet('Configured','Original','30','40','60')][string]$FrameRate = 'Configured',
     [ValidateSet('Configured','English','German','French','Spanish','Italian')][string]$TextLanguage = 'Configured',
-    [string]$VoiceDirectory
+    [string]$VoiceDirectory,
+    [string]$GameDirectory
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -36,11 +37,18 @@ try {
         $info.ArgumentList.Add('--n3_voice_directory')
         $info.ArgumentList.Add($voicePath)
     }
+    $gamePath = Join-Path $root 'private/game'
+    if ($GameDirectory) {
+        $gamePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($GameDirectory)
+    }
+    if (!(Test-Path -LiteralPath $gamePath -PathType Container)) {
+        throw "GameDirectory is not a directory: $gamePath"
+    }
     if ($PSBoundParameters.ContainsKey('Width') -or $PSBoundParameters.ContainsKey('Height')) {
         foreach ($a in @('--window_width', "$Width", '--window_height', "$Height")) { $info.ArgumentList.Add($a) }
     }
     foreach ($argument in @('--no-fullscreen',
-        '--game_data_root', (Join-Path $root 'private/game'), '--user_data_root', (Join-Path $root 'private/user'),
+        '--game_data_root', $gamePath, '--user_data_root', (Join-Path $root 'private/user'),
         '--cache_root', (Join-Path $root 'private/cache'), '--log_file', (Join-Path $root 'logs/runtime-windowed.log'))) {
         $info.ArgumentList.Add($argument)
     }
