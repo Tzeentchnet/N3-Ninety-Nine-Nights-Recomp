@@ -9,7 +9,10 @@ import urllib.parse
 import urllib.request
 import zipfile
 
+from sdk_lock import load_sdk_lock
+
 ROOT = Path(__file__).resolve().parent.parent
+SDK = load_sdk_lock()
 
 
 def asset_label(name):
@@ -61,13 +64,32 @@ def main():
             raise RuntimeError("Release asset checksum changed")
         assets.append(path)
     assets.append(folder / "SHA256SUMS.txt")
-    expected_names = {f"N3-Recompiled-{tag}-windows-x64.zip", "ReXGlue-bd833a2-corresponding-source.zip", "SHA256SUMS.txt"}
+    expected_names = {
+        f"N3-Recompiled-{tag}-windows-x64.zip",
+        SDK.source_archive_name,
+        "SHA256SUMS.txt",
+    }
     if {path.name for path in assets} != expected_names:
         raise RuntimeError("Checksums do not describe this release's expected assets")
+    source_digest = hashlib.sha256(
+        (folder / SDK.source_archive_name).read_bytes()
+    ).hexdigest()
     with zipfile.ZipFile(folder / f"N3-Recompiled-{tag}-windows-x64.zip") as package:
         manifest = json.loads(package.read("release-manifest.json"))
-        if manifest["version"] != tag or manifest.get("sourceCommit") != commit:
-            raise RuntimeError("Packaged source commit or version does not match the release")
+        expected_sdk = {
+            "version": SDK.version,
+            "commit": SDK.commit,
+            "releaseTag": SDK.release_tag,
+            "binaryArchiveSha256": SDK.sha256,
+        }
+        if (
+            manifest["version"] != tag
+            or manifest.get("sourceCommit") != commit
+            or manifest.get("sdk") != expected_sdk
+            or manifest.get("sdkSourceArchive") != SDK.source_archive_name
+            or manifest.get("sdkSourceSha256") != source_digest
+        ):
+            raise RuntimeError("Packaged source, version, or SDK provenance does not match the release")
     # Keep credentials in memory and send them only to GitHub's API/upload hosts.
     result = subprocess.run(["git", "credential", "fill"], input="protocol=https\nhost=github.com\n\n",
                             cwd=ROOT, capture_output=True, text=True, check=True)

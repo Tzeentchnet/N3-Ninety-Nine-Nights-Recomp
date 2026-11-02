@@ -129,7 +129,16 @@ endif()
 if(NOT WIN32)
     message(FATAL_ERROR "The full N3 runtime is Windows-only while platform/GPU adapters are ported. Use -DN3_BUILD_GAME=OFF for portable components.")
 endif()
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_program(N3_PWSH_EXECUTABLE pwsh REQUIRED)
 include(generated/rexglue.cmake)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/tools/toolchain.lock.json" N3_TOOLCHAIN_LOCK)
+string(JSON N3_EXPECTED_REXGLUE_VERSION GET "${N3_TOOLCHAIN_LOCK}" sdk version)
+if(NOT "${REXGLUE_VERSION_STRING}" STREQUAL "${N3_EXPECTED_REXGLUE_VERSION}")
+    message(FATAL_ERROR
+        "ReXGlue SDK version mismatch: found ${REXGLUE_VERSION_STRING}, "
+        "toolchain.lock.json requires ${N3_EXPECTED_REXGLUE_VERSION}")
+endif()
 
 # Sources
 set(N3_SOURCES

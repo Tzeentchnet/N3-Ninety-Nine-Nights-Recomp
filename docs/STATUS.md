@@ -1210,3 +1210,63 @@ created, no packed-resource format was decoded, and no game build, launch,
 visual check, or gameplay route was exercised for this milestone. The stager
 currently enables opaque whole-file replacement, not archive-member editing or
 a stable runtime gameplay-mod API.
+
+## Latest ReXGlue and build-pipeline review
+
+On 2 November 2026, GitHub's release metadata was checked directly. The newest
+published Windows SDK remains nightly `0.10.0.24-dev.gbd833a2`, full commit
+`bd833a2ab69d305f99ddf57418fc38ffec8af93d`, with the same asset URL and
+SHA-256 already recorded in `tools/toolchain.lock.json`. ReXGlue `main` diverges
+at the older v0.10.0 release, so no SDK downgrade or speculative fork
+replacement was made.
+
+Current ReIGlue, Forza Horizon 1: ReImagined, Fable 2 Recomp,
+NocturneRecomp, openNG2, and Viva Pinata Recomp revisions were reviewed for
+build and porting practices. N3 independently adopted exact installed-SDK
+provenance, transactional SDK replacement, commit-derived source bundle names,
+strict CMake/codegen version checks, final-package SDK provenance, and offline
+lock-selection tests. GPL project code and code without an established
+applicable license were not copied.
+
+The review identified a local regeneration defect: the official codegen tool
+rewrote `generated/rexglue.cmake` and removed N3's generated-header output
+ordering fix. A checked post-codegen transformation now restores those outputs,
+rejects unexpected template drift, and routes CMake's incremental codegen
+through the same SDK/XEX validation. An actual manifest-timestamp rebuild
+invoked that wrapper, regenerated the file, reapplied the integration, and left
+the corrected form in place.
+
+The owned ISO was imported read only into ignored local storage for this
+validation. The import produced 3,342 files / 5,770,038,003 bytes and the
+expected XEX SHA-256
+`0fe8973b6ff45d3f8bd03a51a8c0d8cdf278b3d43e793497777e075f4e94a804`.
+The source bundler captured the SDK plus fifteen pinned dependencies; a second
+run was incremental. GPU preparation refreshed from the exact SDK archive,
+applied all three selected ReIGlue patches plus N3's renderer extension, and a
+second run was incremental.
+
+The pinned Clang 20.1.8 / MSVC 14.44 / Windows SDK 26100 RelWithDebInfo and
+Release builds completed after strict codegen. CMake found the exact SDK and
+the explicitly selected Python interpreter. All 47 CTest suites passed in each
+configuration. A separate SDK-independent portable build passed all 23
+component suites. Twenty-three Python lock, generated-CMake, and mod-stager
+tests passed; modified Python, PowerShell, and JSON parsed successfully.
+Deliberately corrupting the local SDK marker caused bootstrap to replace the
+SDK from the verified archive and restore the complete marker. Simulated
+interrupted-replacement recovery also passed. The online latest-release check
+and dirty-package provenance rejection passed.
+
+A 30-second RelWithDebInfo smoke run survived until the harness stopped it.
+The log reached GPU pipeline creation, native frame-clock initialization, audio
+callbacks, and controller connection without error, critical, unregistered
+target, exception, or floating-point-fault entries. No visual observation,
+input exercise, save/load test, mission route, performance measurement, Release
+package, Vulkan run, or non-Windows game build was performed. Process survival
+does not establish correct presentation or gameplay.
+
+Recent ReIGlue changes for loaded-only RenderDoc attachment, keyboard tap
+sampling, opt-in resolve readback, and Xenon-accurate VMX floating-point
+operations remain candidates. They modify runtime or generator components that
+N3 does not currently rebuild from source. They require a matched SDK build,
+regenerated translation comparisons, and repeated gameplay evidence before
+adoption.

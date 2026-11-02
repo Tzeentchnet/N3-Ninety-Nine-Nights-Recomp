@@ -39,14 +39,14 @@ runtime kernel, and GPU/audio/input integration. Its bundled CLI differs from
 older wiki examples: this revision uses `n3_manifest.toml` with `[project]` and
 `[entrypoint]` sections. The local scripts follow the installed CLI/parser.
 
-This remains the newest published nightly and the head of ReXGlue's development
-branch at review time. The repository's `main` branch points to the older
-v0.10.0 release, so replacing the nightly with `main` would be a downgrade.
+This remains the newest published nightly at review time. The repository's
+`main` branch diverges at the older v0.10.0 release, so replacing the nightly
+with `main` would discard the later nightly changes rather than upgrade it.
 
 ## Forza Horizon 1: ReImagined and ReIGlue
 
 - [Forza tree at `a27387e4`](https://github.com/FH1-ReImagined/ForzaHorizon1-ReImagined/tree/a27387e45a5187089a748f12c98af72045408bf9)
-- [ReIGlue at `330770d1`](https://github.com/FH1-ReImagined/ReIGlue/tree/330770d17b64bdf17fcff975b82789418c230db5)
+- [ReIGlue at `6e47a08c`](https://github.com/FH1-ReImagined/ReIGlue/tree/6e47a08c972a23944504af48996330262dfc64e5)
 
 Forza uses the same ReXGlue nightly plus its BSD ReIGlue fork. N3 carries three
 title-independent changes that apply to its D3D12 Xenos plugin: rechecking
@@ -61,6 +61,34 @@ Forza-specific resolve changes are outside N3's current requirements. Its audio
 fallback and XMA hardening would require replacing the prebuilt runtime rather
 than the project-built GPU plugin; N3 has no matching failure evidence, so those
 larger changes remain candidates rather than untested imports.
+
+The follow-up build review also examined ReIGlue's loaded-only RenderDoc probe,
+keyboard tap queue, opt-in CPU/GPU readback synchronization, and VMX
+floating-point accuracy work through `6e47a08c`. They affect the runtime or
+generator rather than N3's project-built plugin alone. They remain deferred
+until N3 can build a matched source SDK and run regenerated-code equivalence
+and gameplay checks.
+
+## Recent ReXGlue build references
+
+- [Forza Horizon 1: ReImagined at `9ca04916`](https://github.com/FH1-ReImagined/ForzaHorizon1-ReImagined/tree/9ca049165d5441483c4aa3325f3ca8093d63ca60)
+  records final payload hashes and public build provenance. Its project is
+  GPL-3.0; no launcher or build code was copied.
+- [Fable 2 Recomp at `4d86f4a1`](https://github.com/himdo/Fable-2-Recomp/tree/4d86f4a10d61f9f0e105b836a1e6587520e8c191)
+  stages matched source-built runtime/plugin binaries with explicit SDK
+  provenance. It is MIT-licensed and informed the compatibility review; N3 did
+  not import its title patches or fork.
+- [NocturneRecomp at `35e7deed`](https://github.com/birabittoh/NocturneRecomp/tree/35e7deed54f1a2d1922009c74ece8a79c51ed78a)
+  uses architecture-aware CMake preset selection in an MIT-licensed build
+  wrapper. N3 already has platform presets and retains its pinned Windows tools.
+- [openNG2 at `18e6029b`](https://github.com/KamiTK2/openNG2/tree/18e6029be7039bf0639d0d4a69a16da83614eef8)
+  and [Viva Pinata Recomp at `e094c650`](https://github.com/crabinacrabic/VivaPinataRecomp/tree/e094c650cab222d7d3d280d63c5a09ebbaa51b55)
+  were reviewed for current preset/build structure only. No source was copied
+  because an applicable repository license was not established.
+
+N3 independently adopted the general outcomes: one validated SDK lock,
+transactional tool replacement, exact CMake/codegen version checks,
+commit-derived source bundle names, and SDK provenance in release manifests.
 
 ## Recompiled Halo Reach
 

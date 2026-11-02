@@ -13,8 +13,9 @@ upstream history.
 - `tools/publish-release.py --version <tag>` reads the matching notes only after
   the exact committed package has been pushed to `private/main`.
 
-Both release tools require an explicit version. Historical WK2D notes are never
-used implicitly for a new package.
+Both release tools require an explicit version, and packaging refuses an
+uncommitted source tree before recording its commit and exact SDK provenance.
+Historical WK2D notes are never used implicitly for a new package.
 
 ## Upstream archive
 

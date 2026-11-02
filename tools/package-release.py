@@ -6,9 +6,13 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
+import sys
 import zipfile
 
+from sdk_lock import load_sdk_lock
+
 ROOT = Path(__file__).resolve().parent.parent
+SDK = load_sdk_lock()
 
 
 def zip_entry(archive, name, data):
@@ -38,10 +42,18 @@ def main():
     args = parser.parse_args()
     if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9.]+)?", args.version):
         raise ValueError("Invalid release version")
+    if subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT).strip():
+        raise ValueError("Commit source changes before packaging")
     build = ROOT / "out/build/win-amd64-release"
     release = ROOT / "out/release"
     release.mkdir(parents=True, exist_ok=True)
-    sources = release / "ReXGlue-bd833a2-corresponding-source.zip"
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools/bundle-sdk-source.py"), "--if-needed"],
+        cwd=ROOT,
+    )
+    if result.returncode != 0:
+        raise ValueError("Pinned SDK source preparation failed")
+    sources = release / SDK.source_archive_name
     if not sources.is_file():
         raise ValueError("Run bundle-sdk-source.py first")
     files = {name: (build / name).read_bytes() for name in
@@ -87,9 +99,20 @@ No Microsoft development tools or debug runtimes are included.
 """
     hashes = {name: hashlib.sha256(data).hexdigest() for name, data in sorted(files.items())}
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    manifest = {"version": args.version, "platform": "Windows x64", "sourceCommit": commit, "files": hashes,
-                "sdkSourceArchive": sources.name,
-                "sdkSourceSha256": hashlib.sha256(sources.read_bytes()).hexdigest()}
+    manifest = {
+        "version": args.version,
+        "platform": "Windows x64",
+        "sourceCommit": commit,
+        "sdk": {
+            "version": SDK.version,
+            "commit": SDK.commit,
+            "releaseTag": SDK.release_tag,
+            "binaryArchiveSha256": SDK.sha256,
+        },
+        "files": hashes,
+        "sdkSourceArchive": sources.name,
+        "sdkSourceSha256": hashlib.sha256(sources.read_bytes()).hexdigest(),
+    }
     files["release-manifest.json"] = json.dumps(manifest, indent=2).encode()
     destination = release / f"N3-Recompiled-{args.version}-windows-x64.zip"
     with zipfile.ZipFile(destination, "w", compresslevel=9) as archive:

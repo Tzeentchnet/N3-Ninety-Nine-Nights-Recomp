@@ -24,17 +24,116 @@ function Get-VerifiedDownload($Package, [string]$Name) {
     return $destination
 }
 
-if (!(Test-Path "$localTools/rexglue-sdk/win-amd64/bin/rexglue.exe")) {
+function Test-ReXGlueSdk([string]$Path) {
+    $executable = Join-Path $Path 'win-amd64/bin/rexglue.exe'
+    $config = Join-Path $Path 'win-amd64/lib/cmake/rexglue/rexglueConfig.cmake'
+    if (!(Test-Path -LiteralPath $executable -PathType Leaf) -or
+        !(Test-Path -LiteralPath $config -PathType Leaf)) {
+        return $false
+    }
+    try {
+        $version = (& $executable --version 2>&1 | Out-String).Trim()
+        $exitCode = $LASTEXITCODE
+    } catch {
+        return $false
+    }
+    return $exitCode -eq 0 -and $version -eq $lock.sdk.version
+}
+
+function Write-ReXGlueMarker([string]$Path) {
+    $marker = [ordered]@{
+        schema = 1
+        version = $lock.sdk.version
+        commit = $lock.sdk.commit
+        releaseTag = $lock.sdk.release_tag
+        archiveSha256 = $lock.sdk.sha256
+    }
+    $marker | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Path '.n3-sdk.json') -Encoding utf8NoBOM
+}
+
+function Test-ReXGlueMarker([string]$Path) {
+    $markerPath = Join-Path $Path '.n3-sdk.json'
+    if (!(Test-Path -LiteralPath $markerPath -PathType Leaf)) { return $false }
+    try {
+        $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
+    } catch {
+        return $false
+    }
+    return $marker.schema -eq 1 -and
+        $marker.version -eq $lock.sdk.version -and
+        $marker.commit -eq $lock.sdk.commit -and
+        $marker.releaseTag -eq $lock.sdk.release_tag -and
+        $marker.archiveSha256 -eq $lock.sdk.sha256
+}
+
+function Remove-OrdinaryDirectory([string]$Path) {
+    if (!(Test-Path -LiteralPath $Path)) { return }
+    $item = Get-Item -LiteralPath $Path -Force
+    if (!$item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Refusing to replace non-directory or linked tool path: $Path"
+    }
+    Remove-Item -LiteralPath $Path -Recurse -Force
+}
+
+$sdkRoot = Join-Path $localTools 'rexglue-sdk'
+$staging = Join-Path $localTools 'rexglue-sdk.installing'
+$backup = Join-Path $localTools 'rexglue-sdk.previous'
+if (!(Test-Path -LiteralPath $sdkRoot) -and (Test-Path -LiteralPath $backup)) {
+    $backupItem = Get-Item -LiteralPath $backup -Force
+    if (!$backupItem.PSIsContainer -or ($backupItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Refusing to recover non-directory or linked SDK backup: $backup"
+    }
+    Move-Item -LiteralPath $backup -Destination $sdkRoot
+}
+if (Test-Path -LiteralPath $sdkRoot) {
+    $sdkItem = Get-Item -LiteralPath $sdkRoot -Force
+    if (!$sdkItem.PSIsContainer -or ($sdkItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Refusing to use non-directory or linked SDK path: $sdkRoot"
+    }
+}
+$sdkValid = Test-ReXGlueSdk $sdkRoot
+$markerValid = Test-ReXGlueMarker $sdkRoot
+if ($sdkValid -and $markerValid) {
+    Remove-OrdinaryDirectory $staging
+    Remove-OrdinaryDirectory $backup
+} else {
     $archive = Get-VerifiedDownload $lock.sdk 'rexglue-sdk.zip'
-    Expand-Archive -LiteralPath $archive -DestinationPath "$localTools/rexglue-sdk" -Force
+    Remove-OrdinaryDirectory $staging
+    New-Item -ItemType Directory -Path $staging | Out-Null
+    try {
+        Expand-Archive -LiteralPath $archive -DestinationPath $staging -Force
+        if (!(Test-ReXGlueSdk $staging)) {
+            throw "Downloaded ReXGlue SDK does not report version $($lock.sdk.version)"
+        }
+        Write-ReXGlueMarker $staging
+        Remove-OrdinaryDirectory $backup
+        if (Test-Path -LiteralPath $sdkRoot) {
+            $item = Get-Item -LiteralPath $sdkRoot -Force
+            if (!$item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                throw "Refusing to replace non-directory or linked SDK path: $sdkRoot"
+            }
+            Move-Item -LiteralPath $sdkRoot -Destination $backup
+        }
+        Move-Item -LiteralPath $staging -Destination $sdkRoot
+        Remove-OrdinaryDirectory $backup
+    } catch {
+        Remove-OrdinaryDirectory $staging
+        if (!(Test-Path -LiteralPath $sdkRoot) -and (Test-Path -LiteralPath $backup)) {
+            Move-Item -LiteralPath $backup -Destination $sdkRoot
+        }
+        throw
+    }
 }
 if (!(Test-Path "$localTools/llvm/bin/clang++.exe")) {
     if (!(Test-Path -LiteralPath $SevenZip)) { throw '7-Zip is required to unpack portable LLVM. Pass -SevenZip <path>.' }
-    $archive = Get-VerifiedDownload $lock.llvm 'LLVM-20.1.8-win64.exe'
+    $llvmArchiveName = [System.IO.Path]::GetFileName(([uri]$lock.llvm.url).AbsolutePath)
+    $archive = Get-VerifiedDownload $lock.llvm $llvmArchiveName
     & $SevenZip x $archive "-o$localTools/llvm" -y -bso0 -bsp0
     if ($LASTEXITCODE) { throw 'LLVM extraction failed' }
 }
-if (!(Test-Path "$localTools/cmake/cmake-3.31.8-windows-x86_64/bin/cmake.exe")) {
+$cmakeArchiveName = [System.IO.Path]::GetFileName(([uri]$lock.cmake.url).AbsolutePath)
+$cmakeDirectory = [System.IO.Path]::GetFileNameWithoutExtension($cmakeArchiveName)
+if (!(Test-Path "$localTools/cmake/$cmakeDirectory/bin/cmake.exe")) {
     $archive = Get-VerifiedDownload $lock.cmake 'cmake.zip'
     Expand-Archive -LiteralPath $archive -DestinationPath "$localTools/cmake" -Force
 }

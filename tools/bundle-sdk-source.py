@@ -1,4 +1,5 @@
 """Bundle the pinned SDK and its non-Vulkan dependency sources for binary releases."""
+import argparse
 import concurrent.futures
 import configparser
 import hashlib
@@ -9,8 +10,11 @@ import tarfile
 import urllib.request
 import zipfile
 
+from sdk_lock import load_sdk_lock
+
 ROOT = Path(__file__).resolve().parent.parent
-COMMIT = "bd833a2ab69d305f99ddf57418fc38ffec8af93d"
+SDK = load_sdk_lock()
+COMMIT = SDK.commit
 OUT = ROOT / "out" / "release"
 CACHE = ROOT / ".tools" / "source-archives"
 REQUIRED = {"cli11", "libmspack", "FFmpeg", "tomlplusplus", "simde", "xxHash",
@@ -59,8 +63,62 @@ def add_file(archive, name, data):
     archive.writestr(info, data)
 
 
+def extension_files():
+    files = [
+        "tools/bundle-sdk-source.py",
+        "tools/codegen.ps1",
+        "tools/fix_generated_cmake.py",
+        "tools/prepare-gpu.py",
+        "tools/sdk_lock.py",
+        "tools/toolchain.lock.json",
+        "tools/gpu/CMakeLists.txt",
+        "tools/gpu/d3d12_live_resolution.inc",
+        "tools/gpu/d3d12_sampler_audit.inc",
+        "tools/build.ps1",
+        "src/graphics_policy.h",
+        "LICENSES/ReIGlue.txt",
+    ]
+    files += sorted(
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "tools/gpu/patches").glob("*")
+        if path.is_file()
+    )
+    return files
+
+
+def bundle_fingerprint(files):
+    digest = hashlib.sha256(b"N3 ReXGlue source bundle inputs v1\0")
+    for value in (SDK.version, SDK.commit, SDK.release_tag, SDK.asset_name, SDK.sha256):
+        digest.update(value.encode())
+        digest.update(b"\0")
+    for name in sorted(files):
+        digest.update(name.encode())
+        digest.update(b"\0")
+        digest.update(hashlib.sha256((ROOT / name).read_bytes()).digest())
+    return digest.hexdigest()
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--if-needed",
+        action="store_true",
+        help="reuse a bundle whose complete local input fingerprint still matches",
+    )
+    args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
+    destination = OUT / SDK.source_archive_name
+    inputs = extension_files()
+    fingerprint = bundle_fingerprint(inputs)
+    fingerprint_file = destination.with_suffix(destination.suffix + ".inputs.sha256")
+    if (
+        args.if_needed
+        and destination.is_file()
+        and fingerprint_file.is_file()
+        and fingerprint_file.read_text(encoding="ascii").strip() == fingerprint
+    ):
+        print(f"Pinned SDK source bundle is up to date: {destination.name}")
+        return
     sdk, sdk_manifest = snapshot("rexglue/rexglue-sdk", COMMIT)
     tree = json.loads(fetch(f"https://api.github.com/repos/rexglue/rexglue-sdk/git/trees/{COMMIT}?recursive=1"))
     modules = {item["path"]: item["sha"] for item in tree["tree"] if item["type"] == "commit"}
@@ -76,26 +134,23 @@ def main():
             jobs.append((path, repo, modules[path]))
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(lambda job: (job[0], *snapshot(job[1], job[2])), jobs))
-    destination = OUT / "ReXGlue-bd833a2-corresponding-source.zip"
-    extension_files = ["tools/prepare-gpu.py", "tools/gpu/CMakeLists.txt",
-                       "tools/gpu/d3d12_live_resolution.inc", "tools/gpu/d3d12_sampler_audit.inc",
-                       "tools/build.ps1", "src/graphics_policy.h", "LICENSES/ReIGlue.txt"]
-    extension_files += sorted(path.relative_to(ROOT).as_posix()
-                              for path in (ROOT / "tools/gpu/patches").glob("*")
-                              if path.is_file())
-    extension_manifest = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
-                          for name in extension_files}
-    with zipfile.ZipFile(destination, "w", compresslevel=6) as archive:
+    extension_manifest = {
+        name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+        for name in inputs
+    }
+    temporary_destination = destination.with_suffix(destination.suffix + ".tmp")
+    with zipfile.ZipFile(temporary_destination, "w", compresslevel=6) as archive:
         add_snapshot(archive, sdk, "rexglue-sdk")
         for path, data, manifest in results:
             manifest["path"] = path
             add_snapshot(archive, data, "rexglue-sdk/" + path)
         add_file(archive, "SOURCE-MANIFEST.json", json.dumps([sdk_manifest] + [r[2] for r in results], indent=2).encode())
-        for name in extension_files:
+        add_file(archive, "SDK-LOCK.json", json.dumps(vars(SDK), indent=2).encode())
+        for name in inputs:
             add_file(archive, "n3-gpu-extension/" + name, (ROOT / name).read_bytes())
         add_file(archive, "n3-gpu-extension/SHA256.json", json.dumps(extension_manifest, indent=2).encode())
-        add_file(archive, "README.txt", b"""Corresponding source for the ReXGlue runtime and GPU DLLs.
-SDK commit bd833a2ab69d305f99ddf57418fc38ffec8af93d; upstream sources preserved.
+        readme = f"""Corresponding source for the ReXGlue runtime and GPU DLLs.
+SDK version {SDK.version}; commit {SDK.commit}; upstream sources preserved.
 The N3 GPU extension and preparation/build scripts are in n3-gpu-extension/.
 They rebuild the Xenos plugin with live render-resolution support. To reproduce
 the application build, use the matching N3 project release tag and its
@@ -121,7 +176,13 @@ Build recipe used by the prebuilt SDK is preserved in
 rexglue-sdk/.github/workflows/build-win-amd64.yaml,
 rexglue-sdk/.github/workflows/_build-platform.yaml and their referenced scripts.
 SOURCE-MANIFEST.json records source URLs, commit IDs, and archive SHA-256 values.
-""")
+SDK-LOCK.json records the exact official binary release used by this project.
+"""
+        add_file(archive, "README.txt", readme.encode())
+    temporary_destination.replace(destination)
+    temporary = fingerprint_file.with_suffix(fingerprint_file.suffix + ".tmp")
+    temporary.write_text(fingerprint + "\n", encoding="ascii")
+    temporary.replace(fingerprint_file)
     print(f"Bundled SDK and {len(results)} dependencies: {destination.name} ({destination.stat().st_size} bytes)")
 
 

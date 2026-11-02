@@ -1,12 +1,16 @@
 """Prepare the pinned SDK plugin source and apply the local renderer extension."""
 from pathlib import Path
 import hashlib
+import shutil
 import subprocess
 import zipfile
 
+from sdk_lock import load_sdk_lock
+
 ROOT = Path(__file__).resolve().parent.parent
+SDK = load_sdk_lock()
 source = ROOT / '.tools/live-gpu-source/rexglue-sdk'
-archive = ROOT / 'out/release/ReXGlue-bd833a2-corresponding-source.zip'
+archive = ROOT / 'out/release' / SDK.source_archive_name
 if not archive.is_file():
     raise SystemExit('Run tools/bundle-sdk-source.py to obtain the pinned SDK sources first.')
 extension = ROOT / 'tools/gpu/d3d12_live_resolution.inc'
@@ -14,9 +18,18 @@ patches = sorted((ROOT / 'tools/gpu/patches').glob('*.patch'))
 fingerprint = hashlib.sha256(Path(__file__).read_bytes() +
     b''.join(p.read_bytes() for p in sorted((ROOT / 'tools/gpu').glob('*.inc'))) +
     b''.join(p.read_bytes() for p in patches) +
+    SDK.commit.encode() +
     str(archive.stat().st_mtime_ns).encode()).hexdigest()
 marker = source / '.n3-extension'
-if marker.is_file() and marker.read_text() == fingerprint:
+sdk_marker = source / '.n3-sdk-commit'
+if source.is_symlink() or (hasattr(source, 'is_junction') and source.is_junction()):
+    raise RuntimeError(f'Refusing to use linked SDK source directory: {source}')
+if source.exists() and (
+    not sdk_marker.is_file()
+    or sdk_marker.read_text(encoding='ascii').strip() != SDK.commit
+):
+    shutil.rmtree(source)
+if marker.is_file() and marker.read_text(encoding='ascii').strip() == fingerprint:
     print('Pinned GPU extension is up to date')
     raise SystemExit(0)
 
@@ -182,5 +195,9 @@ replace('src/graphics/d3d12/command_processor.cpp',
   }
   system::X_VIDEO_MODE video_mode;
   kernel::xboxkrnl::VdQueryVideoMode(&video_mode);''')
-marker.write_text(fingerprint)
-print(f'Pinned GPU source prepared with live-resolution extension and {len(patches)} ReIGlue fixes')
+sdk_marker.write_text(SDK.commit + '\n', encoding='ascii')
+marker.write_text(fingerprint + '\n', encoding='ascii')
+print(
+    f'Pinned GPU source {SDK.commit[:7]} prepared with live-resolution '
+    f'extension and {len(patches)} ReIGlue fixes'
+)

@@ -191,7 +191,9 @@ Alternatively, supply an existing VS 2022 x64 development environment and use
 `bootstrap.ps1 -ToolsOnly`. Tool versions, download URLs, and archive checksums
 are in [toolchain.lock.json](tools/toolchain.lock.json). The Microsoft downloader
 pins VS 2022 / MSVC 14.44 / Windows SDK 26100; Microsoft's servicing manifests can
-update the patch versions within those selections.
+update the patch versions within those selections. Bootstrap validates the exact
+ReXGlue version and records its full commit and release-asset digest; a changed
+lock cannot silently reuse an older extracted SDK.
 
 Extraction refuses an existing output directory. Each extracted file receives
 a SHA-256 hash in the local disc manifest. Build/codegen verifies the expected
@@ -202,6 +204,8 @@ a SHA-256 hash in the local disc manifest. Build/codegen verifies the expected
 ```powershell
 node --test tools/disc.test.mjs
 python -m unittest tools.mods_test
+python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test
+python tools/check-sdk.py
 pwsh -NoProfile -File tools/codegen.ps1 -Regenerate
 pwsh -NoProfile -File tools/build.ps1 -Configuration RelWithDebInfo -Jobs 4
 pwsh -NoProfile -File tools/smoke.ps1 -Seconds 30
@@ -219,6 +223,7 @@ extension and three title-independent BSD ReIGlue corrections in `tools/gpu/`:
 stale-texture watch prevention, a valid-range shared-memory fast path, and
 correct D3D12 fence error checks. The first build downloads the corresponding
 SDK sources when necessary; `-Python` selects the Python executable for preparation.
+That same interpreter is pinned into CMake's incremental codegen command.
 For an isolated developer profile, `--graphics_audit --graphics_trace
 --frame_pacing_trace` cycles controls without saving. After at least 50 seconds,
 `python tools/verify-graphics-audit.py path/to/the-log` checks actual window,
@@ -239,13 +244,16 @@ Analysis hints belong in `n3_manifest.toml`, and runtime fixes belong in `src/`.
 Do not hand-edit generated translations. `generated/rexglue.cmake` is SDK build
 integration boilerplate and is the only tracked file in `generated/`.
 
-For a Windows release, build the `Release` configuration, run
-`python tools/bundle-sdk-source.py`, then
+For a Windows release, commit the exact source, build the `Release`
+configuration, run `python tools/bundle-sdk-source.py`, then
 `python tools/package-release.py --version <tag>`.
 The packaging tool admits an explicit set of runtime files, carries third-party
 notices, scans binaries for local identifiers, and writes ZIP checksums under
-`out/release/`. Inspect and test that package before publishing. Current release
-authoring conventions are in [docs/releases/README.md](docs/releases/README.md).
+`out/release/`. Its manifest records the exact source commit, SDK version,
+SDK commit, release tag, binary-archive digest, corresponding-source archive,
+and every packaged file hash. Inspect and test that package before publishing.
+Current release authoring conventions are in
+[docs/releases/README.md](docs/releases/README.md).
 
 ## References
 

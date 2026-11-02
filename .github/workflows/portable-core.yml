@@ -21,6 +21,8 @@ jobs:
       - name: Verify Apple Silicon runner
         if: runner.os == 'macOS'
         run: test "$(uname -m)" = arm64
+      - name: Validate pinned SDK metadata
+        run: python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test
       - name: Configure without SDK or game data
         run: cmake -S . -B out/portable-core -DN3_BUILD_GAME=OFF -DCMAKE_BUILD_TYPE=Release
       - name: Build

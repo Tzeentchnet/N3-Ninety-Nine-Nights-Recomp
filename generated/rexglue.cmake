@@ -121,7 +121,11 @@ add_custom_command(
            ${REXGLUE_ENTRYPOINT_GENERATED_SOURCES}
            "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/n3_pch.h"
            "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/n3_init.h"
-    COMMAND $<TARGET_FILE:rex::rexglue> codegen ${CMAKE_CURRENT_SOURCE_DIR}/n3_manifest.toml
+    # Route incremental builds through the same pin/XEX checks and post-processing
+    # as an explicit tools/codegen.ps1 invocation.
+    COMMAND "${N3_PWSH_EXECUTABLE}" -NoProfile -File
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/codegen.ps1"
+            -Python "${Python3_EXECUTABLE}"
     DEPFILE "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.d"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Generating recompiled code for n3"
