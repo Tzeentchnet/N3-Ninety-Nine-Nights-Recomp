@@ -12,6 +12,7 @@ a section explicitly says otherwise.
 | [Game-code conversion plan](CONVERSION-PLAN.md) | Converted domains, remaining generated code, and criteria for future native modules |
 | [Native code and platform roadmap](PORTING.md) | Portable components, renderer/platform work, and deeper game changes |
 | [Modding](MODDING.md) | Safe loose-file staging, manifests, load order, verified asset inventory, and future mod hooks |
+| [Blender asset authoring](BLENDER-MODDING.md) | Blender 5.2 import/export roadmap, format gates, and versioned mod handoff |
 | [Reference projects](REFERENCES.md) | Reviewed projects, exact revisions, adopted ideas, and licensing boundaries |
 | [Supported game build](game-build.json) | Disc and executable identity used by import and compatibility checks |
 | [Release documentation](releases/README.md) | Current package-document contract and archived upstream release records |

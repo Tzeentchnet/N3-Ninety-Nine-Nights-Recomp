@@ -131,10 +131,14 @@ typed native modules with explicit guest-memory adapters, units and ownership;
 compare outputs against the retained translated implementation before switching.
 
 Offline loose-file staging now provides the first asset-override boundary; see
-[Modding](MODDING.md). Future runtime or gameplay hooks should build on typed
-interfaces and verified archive lookups rather than patching generated code.
-Keep save formats and original data compatible until a migration is deliberately
-implemented and tested. Profiles, traces and original assets stay local.
+[Modding](MODDING.md). The separate
+[Blender asset-authoring roadmap](BLENDER-MODDING.md) keeps bounded format
+codecs and Blender adapters outside the runtime, with read-only import before
+any writer and a versioned handoff into the existing stager. Future runtime or
+gameplay hooks should build on typed interfaces and verified archive lookups
+rather than patching generated code. Keep save formats and original data
+compatible until a migration is deliberately implemented and tested. Profiles,
+traces and original assets stay local.
 
 Milestones are a rendered Vulkan Windows build, matching Graphics controls,
 normal-speed high-FPS gameplay, a rendered ARM64 Mac build, then mission coverage

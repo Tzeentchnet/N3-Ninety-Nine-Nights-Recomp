@@ -169,6 +169,9 @@ base files are hardlinked where possible, so never edit `out/game` by hand;
 restage it instead. Use `python tools/mods.py stage --copy-base` when physical
 separation from `private/game` is required. See the [modding guide](docs/MODDING.md)
 for manifests, safety rules, current format limits, and planned runtime hooks.
+The separate [Blender authoring roadmap](docs/BLENDER-MODDING.md) defines the
+read-only-first `.skin` / `.bm` plan, later `.36t` preview, writer gates, and
+versioned export receipt. No Blender codec or exporter is implemented yet.
 
 ## Build from a fresh checkout
 

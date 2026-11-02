@@ -13,6 +13,8 @@ and is never edited by the stager.
 | Deterministic load order, conflict winners, and staging report | **Implemented and fixture-tested** |
 | Whole-file replacement of loose assets or complete `.pak` files | **Implemented as opaque path replacement** |
 | Override `default.xex`, system-update files, or paths outside `data/` | **Rejected** |
+| Import loose N3 assets into Blender | **Planned; no codec or add-on implementation yet** |
+| Emit a versioned Blender export receipt | **Version 1 contract documented; no exporter or stager validation yet** |
 | Decode or encode `.36t`, `.bm`, `.skin`, or N3 `.pak` formats | **Not implemented** |
 | Override individual members inside `.pak` containers | **Not implemented** |
 | Hot-load mods or change load order while the game is running | **Not implemented** |
@@ -119,7 +121,7 @@ The owned image contains these relevant file counts:
 | `.36t` | 1,047 | Loose texture-like resources; opaque whole-file replacement |
 | `.pak` | 523 | Complete-container replacement only; 522 are under `data/PackedResources/` |
 | `.fxw` | 509 | Effect-related binary; format not decoded |
-| `.skin` | 216 | Model/skin companion data; opaque whole-file replacement |
+| `.skin` | 216 | Small companion data with observed `.bm` / `.fx` references; opaque whole-file replacement |
 | `.txt` | 196 | Text or configuration data; encoding/schema remains file-specific |
 | `.bm` | 187 | Model-like resources; opaque whole-file replacement |
 | `.bpf` | 143 | Binary data; format not decoded |
@@ -134,6 +136,25 @@ The owned image contains these relevant file counts:
 
 Counts are evidence for research scope, not a promise that every file can be
 edited safely. Multi-file assets should be replaced with all known companions.
+
+## Blender authoring track
+
+The selected Blender 5.2 roadmap starts with read-only `.skin` dependency
+inspection and `.bm` import. Read-only `.36t` previews follow model structure;
+constrained export follows only after corpus and byte-identical unmodified
+round-trip gates; bounded read-only `.pak` research comes later.
+
+A local scan found that every loose `.skin` sample contains exactly one
+NUL-terminated `.bm` reference and at least one `.fx` reference; 205 of 216
+also contain a `.dds` reference. This is evidence for a model/material
+dependency descriptor, not evidence for bones or animation. The add-on must not
+map `.skin` directly to a Blender armature based on its extension.
+
+The complete architecture, format questions, acceptance gates, validation
+ladder, and future versioned export receipt are in
+[Blender asset authoring](BLENDER-MODDING.md). The current stager neither reads
+nor validates that optional receipt. Blender support remains planned until code
+and tests establish it.
 
 ## Packed-resource limitation
 

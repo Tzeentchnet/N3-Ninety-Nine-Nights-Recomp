@@ -1283,3 +1283,30 @@ operations remain candidates. They modify runtime or generator components that
 N3 does not currently rebuild from source. They require a matched SDK build,
 regenerated translation comparisons, and repeated gameplay evidence before
 adoption.
+
+## Blender mod-authoring plan
+
+On 2 November 2026, the loose-asset mod plan was expanded for the user's
+separate Blender 5.2 add-on project. The selected first milestone is read-only
+`.skin` dependency inspection and `.bm` import. Read-only `.36t` preview follows
+model work, while bounded read-only `.pak` research follows the loose-asset
+path. Export and package writing remain gated rather than assumed.
+
+A read-only local scan of the verified extraction found 187 loose `.bm` and 216
+loose `.skin` files, including 162 same-relative-stem pairs. Every `.skin`
+contained exactly one NUL-terminated `.bm` reference and at least one `.fx`
+reference; 205 contained a `.dds` reference. The median sizes were 12,510 bytes
+for `.bm` and 297 bytes for `.skin`. These are observed dependency clues, not a
+complete record layout or evidence of skeletal data.
+
+The documented architecture now separates pure bounded codecs, Blender
+adapters, future constrained writers, the existing offline stager, and runtime
+validation. A structural version 1 `n3-blender-export.json` contract binds
+future outputs to the supported XEX, producer/profile versions, source and
+output hashes, claimed capabilities, unknown-data preservation, and explicit
+validation results. The receipt is not yet consumed by `tools/mods.py`.
+
+No add-on code, parser, importer, exporter, synthetic fixture, private-corpus
+test suite, Blender background run, asset round trip, staged output, game
+launch, visual comparison, or gameplay route was completed for this milestone.
+The separate add-on project was not scaffolded or modified.
