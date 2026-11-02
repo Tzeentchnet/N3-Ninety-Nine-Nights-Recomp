@@ -12,6 +12,7 @@
 /build/
 /logs/
 /CMakeUserPresets.json
+/TODO.md
 *.log
 /metadata/
 __pycache__/
