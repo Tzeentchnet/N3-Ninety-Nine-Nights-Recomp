@@ -1259,13 +1259,23 @@ SDK from the verified archive and restore the complete marker. Simulated
 interrupted-replacement recovery also passed. The online latest-release check
 and dirty-package provenance rejection passed.
 
-A 30-second RelWithDebInfo smoke run survived until the harness stopped it.
-The log reached GPU pipeline creation, native frame-clock initialization, audio
-callbacks, and controller connection without error, critical, unregistered
-target, exception, or floating-point-fault entries. No visual observation,
-input exercise, save/load test, mission route, performance measurement, Release
-package, Vulkan run, or non-Windows game build was performed. Process survival
-does not establish correct presentation or gameplay.
+After commit `9b34fdb`, a nonpublished `v0.0.0-sdkreview` package admitted 76
+allowlisted entries. Repeating packaging produced the same
+`87506cd252270a02e0dc998ba5b3e54b0c6ff7408e09c28b57e941ee4cd715f0`
+SHA-256. Every payload hash, the complete SDK identity, source commit,
+corresponding-source digest, and both final checksums were independently
+verified. The archive contained no PDB, XEX, ISO, game, profile, image, or log
+payload.
+
+Thirty-second RelWithDebInfo and extracted Release-package smoke runs survived
+until the harness stopped them. Both reached GPU pipeline creation, native
+frame-clock initialization, audio callbacks, and controller connection without
+error, critical, unregistered target, exception, or floating-point-fault
+entries. No visual observation, input exercise, save/load test, mission route,
+performance measurement, published release, Vulkan run, or non-Windows game
+build was performed. The packaged run used the command-line game-data override;
+it did not exercise the first-run import UI. Process survival does not establish
+correct presentation or gameplay.
 
 Recent ReIGlue changes for loaded-only RenderDoc attachment, keyboard tap
 sampling, opt-in resolve readback, and Xenon-accurate VMX floating-point
