@@ -1,5 +1,9 @@
 # Third-party notices
 
+Project-authored source and documentation are licensed under the BSD 3-Clause
+License in [`LICENSE`](LICENSE). The components and adapted work identified
+below retain their respective copyright notices and license terms.
+
 ReXGlue supplies generated project/build boilerplate and the downloaded runtime.
 It is derived in part from Xenia. Its source and licence are available at:
 

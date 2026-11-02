@@ -13,6 +13,11 @@ from sdk_lock import load_sdk_lock
 
 ROOT = Path(__file__).resolve().parent.parent
 SDK = load_sdk_lock()
+PACKAGE_DOCUMENTS = {
+    "LICENSE.txt": ROOT / "LICENSE",
+    "README.txt": ROOT / "docs/releases/PACKAGE-README.txt",
+    "THIRD_PARTY.md": ROOT / "THIRD_PARTY.md",
+}
 
 
 def zip_entry(archive, name, data):
@@ -103,8 +108,8 @@ def main():
             raise ValueError("Missing release C/C++ runtime")
     for name, data in files.items():
         check_binary(name, data)
-    files["README.txt"] = (ROOT / "docs/releases/PACKAGE-README.txt").read_bytes()
-    files["THIRD_PARTY.md"] = (ROOT / "THIRD_PARTY.md").read_bytes()
+    for name, path in PACKAGE_DOCUMENTS.items():
+        files[name] = path.read_bytes()
     files["supported-game.json"] = (ROOT / "docs/game-build.json").read_bytes()
     # Preserve all separately supplied upstream notices, including nested libraries.
     with zipfile.ZipFile(sources) as source:

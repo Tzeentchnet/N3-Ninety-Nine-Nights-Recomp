@@ -16,6 +16,14 @@ SPEC.loader.exec_module(package_release)
 
 
 class PackageReleaseTests(unittest.TestCase):
+    def test_package_includes_project_license(self):
+        license_path = package_release.PACKAGE_DOCUMENTS["LICENSE.txt"]
+        self.assertEqual(license_path, package_release.ROOT / "LICENSE")
+        self.assertIn(
+            "BSD 3-Clause License",
+            license_path.read_text(encoding="ascii"),
+        )
+
     def test_username_substring_inside_symbol_is_allowed(self):
         with mock.patch.dict(os.environ, {"USERNAME": "KENP"}):
             package_release.check_binary(

@@ -76,6 +76,7 @@ def extension_files():
         "tools/gpu/d3d12_sampler_audit.inc",
         "tools/build.ps1",
         "src/graphics_policy.h",
+        "LICENSE",
         "LICENSES/ReIGlue.txt",
     ]
     files += sorted(

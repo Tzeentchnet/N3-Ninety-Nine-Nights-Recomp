@@ -66,6 +66,11 @@ exercised. Full-game coverage, later missions and characters, other PCs, and
 mod compatibility remain unvalidated. Build and startup checks do not establish
 gameplay correctness.
 
+PROJECT LICENSE
+Project-authored software and documentation are licensed under the BSD 3-Clause
+License in LICENSE.txt. This grant does not cover original N3 game material,
+which is not included.
+
 THIRD-PARTY SOFTWARE
 ReXGlue and its dependencies are credited in THIRD_PARTY.md and licenses/.
 The Xenos plugin includes the project's live-resolution extension and selected

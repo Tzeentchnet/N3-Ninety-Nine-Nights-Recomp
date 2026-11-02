@@ -264,6 +264,18 @@ and every packaged file hash. Inspect and test that package before publishing.
 Current release authoring conventions are in
 [docs/releases/README.md](docs/releases/README.md).
 
+## License
+
+Project-authored source code and documentation are available under the
+[BSD 3-Clause License](LICENSE). Third-party components and adapted work retain
+their own terms as described in the [third-party notices](THIRD_PARTY.md) and
+the files under [`LICENSES/`](LICENSES/).
+
+This license does not grant rights to **N3: Ninety-Nine Nights**, its original
+executable, game data, artwork, audio, trademarks, or other proprietary
+material. Those materials are not included in this repository or its release
+packages and must be supplied lawfully by the user.
+
 ## References
 
 Start with the [documentation index](docs/README.md) for active implementation,
