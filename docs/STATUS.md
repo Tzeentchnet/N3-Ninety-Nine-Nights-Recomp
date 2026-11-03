@@ -1590,3 +1590,40 @@ code also shows no route invalidation when dynamic NAV groups change, but a
 troop stalling at a closing gate has not yet been reproduced. No runtime
 AI/pathfinding behavior, generated translation, manifest entry, game asset, or
 private-derived report changed in this milestone.
+
+## Bounded signal/clip research
+
+**Observed, static and private corpus:** an independent all-package inventory
+found 11 strict-add-on-rejected BA trailing profiles in 57 occurrences, and
+85 unique AS-101 payloads containing 4,300 groups and 18,477 retained bounded
+records. The tails are characterized only by offsets, lengths and hashes.
+There are also 85 INFO-100 payloads with 4,300 bounded rows. Generated code
+statically connects CHARDATA to the three loaders and uses an installed actor
+row to index INFO, BA and AS; this does not establish a live resolver choice.
+The same numeric signal-schema kind and declared slot count match the AS
+payload-word count for 18,474 records; three kind-95 records have no matching
+schema kind. AniTool IDs are not the 27 runtime animation types.
+
+**Candidate and rejected:** same-family CHARDATA names and equal counts yield
+86 distinct candidate BA/AS/INFO triples, not proven runtime pairings. Their
+same-index comparison has 90 of 18,618 record times at or beyond the BA frame
+count, rejecting a universal in-range assumption for these candidates. Fifty
+records have kinds outside the generic dispatcher's 1–37 range; actor-specific
+handling and effects remain unknown. Script substring searches and table
+column names are not evidence that scripts cannot encode signals.
+
+**Observed, reproducibility:** `tools\signal_clip_research.py` produces a
+deterministic, aggregate-only report and has 18 synthetic tests. The existing
+bounded runtime trace remains resource-scoped, with no actor/AS/INFO binding,
+no setup/controller calls and only clip-0 queue/evaluation samples. No new
+capture or gameplay-semantic trigger was performed for this study. See
+`docs\NATIVE-CODE.md` for the structural profile, all tail hashes, addresses,
+reproduction command and evidence limitations.
+
+**Unknown and next experiment:** correlate the actual resolver-selected
+package/member hashes, actor BA/AS/INFO bindings, selected row and bounded
+record dispatch with an independently observed effect for at least two
+characters, without exceeding the existing route/capture limits. The present
+hooks do not observe effects. Until that edge is proved, retain `Clip_###`,
+unsupported tails and no notify markers; source FPS and attachment semantics
+are also unproven.

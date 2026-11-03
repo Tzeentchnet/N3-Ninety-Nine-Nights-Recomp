@@ -1024,6 +1024,190 @@ Subsequent builds, 120 process replays and per-processor pinned runs passed; the
 do not establish its cause or a fix. First-byte diagnostics now accompany that
 suite. See `docs/STATUS.md` for the observed failure and limits.
 
+## Bounded signal/clip correlation
+
+This independent, read-only study inventories the private corpus and follows
+generated code without copying member names, decoded records, payload words,
+or retail bytes into the repository. `tools\signal_clip_research.py` emits
+only bounded structural counts, offsets, hashes, numeric identities and
+aggregate candidate fingerprints. Its structural profile is not a writer or a
+claim that every possible input has the observed layout.
+
+### BA trailing extents
+
+**Observed, private corpus:** all 522 packages were readable: 36 character,
+36 resource2, 36 resource3, one initial and 413 other packages. Character
+packages contain 685 BA occurrences representing 67 unique payloads. The
+bounded mode-2 extent walker found trailing data in 11 unique payloads,
+occurring 57 times. The companion add-on's strict reader independently rejects
+each of those 11 with its trailing-data classification. This confirms only
+the boundary and rejection, not a trailing-data format or semantics.
+
+The table gives zero-based member-relative offsets, tail lengths, occurrence
+counts, complete member SHA-256 identities, and SHA-256 of the opaque tail.
+No word inside a tail is interpreted. The multiset fingerprint of the
+confirmed entries is
+`d402cff68a44ec9e9deef7fa4272d70a1d462feb0d79dee69c25ab05bd53993a`.
+
+| Offset | Length | Occurrences | Member SHA-256 | Tail SHA-256 |
+| ---: | ---: | ---: | --- | --- |
+| 492860 | 288 | 3 | `02a7bcf62a4125ee5954d965ff4a0e7f6089d9696286120b56ab9a7c4ca738d0` | `679733ec9726af15f5df6184c97457fa73f9bca02cde746870dff2597d6cf109` |
+| 494104 | 1052 | 1 | `4574c1abc5a19edda29b84bc01342cdfc92a59a1d9b7e1f748c0fd9d999287c6` | `69e78cb39a4c623ec1251f0be0d203c9c67b3087faa2b347869d8e8f40b76533` |
+| 1434104 | 920 | 7 | `687e210b9d1767b73fb0ae61c0c750e78c807ab1a03e251b34ce4915d3743bfe` | `abb822772cab788cf9cd0743953a066e38c8f64b9bc27a430569ba21352b6b9c` |
+| 527104 | 512184 | 3 | `9a94309feedbb576ac1435b5b7c0b8ae37ea857fe8943f0e78a2aaafd61cbbaa` | `efa7f59ef523ed481fe9f079d7a0f90f58b67ce5c7568a34724a0b1e933f0d33` |
+| 480128 | 7600 | 3 | `a346732c287df695dafa764e242af6d515f0c0d88a90a892c4fdee7ff0fac520` | `b0dcb65aea054361e66aee97d9626083c595f147671a3581b3bccb82761c728d` |
+| 886012 | 7404 | 29 | `b011c8cd2acdcb94ef0210654ad8498be9d1870682b826009f61f59e4732cd4a` | `c54644db93bf52f4d63a238b0f7fd690037c4060339deefd585fe35b45d3720c` |
+| 480344 | 132984 | 2 | `b0a6a7b35b8e2d1953ace6f32e05eb6b7e7ea5e9c66154055999c998069cf54b` | `d6ee866c5fe6aaaad7e7a43ebdfc6385f765afbb23d56b7c9627caf0e1735563` |
+| 486268 | 20 | 3 | `b93a302d5f61bfb7bf021adbdd04b52fb92650d1fd1a9b3ef92bbd368e1137ba` | `2a5c8f010bcac5d3dc04d53648059d71ea33cc9b71d2fb6275a2d89385b13fb3` |
+| 496592 | 153316 | 2 | `debb52f01ceffeef519d5cf4e02eb10f6cd6b9dc5ec56b2a3af49ea0c73e96d8` | `e3db30b85878378ff8bc6f6eb03c9af949709f5582139732c578c084bcda2bc6` |
+| 569394 | 158520 | 2 | `e0b6738e6192ea281afd8548525d8f3b4aeccf78de05f00059f2bad421be89e0` | `11d41701ce5926c553cfb5fb1976b27136c200e800f58149518c76894d892c51` |
+| 500000 | 138764 | 2 | `fc374860582558b85d578e4374cb44fca931a1f5a27048ff91d65a444f67c277` | `27aff700db9c008a5d7e76e1c0934760114787afd7798a6d827edeee6ccf0776` |
+
+### Bounded AS and INFO records
+
+**Observed, generated code and private corpus:** the characterized AS profile
+starts with big-endian word 101 and a group count, followed by 512 skipped
+bytes. Each group has a count and, for nonempty groups, pairs of kind and
+absolute member offset. At each offset the characterized record has a signed
+time-like word, a signed bounded word, a word count, that many uninterpreted
+four-byte words, and 16 further uninterpreted bytes. The loader retains
+records with nonnegative time and bounded word 0–15. The bounded walker
+requires ordered, contiguous records; the guest follows offsets, so
+contiguity is a corpus observation, not a universal format guarantee.
+`0x8210BF78` and `0x8210C728` are the relevant generated loaders.
+
+There are 85 unique AS payloads with 4,300 groups: 3,553 nonempty and 747
+empty. All 18,477 declared records are retained, with time-like values
+0–17,289; all bounded-word values 0–15 occur. Payloads span 0–29 unknown
+words in 15 distinct lengths. Across different members, the minimum retained
+record start is 532 and the maximum checked record end is 169,112; these are
+member-relative bounds, not a single combined file. No group uses the
+recognized `0x10000` empty sentinel. Across these payloads, the groups are
+followed by 5,140 opaque 64-byte blocks and two opaque count-prefixed arrays
+containing 248 and 358 words respectively.
+The generic dispatcher `0x82097D90` handles the numbered range 1–37;
+50 corpus records have kinds outside that range: 0 (6), 38 (14), 39 (27)
+and 95 (3). Actor-specific dispatch may handle additional kinds, so this is
+not proof that those records cannot have effects.
+
+**Observed, separate vocabulary:** `animtype.h` has 33 numeric definitions
+and 31 distinct values, including all 27 runtime animation types 0–26 plus
+attribute/sentinel values. `signaltype.h` has 42 kind IDs 0–41.
+`signalid.txt` has 42 blocks resolving to those 42 symbols and declaring
+255 parameter slots; its standalone block numbers are *counts*, not IDs.
+`animid.txt` has five distinct authoring IDs, -1 through 3. These are
+different namespaces; no animation type is assigned from an AniTool ID.
+As a structural test only, all 18,474 AS records whose numeric kind has a
+unique signal-schema definition have a payload-word count equal to that
+same-number definition's declared slot count; the other three are kind 95,
+outside the schema. This is strong layout correlation, not proof of
+parameter values, effect semantics, or a particular live clip association.
+
+**Observed, INFO:** the 85 unique INFO-100 payloads contain 4,300 bounded
+86-byte rows. Attributes have counts 0: 2,952, 256: 1,018, 512: 213 and
+1,024: 117; row indices are zero 1,661 times and positive 2,639 times.
+Every payload has a suffix of 4–1,872 bytes. The first signed suffix word is
+used by the generated loader at `0x8210CE0C–0x8210CF10` as a count of
+auxiliary entries; across the 85 files those counts total 222. The remaining
+suffix is not parsed or assigned signal/attachment semantics here.
+
+### Static selection, candidates, and missing runtime edge
+
+**Observed, generated code:** `sub_82103640` copies the three CHARDATA
+animation, AS and parts fields to offsets +260/+344/+408 of 984-byte rows at
+`0x821039C0`, `0x82103AB8` and `0x82103B10`. The pointer assigned at
+`0x8258889C` connects that table to `sub_820F3618`, whose calls at
+`0x820F3DCC`, `0x820F3DF4` and `0x820F3E84` pass the respective fields to
+the BA, AS and INFO loaders. This is a static metadata-to-loader path, not
+proof of the winning archive/member at runtime.
+
+`sub_8210CB78` counts INFO runtime types in a four-by-27 table.
+`sub_8210CFE8` selects by runtime type, index and attribute: index -1
+chooses pseudorandomly among matching type/attribute rows or tries zero;
+an explicit index tries the exact triple, then the first matching type and
+requested index or zero. The apparent later attribute-only fallback is not
+reached from its initialized accumulator. `sub_82097958` can instead install
+a direct row without typed selection, and `0x8209D644` can reinstall the
+current row. On the observed actor path, the installed `actor+192` row
+indexes INFO and BA, and `sub_82097D00` indexes the AS group with the same
+row before virtual dispatch. This wiring is conditional on the actual actor
+bindings and does not identify their package members.
+
+For example, the actor-specific kind-24 branch at
+`0x820927F0–0x82092850` compares record time against the half-open interval
+`[actor+196, actor+196 + virtual step)`. On the observed transform path,
+`0x82080248–0x82080280` truncates the same actor time and forwards it with
+the row to the transform queue. This supports a shared frame-like numeric
+basis for these paths only; it does not establish source FPS, universal
+interpolation, or an observed effect.
+
+**Candidate, not resolver proof:** matching CHARDATA basenames within paired
+character/resource2 package families yields 640 occurrences for 86 table
+rows and 86 distinct BA/AS/INFO payload triples with equal clip/group/row
+counts. These use 57 distinct BA, 85 AS and 85 INFO payloads. The multiset
+fingerprints for candidate identities and triples are respectively
+`46467236e133cfd5465f0ed98cf36fb521542b96d4b324ed08b04328fbff071d` and
+`4a5161f361d29c034b4325c0d5e6ade9592357289f3b2abd43bce3ad46e4d4a0`.
+Across unique triples, same-index comparison counts 18,618 AS records:
+18,528 below the BA frame count, three equal and 87 above. Triples may reuse
+an AS payload, so this is not the unique-AS record total. The 90 exceptions
+reject an unconditional in-range assertion for all heuristic pairings; they
+do not identify which candidate a runtime actually uses.
+
+**Observed, independent resource search:** CHARDATA has 100 rows/33 columns
+and ITEMTABLE has 200 rows/30 columns; neither has a column name containing
+signal, clip or event. The package scan includes 664 `.aib` occurrences
+(95 distinct), 350 `.ai_funcb` occurrences (19 distinct), and 1,966 generic
+`.bin` occurrences (288 distinct); loose resources add 7 `.aib`, 19
+`.ai_funcb` and 36 `.n3sb` files. Case-insensitive byte-substring scans of
+these resources found no `signal`, `notify`, or `event` strings. Generic
+`.bin` resources are not assumed to be scripts. These are lexical checks,
+not parsers or evidence that binary scripts cannot encode such behavior.
+
+**Observed, existing runtime only:** the validated resource-scoped trace
+SHA-256 `7a0a80d6575bcf83f581f4d0c8c0b9e1093d93013607118307e62232adf92edd`
+has no actor, AS or INFO binding, zero setup/controller calls, and 64 queue
+plus 64 evaluator samples, all clip 0. Its validated route SHA-256 is
+`580acdd23358a6977461c285169cd18c394ca5d266db927b1aa661d80e4ba41e`;
+it targets 30 Hz, posts 21 input pairs within a 120-second limit, and exits
+normally. Posting inputs does not prove consumption. No new runtime capture
+or effect observation was performed in this study.
+
+**Unknown and next discriminating experiment:** the exact missing edge is a
+bounded association between resolver-selected package/member hashes and a
+live actor's BA/AS/INFO bindings, selected row, record dispatch and an
+independently observed effect, repeated for at least two characters. Existing
+hooks do not capture dispatch effects. A future explicitly authorized probe
+must preserve original calls, stay within the existing local-route and capture
+limits, and first establish those identities before comparing time windows
+and effects. A missed actor or effect remains missing evidence, not a reason
+to assign markers or names. Preserve `Clip_###`, unsupported BA tails, and no
+notify markers; no source FPS or attachment relationship follows from this
+study.
+
+### Reproduction
+
+Run the analyzer against the owned extraction, the add-on checkout and the
+existing bounded trace; placeholders below are inputs, not committed host
+paths. It makes no writes and reports generic, path-free errors. Omit
+`--trace` only when intentionally excluding the runtime summary; omit
+`--addon-root` only when strict add-on tail confirmation is not needed.
+The optional trace check uses the separately provided
+`tools\animation_trace_manifest.py` validator; the synthetic analyzer tests
+do not require that instrumentation helper.
+
+```powershell
+python -B tools\signal_clip_research.py --game-root '<owned-game-root>' --addon-root '<addon-checkout>' --all-packages --trace '<existing-trace-json>'
+python -B -m unittest -q tools.signal_clip_research_test
+python -B -c "import hashlib,subprocess,sys; b=subprocess.run(sys.argv[1:],stdout=subprocess.PIPE,check=True).stdout; print(len(b),hashlib.sha256(b).hexdigest())" `
+  python -B tools\signal_clip_research.py --game-root '<owned-game-root>' --addon-root '<addon-checkout>' --all-packages --trace '<existing-trace-json>'
+```
+
+Two Windows runs produced 8,531 identical stdout bytes, SHA-256
+`bc6d91dab16063a1a826ad001a318c2019377077750f4d5d1935bc97782590a7`,
+for the specified corpus, strict confirmation and trace. The report includes
+no private-derived output file.
+
 ## Adding the next module
 
 Identify a bounded engine routine and its inputs, outputs, units, side effects,
