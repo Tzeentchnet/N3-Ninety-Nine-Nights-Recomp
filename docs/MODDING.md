@@ -17,6 +17,8 @@ and is never edited by the stager.
 | Emit a versioned Blender export receipt | **Version 1 contract documented; no exporter or stager validation yet** |
 | Decode `.pak` containers and `.sox` tables | **Bounded read-only codec and full-corpus validation implemented** |
 | Inspect global character, unit, combat, troop, item, or ability tables | **Read-only visual application implemented and fixture-tested** |
+| Export and rebuild loose PAL localization text | **Format and sheet contract investigated; tooling not implemented** |
+| Rebuild localized SOX tables or their containing PAKs | **Not implemented; formats mapped for staged writer work** |
 | Edit global gameplay tables | **Not implemented; no runtime-edited package validation yet** |
 | Decode or encode `.36t`, `.bm`, or `.skin` formats | **Not implemented** |
 | Override individual members inside `.pak` containers | **Not implemented** |
@@ -137,7 +139,7 @@ The owned image contains these relevant file counts:
 | `.pak` | 523 | Complete-container replacement only; 522 are under `data/PackedResources/` |
 | `.fxw` | 509 | Effect-related binary; format not decoded |
 | `.skin` | 216 | Small companion data with observed `.bm` / `.fx` references; opaque whole-file replacement |
-| `.txt` | 196 | Text or configuration data; encoding/schema remains file-specific |
+| `.txt` | 196 | PAL `data/Text` localization subset decoded; other text/configuration files remain file-specific |
 | `.bm` | 187 | Model-like resources; opaque whole-file replacement |
 | `.bpf` | 143 | Binary data; format not decoded |
 | `.xwb` | 113 | XACT wave banks; use the validated voice-directory path for full voice sets |
@@ -306,6 +308,41 @@ and mission-result categories. They provide useful test cases, not binary
 schemas. No credible public numeric enemy-stat table, N3 archive writer,
 mission-spawn format, or open-source save editor was found during this
 investigation.
+
+## Localization data
+
+The five PAL language slots contain a sheet-ready loose-text surface:
+
+- 32 ordinary keyed tables plus one UTF-16BE dashboard table per slot;
+- 3,849 matching numeric keys and 3,747 nonempty strings per slot;
+- ASCII English and Windows-1252 French, German, Italian, and Spanish ordinary
+  tables, all with CRLF line endings; and
+- 280 two-field rows whose locale-specific texture, voice, or event companion
+  must remain locked to the target slot.
+
+The existing Graphics-menu integration already copies, extends, and mounts
+these tables from a profile cache. This supports a first exporter/importer that
+patches only the translated string span in a target template, preserves all
+other formatting and metadata, and emits complete files beneath a normal
+mod's `files/data/Text/<LANG>/` tree.
+
+Additional localization is stored in seven briefing SOX files, seven
+per-character ability SOX files, and two localized SOX members inside each PAL
+`res_init<lang>.pak`. These expand the standard PAL sheet surface to 6,182
+string cells per slot, about 4,850 of them nonempty. They require SOX and
+eventually PAK writers before replacement. English also has one unmatched
+generic ability table.
+
+Thirty-two `.36t` interface textures per PAL slot contain baked labels. The
+PAL initialization archives share the same English, Euro, and special font
+atlases, and the observed text fits the current ASCII/Windows-1252 pipeline.
+A complete new script or code page therefore needs texture, font, and runtime
+decoding work in addition to translated sheets.
+
+The complete inventory, proposed stable sheet keys, target-metadata rules,
+validation policy, and staged implementation path are in
+[localization data](LOCALIZATION.md). No localization exporter, importer, SOX
+writer, PAK writer, texture writer, or edited-string runtime test exists yet.
 
 ## Runtime and gameplay hooks
 

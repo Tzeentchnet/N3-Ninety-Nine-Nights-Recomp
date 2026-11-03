@@ -1411,3 +1411,51 @@ SOX or PAK writer exists, no game data or save was modified, no rebuilt archive
 was launched, and no field's runtime ownership, units, gameplay behavior, or
 save compatibility was established. The user workflow and current boundary are
 documented in [gameplay data inspector](GAMEPLAY-INSPECTOR.md).
+
+## Localization data investigation
+
+The five PAL `data/Text` folders were inventoried as 32 ordinary keyed tables
+and one UTF-16BE dashboard table per language. Each slot contains the same
+3,849 logical keys in the same order, including 3,747 nonempty strings. English
+ordinary files contain ASCII; French, German, Italian, and Spanish use
+Windows-1252; all preserve CRLF line endings. The record grammar, comments,
+blank lines, whitespace, and one- or two-field layout were traced across all
+19,245 localized rows without finding embedded quote syntax.
+
+The first quoted field is translatable. Of the 3,849 rows per slot, 280 have a
+second texture, voice, event, or related companion field. Several companion
+values legitimately differ between PAL slots, so a rebuild must retain the
+target template's companion rather than copying the source row. Filenames,
+numeric key sequences, and field counts align across all five slots; comments
+do not. The shipped default-table header provides symbolic context for 148
+numeric IDs.
+
+Seven briefing SOX files per PAL slot provide 1,120 string slots, with 279-286
+nonempty depending on retail line wrapping. Their SOX row IDs align while
+their `_TextId` values can differ, making file plus row ID the stable key.
+Seven per-character ability files align across 257 rows and expose 771 string
+cells, 514 nonempty, while retaining locked level values. English has an
+additional unmatched 70-row generic ability table.
+
+Each PAL `res_init<lang>.pak` contains 206 members and 23 SOX tables. Two are
+localized: a 200-row item-name/description table and a seven-row character
+profile table, together exposing 442 string cells and 310 nonempty values.
+The standard PAL text surfaces therefore total 6,182 cells per slot, about
+4,850 nonempty. Rebuilding the packed subset requires both SOX serialization
+and complete PAK emission.
+
+Thirty-two aligned `.36t` interface textures per PAL slot contain baked menu,
+mission, result, map, and character-name labels. The five PAL texture
+initialization archives contain byte-identical English, Euro, and special font
+atlases. The observed single-byte localization uses the existing
+ASCII/Windows-1252 repertoire; another script needs font, mapping, texture, and
+likely runtime-decoding work.
+
+These observations establish a practical UTF-8 sheet and template-patching
+design for the loose 3,849-row surface. The existing Graphics-menu path already
+generates and mounts copies of the loose Text tables without altering the game
+folder. No exporter, importer, localization UI, SOX writer, PAK writer, `.36t`
+writer, changed-string launch, visual PAL pass, or complete new-language test
+was performed. The sheet contract, preservation rules, validation limits, and
+staged implementation plan are documented in
+[localization data](LOCALIZATION.md).
