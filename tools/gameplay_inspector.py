@@ -10,6 +10,7 @@ from pathlib import Path
 import queue
 import sys
 import threading
+from typing import Callable
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if __package__ in {None, ""}:
@@ -17,6 +18,7 @@ if __package__ in {None, ""}:
 
 from tools.n3_gameplay_data import (
     AbilityRecord,
+    FieldGuide,
     GameData,
     GameplayDataError,
     ItemRecord,
@@ -57,6 +59,81 @@ def _short(value: str, limit: int = 180) -> str:
     return normalized if len(normalized) <= limit else normalized[: limit - 1] + "…"
 
 
+class _TreeviewTooltip:
+    def __init__(
+        self,
+        tk_module,
+        tree,
+        text_provider: Callable[[str, str | None], str | None],
+    ):
+        self.tk = tk_module
+        self.tree = tree
+        self.text_provider = text_provider
+        self._pending: str | None = None
+        self._tip = None
+        self._target: tuple[str, str, str] | None = None
+        tree.bind("<Motion>", self._on_motion, add="+")
+        tree.bind("<Leave>", self._hide, add="+")
+        tree.bind("<ButtonPress>", self._hide, add="+")
+
+    def _on_motion(self, event) -> None:
+        region = self.tree.identify_region(event.x, event.y)
+        column_token = self.tree.identify_column(event.x)
+        if region not in {"heading", "cell"} or not column_token.startswith("#"):
+            self._hide()
+            return
+        index = int(column_token[1:]) - 1
+        columns = tuple(self.tree["columns"])
+        if index < 0 or index >= len(columns):
+            self._hide()
+            return
+        column = str(columns[index])
+        row = self.tree.identify_row(event.y) if region == "cell" else ""
+        current = self.tree.set(row, column) if row else None
+        text = self.text_provider(column, current)
+        if not text:
+            self._hide()
+            return
+        target = (region, column, row)
+        if target == self._target:
+            return
+        self._hide()
+        self._target = target
+        self._pending = self.tree.after(
+            350,
+            lambda: self._show(text, event.x_root + 14, event.y_root + 18),
+        )
+
+    def _show(self, text: str, x: int, y: int) -> None:
+        self._pending = None
+        tip = self.tk.Toplevel(self.tree)
+        tip.wm_overrideredirect(True)
+        tip.wm_geometry(f"+{x}+{y}")
+        self.tk.Label(
+            tip,
+            text=text,
+            justify="left",
+            anchor="w",
+            background="#fffbe6",
+            foreground="#202020",
+            relief="solid",
+            borderwidth=1,
+            padx=8,
+            pady=6,
+            wraplength=500,
+        ).pack()
+        self._tip = tip
+
+    def _hide(self, _event=None) -> None:
+        if self._pending is not None:
+            self.tree.after_cancel(self._pending)
+            self._pending = None
+        if self._tip is not None:
+            self._tip.destroy()
+            self._tip = None
+        self._target = None
+
+
 class GameplayInspectorApp:
     def __init__(self, root, initial_game: Path | None = None):
         import tkinter as tk
@@ -76,6 +153,8 @@ class GameplayInspectorApp:
         self._item_records: dict[str, ItemRecord] = {}
         self._ability_records: dict[str, AbilityRecord] = {}
         self._generic_rows: dict[str, SoxRow] = {}
+        self._curve_guides: dict[str, FieldGuide] = {}
+        self._hero_guides: dict[str, FieldGuide] = {}
         self._current_table: TableSource | None = None
         self._loading = False
 
@@ -255,13 +334,16 @@ class GameplayInspectorApp:
         ttk.Label(left, text="Units", style="Heading.TLabel").pack(anchor="w")
         ttk.Entry(left, textvariable=self.unit_filter).pack(fill="x", pady=(5, 7))
         self.unit_tree = self._scrolled_tree(
-            left, ("name", "id", "type", "max"), selectmode="browse"
+            left,
+            ("name", "id", "type", "max", "hero_levels"),
+            selectmode="browse",
         )
         for column, label, width in (
             ("name", "Display name", 150),
             ("id", "Internal ID", 115),
             ("type", "Unit type", 75),
-            ("max", "Max level", 70),
+            ("max", "Unit MaxLevel", 90),
+            ("hero_levels", "Hero levels", 80),
         ):
             self.unit_tree.heading(column, text=label)
             self.unit_tree.column(column, width=width, minwidth=55, stretch=True)
@@ -286,6 +368,15 @@ class GameplayInspectorApp:
         unit_tabs.add(related, text="All related fields")
 
         self.unit_identity_tree = self._field_tree(identity)
+        ttk.Label(
+            curves,
+            text=(
+                "Hover a heading or value for source fields, interpretation, "
+                "retail hero ranges, and validation limits."
+            ),
+            style="Muted.TLabel",
+            wraplength=900,
+        ).pack(anchor="w", pady=(0, 5))
         self.unit_curve_tree = self._scrolled_tree(
             curves,
             (
@@ -308,22 +399,22 @@ class GameplayInspectorApp:
             ),
         )
         curve_labels = (
-            ("level", "Level"),
-            ("atk_e", "Attack enemy"),
-            ("atk_f", "Attack friend"),
-            ("def_e", "Defense enemy"),
-            ("def_f", "Defense friend"),
-            ("hp_e", "HP enemy"),
-            ("hp_f", "HP friend"),
-            ("crit_e", "Critical enemy"),
-            ("crit_f", "Critical friend"),
-            ("orb", "Orb Spark"),
-            ("exp", "EXP"),
-            ("guard_e", "Guard prob enemy"),
-            ("guard_f", "Guard prob friend"),
-            ("guard_h", "Guard prob hero"),
+            ("level", "Curve slot"),
+            ("atk_e", "Attack enemy-side"),
+            ("atk_f", "Attack friendly-side"),
+            ("def_e", "Defense enemy-side"),
+            ("def_f", "Defense friendly-side"),
+            ("hp_e", "HP enemy-side"),
+            ("hp_f", "HP friendly-side"),
+            ("crit_e", "Critical enemy-side"),
+            ("crit_f", "Critical friendly-side"),
+            ("orb", "Orb Spark curve"),
+            ("exp", "Unit EXP"),
+            ("guard_e", "Defense prob enemy"),
+            ("guard_f", "Defense prob friend"),
+            ("guard_h", "Defense prob hero"),
             ("true_orb", "True Orb atten."),
-            ("match", "Level match"),
+            ("match", "Matched level"),
         )
         for column, label in curve_labels:
             self.unit_curve_tree.heading(column, text=label)
@@ -334,6 +425,23 @@ class GameplayInspectorApp:
                 stretch=False,
                 anchor="e" if column != "level" else "center",
             )
+        self._curve_tooltip = _TreeviewTooltip(
+            self.tk,
+            self.unit_curve_tree,
+            lambda column, current: self._guide_text(
+                self._curve_guides, column, current
+            ),
+        )
+        ttk.Label(
+            hero,
+            text=(
+                "Ranges are observed in the seven retail hero rows. "
+                "Only explicitly noted UI limits are supported domains; "
+                "other edit bounds remain unknown."
+            ),
+            style="Muted.TLabel",
+            wraplength=900,
+        ).pack(anchor="w", pady=(0, 5))
         self.hero_tree = self._scrolled_tree(
             hero,
             (
@@ -345,22 +453,31 @@ class GameplayInspectorApp:
                 "guard_hp",
                 "troops",
                 "units",
+                "total_units",
                 "range",
             ),
         )
         for column, label in (
             ("level", "Hero level"),
-            ("speed", "Move speed"),
-            ("slots", "Slots"),
-            ("orb", "Orb use"),
+            ("speed", "Move scale"),
+            ("slots", "Accessory slots"),
+            ("orb", "Orb decrease"),
             ("guard_def", "Guard defense"),
             ("guard_hp", "Guard HP"),
-            ("troops", "Troop count"),
-            ("units", "Units/troop"),
-            ("range", "Attack range"),
+            ("troops", "Troop groups"),
+            ("units", "Units/group"),
+            ("total_units", "Total units"),
+            ("range", "Range bonus"),
         ):
             self.hero_tree.heading(column, text=label)
             self.hero_tree.column(column, width=110, minwidth=70, anchor="e")
+        self._hero_tooltip = _TreeviewTooltip(
+            self.tk,
+            self.hero_tree,
+            lambda column, current: self._guide_text(
+                self._hero_guides, column, current
+            ),
+        )
         self.unit_related_tree = self._scrolled_tree(
             related, ("table", "field", "value")
         )
@@ -622,6 +739,12 @@ class GameplayInspectorApp:
         if not isinstance(data, GameData):
             raise TypeError("Loader returned an unexpected data model")
         self.data = data
+        self._curve_guides = {
+            guide.key: guide for guide in data.hero_curve_guides()
+        }
+        self._hero_guides = {
+            guide.key: guide for guide in data.hero_field_guides()
+        }
         self.game_path.set(str(data.game_root))
         self._populate_overview()
         self._populate_units()
@@ -709,6 +832,14 @@ class GameplayInspectorApp:
                 continue
             iid = f"unit:{record.row.row_id}"
             self._unit_records[iid] = record
+            hero_levels = (
+                9
+                if any(
+                    related.name.casefold() == "herotable.sox"
+                    for related, _row in record.tables
+                )
+                else ""
+            )
             self.unit_tree.insert(
                 "",
                 "end",
@@ -718,6 +849,7 @@ class GameplayInspectorApp:
                     record.unit_id,
                     display_value(record.row.values[unit_type], source.encoding),
                     display_value(record.row.values[max_level], source.encoding),
+                    hero_levels,
                 ),
             )
 
@@ -731,8 +863,11 @@ class GameplayInspectorApp:
             return
         self.unit_title.configure(text=record.display_name)
         subtitle = record.unit_id
-        if record.display_name != record.unit_id:
-            subtitle += " — playable hero"
+        if any(
+            related.name.casefold() == "herotable.sox"
+            for related, _row in record.tables
+        ):
+            subtitle += " — playable hero, progression levels 1..9"
         self.unit_subtitle.configure(text=subtitle)
 
         self._fill_field_tree(
@@ -807,6 +942,17 @@ class GameplayInspectorApp:
             return
         source, row = pair
         for level in range(1, 10):
+            troop_count = _number(
+                source, row, f"GuardianControlTroopCount{level}"
+            )
+            units_per_group = _number(
+                source, row, f"GuardianControlTroopUnitCount{level}"
+            )
+            total_units = (
+                str(int(troop_count) * int(units_per_group))
+                if troop_count and units_per_group
+                else ""
+            )
             self.hero_tree.insert(
                 "",
                 "end",
@@ -817,10 +963,9 @@ class GameplayInspectorApp:
                     _number(source, row, f"OrbDecrease{level}"),
                     _number(source, row, f"GuardianDefense{level}"),
                     _number(source, row, f"GuardianHP{level}"),
-                    _number(source, row, f"GuardianControlTroopCount{level}"),
-                    _number(
-                        source, row, f"GuardianControlTroopUnitCount{level}"
-                    ),
+                    troop_count,
+                    units_per_group,
+                    total_units,
                     _number(source, row, f"AttackRange{level}"),
                 ),
             )
@@ -1048,6 +1193,15 @@ class GameplayInspectorApp:
                 "end",
                 values=(label, display_value(value, source.encoding)),
             )
+
+    @staticmethod
+    def _guide_text(
+        guides: dict[str, FieldGuide],
+        column: str,
+        current_value: str | None,
+    ) -> str | None:
+        guide = guides.get(column)
+        return guide.tooltip_text(current_value) if guide is not None else None
 
     @staticmethod
     def _clear_tree(tree) -> None:

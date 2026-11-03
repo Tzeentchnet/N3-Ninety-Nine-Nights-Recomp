@@ -98,6 +98,16 @@ PLAYABLE_SUFFIXES = {
     "dw": "Dwingvatt",
 }
 
+PLAYABLE_UNIT_NAMES = {
+    "C_LP_KM": "Aspharr",
+    "C_LP_KF": "Inphyy",
+    "C_LP_MF": "Tyurru",
+    "C_LP_PM": "Klarrann",
+    "C_LP_WM": "Myifee",
+    "C_DP_TR": "Vigk Vagk",
+    "C_DP_GB": "Dwingvatt",
+}
+
 LANGUAGE_ENCODINGS = {
     "ENG": "cp1252",
     "FRA": "cp1252",
@@ -240,6 +250,328 @@ class AbilityRecord:
     source: str
 
 
+@dataclass(frozen=True)
+class FieldGuide:
+    key: str
+    label: str
+    source: str
+    description: str
+    units: str
+    evidence: str
+    known_limits: str
+    observed_values: tuple[int, ...]
+
+    @property
+    def observed_range(self) -> tuple[int, int] | None:
+        if not self.observed_values:
+            return None
+        return self.observed_values[0], self.observed_values[-1]
+
+    @property
+    def observed_summary(self) -> str:
+        values = self.observed_values
+        if not values:
+            return "not available"
+        if len(values) == 1:
+            return str(values[0])
+        if all(right == left + 1 for left, right in zip(values, values[1:])):
+            return f"{values[0]}..{values[-1]}"
+        if len(values) <= 14:
+            return ", ".join(map(str, values))
+        return f"{values[0]}..{values[-1]} ({len(values)} distinct values)"
+
+    def tooltip_text(self, current_value: str | None = None) -> str:
+        lines = [
+            self.label,
+            self.description,
+            f"Source: {self.source}",
+        ]
+        if current_value not in {None, ""}:
+            lines.append(f"Current value: {current_value}")
+        lines.extend(
+            (
+                f"Units: {self.units}",
+                f"Retail hero values: {self.observed_summary}",
+                f"Known limits: {self.known_limits}",
+                f"Evidence: {self.evidence}",
+            )
+        )
+        return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class _FieldGuideSpec:
+    key: str
+    label: str
+    table_name: str
+    prefix: str
+    field_count: int
+    description: str
+    units: str
+    evidence: str
+    known_limits: str
+
+
+_HERO_FIELD_SPECS = (
+    _FieldGuideSpec(
+        "speed",
+        "Movement-speed scale",
+        "HEROTABLE.SOX",
+        "MoveSpeed",
+        9,
+        "Base movement-speed scale for the selected hero level.",
+        "percentage-like scale; 100 is the retail baseline",
+        "Field name, 100-based hero progression, and percentage-point movement item bonuses.",
+        "Retail values only; no runtime-safe minimum or maximum is established.",
+    ),
+    _FieldGuideSpec(
+        "slots",
+        "Accessory slots",
+        "HEROTABLE.SOX",
+        "SlotCount",
+        9,
+        "Number of accessory slots unlocked at the selected hero level. The weapon slot is separate.",
+        "slot count",
+        "Field name plus five separate accessory controls in the shipped status UI.",
+        "Retail and UI-supported domain is 1..5 accessory slots.",
+    ),
+    _FieldGuideSpec(
+        "orb",
+        "Orb decrease",
+        "HEROTABLE.SOX",
+        "OrbDecrease",
+        9,
+        "Base Orb gauge decrease or consumption scalar. The exact formula and direction remain untraced.",
+        "unknown; the shipped value resembles a 100-based scalar",
+        "Field name and retail values; no translated-code ownership has been established.",
+        "Every shipped hero value is 100. Other values are untested.",
+    ),
+    _FieldGuideSpec(
+        "guard_def",
+        "Guard defense",
+        "HEROTABLE.SOX",
+        "GuardianDefense",
+        9,
+        "Base defense stat for the hero's accompanying guard units.",
+        "integer base stat",
+        "Field name and independently described percentage modifiers for Guard defense.",
+        "Observed retail range only; no runtime-safe upper bound is established.",
+    ),
+    _FieldGuideSpec(
+        "guard_hp",
+        "Guard maximum HP",
+        "HEROTABLE.SOX",
+        "GuardianHP",
+        9,
+        "Base maximum-HP stat for the hero's guard force. Per-unit versus shared-pool ownership is untraced.",
+        "HP points",
+        "Field name and independently described Guard maximum-HP item modifiers.",
+        "Observed retail range only; no runtime-safe upper bound is established.",
+    ),
+    _FieldGuideSpec(
+        "troops",
+        "Controllable troop groups",
+        "HEROTABLE.SOX",
+        "GuardianControlTroopCount",
+        9,
+        "Number of guard groups that can be controlled independently.",
+        "group count",
+        "Field name plus separate left and right Guardian screens and controls.",
+        "Retail and UI-supported domain is 1 or 2 groups.",
+    ),
+    _FieldGuideSpec(
+        "units",
+        "Guard units per group",
+        "HEROTABLE.SOX",
+        "GuardianControlTroopUnitCount",
+        9,
+        "Number of guard units assigned to each controllable troop group.",
+        "units per group",
+        "Field name and the value reset that accompanies unlocking a second group.",
+        "Observed retail values only; allocation and engine-safe bounds are untraced.",
+    ),
+    _FieldGuideSpec(
+        "range",
+        "Innate attack-range bonus",
+        "HEROTABLE.SOX",
+        "AttackRange",
+        9,
+        "Innate attack-range bonus granted by hero progression.",
+        "percentage points",
+        "Field name and matching percentage-point attack-range item modifiers.",
+        "The innate retail range is not an engine cap; item modifiers exceed it.",
+    ),
+)
+
+_HERO_CURVE_SPECS = (
+    _FieldGuideSpec(
+        "atk_e",
+        "Enemy-side attack",
+        "ATTACKTABLE.SOX",
+        "Attack_enemy",
+        11,
+        "Base attack curve when this unit uses the enemy-side stat branch.",
+        "integer base stat",
+        "Direct table and field naming; all seven playable rows share this enemy branch.",
+        "Observed retail values only; runtime branch selection and edit bounds are untraced.",
+    ),
+    _FieldGuideSpec(
+        "atk_f",
+        "Friendly-side attack",
+        "ATTACKTABLE.SOX",
+        "Attack_friend",
+        11,
+        "Base attack curve for the friendly-side branch, which is character-specific for playable units.",
+        "integer base stat",
+        "Direct table and field naming plus character-specific playable-row values.",
+        "Likely player/ally-facing, but runtime branch ownership and safe bounds are untraced.",
+    ),
+    _FieldGuideSpec(
+        "def_e",
+        "Enemy-side defense",
+        "DEFENSETABLE.SOX",
+        "Defense_enemy",
+        11,
+        "Base defense curve when this unit uses the enemy-side stat branch.",
+        "integer base stat",
+        "Direct table and field naming.",
+        "Observed retail values only; runtime branch selection and edit bounds are untraced.",
+    ),
+    _FieldGuideSpec(
+        "def_f",
+        "Friendly-side defense",
+        "DEFENSETABLE.SOX",
+        "Defense_friend",
+        11,
+        "Base defense curve for the friendly-side stat branch.",
+        "integer base stat",
+        "Direct table and field naming.",
+        "Likely player/ally-facing, but runtime branch ownership and safe bounds are untraced.",
+    ),
+    _FieldGuideSpec(
+        "hp_e",
+        "Enemy-side HP",
+        "HPTABLE.SOX",
+        "HP_enemy",
+        11,
+        "Maximum-HP curve when this unit uses the enemy-side stat branch.",
+        "HP points",
+        "Direct table and field naming.",
+        "Playable enemy-side tails include zero placeholders; observed extrema are not safe edit limits.",
+    ),
+    _FieldGuideSpec(
+        "hp_f",
+        "Friendly-side HP",
+        "HPTABLE.SOX",
+        "HP_friend",
+        11,
+        "Maximum-HP curve for the friendly-side branch.",
+        "HP points",
+        "Direct table and field naming plus character-specific playable-row values.",
+        "Likely player/ally-facing, but runtime branch ownership and safe bounds are untraced.",
+    ),
+    _FieldGuideSpec(
+        "crit_e",
+        "Enemy-side critical value",
+        "CRITICALTABLE.SOX",
+        "Critical_enemy",
+        11,
+        "Critical-rate value for the enemy-side branch.",
+        "percentage-like points",
+        "Direct table and field naming and matching percentage-point critical item modifiers.",
+        "Slots 10 and 11 are zero for playable rows; no safe edit range is established.",
+    ),
+    _FieldGuideSpec(
+        "crit_f",
+        "Friendly-side critical value",
+        "CRITICALTABLE.SOX",
+        "Critical_friend",
+        11,
+        "Critical-rate value for the friendly-side branch.",
+        "percentage-like points",
+        "Direct table and field naming and matching percentage-point critical item modifiers.",
+        "Slots 10 and 11 are zero for playable rows; no safe edit range is established.",
+    ),
+    _FieldGuideSpec(
+        "orb",
+        "Orb Spark curve",
+        "ORBTABLE.SOX",
+        "OrbSpark",
+        11,
+        "Numeric Orb Spark progression curve, likely a blue-gauge threshold or capacity.",
+        "unknown integer gauge units",
+        "Field name and monotonic retail progression; the runtime formula is untraced.",
+        "Observed retail values only; threshold versus capacity semantics remain inferred.",
+    ),
+    _FieldGuideSpec(
+        "exp",
+        "Unit EXP value",
+        "ORBTABLE.SOX",
+        "Exp",
+        11,
+        "EXP value associated with the unit curve. It is not the playable hero level-up threshold.",
+        "EXP points",
+        "All seven playable rows are zero while non-player units use this field.",
+        "Every shipped playable-hero value is zero.",
+    ),
+    _FieldGuideSpec(
+        "guard_e",
+        "Enemy-side defense probability",
+        "DEFENSEPROBTABLE.SOX",
+        "DefenseProb_enemy",
+        11,
+        "Defense or block probability value for the enemy-side branch.",
+        "percentage-like points",
+        "Direct table and field naming.",
+        "Observed retail values only; probability formula and safe bounds are untraced.",
+    ),
+    _FieldGuideSpec(
+        "guard_f",
+        "Friendly-side defense probability",
+        "DEFENSEPROBTABLE.SOX",
+        "DefenseProb_friend",
+        11,
+        "Defense or block probability value for the friendly-side branch.",
+        "percentage-like points",
+        "Direct table and field naming.",
+        "Observed retail values only; probability formula and safe bounds are untraced.",
+    ),
+    _FieldGuideSpec(
+        "guard_h",
+        "Hero defense probability",
+        "DEFENSEPROBTABLE.SOX",
+        "DefenseProb_Hero",
+        11,
+        "Hero-specific defense or block probability value.",
+        "percentage-like points",
+        "Direct table and field naming.",
+        "Observed retail values only; probability formula and safe bounds are untraced.",
+    ),
+    _FieldGuideSpec(
+        "true_orb",
+        "True Orb attenuation",
+        "DEFENSETABLE.SOX",
+        "TrueOrb_attenuation",
+        11,
+        "Attenuation scalar associated with True Orb or Orb Spark combat.",
+        "unknown; percentage-like scalar",
+        "Direct field naming; every shipped playable value is 65.",
+        "Only 65 is observed for playable heroes; target and formula remain untraced.",
+    ),
+    _FieldGuideSpec(
+        "match",
+        "Level-matching result",
+        "LEVELMATCHINGTABLE.SOX",
+        "Level",
+        12,
+        "Maps each requested level slot to a stat-curve level.",
+        "curve level index",
+        "Playable rows map slots 1..9 directly and clamp slots 10..12 to level 9.",
+        "A result must identify an available curve level; edited runtime behavior is untested.",
+    ),
+)
+
+
 @dataclass
 class GameData:
     game_root: Path
@@ -271,18 +603,16 @@ class GameData:
         if character_source is None:
             return ()
 
-        hero_names: dict[str, str] = {}
         hero_source = self.table_source("HEROTABLE.SOX")
-        menu_source = self.table_source("MENULIBCHARINFO_ENG.SOX")
-        if hero_source and menu_source:
-            menu_name = menu_source.table.column_index("name")
-            for hero_row, menu_row in zip(
-                hero_source.table.rows, menu_source.table.rows, strict=False
-            ):
-                unit_id = display_value(hero_row.values[0], hero_source.encoding)
-                hero_names[unit_id] = display_value(
-                    menu_row.values[menu_name], menu_source.encoding
-                )
+        hero_ids = (
+            {
+                display_value(row.values[0], hero_source.encoding)
+                for row in hero_source.table.rows
+                if row.values
+            }
+            if hero_source
+            else set()
+        )
 
         related_names = (
             "ATTACKTABLE.SOX",
@@ -319,11 +649,148 @@ class GameData:
                 UnitRecord(
                     row=row,
                     unit_id=unit_id,
-                    display_name=hero_names.get(unit_id, unit_id),
+                    display_name=(
+                        PLAYABLE_UNIT_NAMES.get(unit_id, unit_id)
+                        if unit_id in hero_ids
+                        else unit_id
+                    ),
                     tables=linked,
                 )
             )
         return tuple(units)
+
+    def hero_field_guides(self) -> tuple[FieldGuide, ...]:
+        source = self.table_source("HEROTABLE.SOX")
+        if source is None:
+            return ()
+
+        guides = [
+            FieldGuide(
+                key="level",
+                label="Hero level",
+                source="HEROTABLE.SOX / numbered fields 1..9",
+                description="Playable-character progression level selecting each numbered hero field.",
+                units="integer level",
+                evidence="The table provides exactly nine fields in every hero progression family.",
+                known_limits="Defined retail progression domain is level 1..9.",
+                observed_values=tuple(range(1, 10)),
+            )
+        ]
+        for spec in _HERO_FIELD_SPECS:
+            guide = self._guide_from_spec(spec, source.table.rows)
+            guides.append(guide)
+            if spec.key == "units":
+                totals = []
+                for row in source.table.rows:
+                    for level in range(1, 10):
+                        group_value = self._numbered_value(
+                            source, row, "GuardianControlTroopCount", level
+                        )
+                        unit_value = self._numbered_value(
+                            source, row, "GuardianControlTroopUnitCount", level
+                        )
+                        if group_value is not None and unit_value is not None:
+                            totals.append(group_value * unit_value)
+                guides.append(
+                    FieldGuide(
+                        key="total_units",
+                        label="Derived total guard units",
+                        source=(
+                            "HEROTABLE.SOX / GuardianControlTroopCountN x "
+                            "GuardianControlTroopUnitCountN"
+                        ),
+                        description="Derived total capacity across all controllable guard groups.",
+                        units="guard units",
+                        evidence=(
+                            "Arithmetic derivation from the two directly named troop fields; "
+                            "runtime allocation is untraced."
+                        ),
+                        known_limits=(
+                            "Display-only derived value; it is not a separate editable SOX field."
+                        ),
+                        observed_values=tuple(sorted(set(totals))),
+                    )
+                )
+        return tuple(guides)
+
+    def hero_curve_guides(self) -> tuple[FieldGuide, ...]:
+        hero_source = self.table_source("HEROTABLE.SOX")
+        if hero_source is None:
+            return ()
+        hero_ids = {
+            display_value(row.values[0], hero_source.encoding)
+            for row in hero_source.table.rows
+            if row.values
+        }
+        guides = [
+            FieldGuide(
+                key="level",
+                label="Curve slot",
+                source="Core stat tables slots 1..11; LEVELMATCHINGTABLE.SOX slots 1..12",
+                description=(
+                    "Structural curve slot, not a confirmed playable-character level. "
+                    "Only level matching has slot 12."
+                ),
+                units="slot index",
+                evidence="Direct schema counts across the seven displayed core tables.",
+                known_limits=(
+                    "Stat curves define slots 1..11. Level matching alone defines slots 1..12."
+                ),
+                observed_values=tuple(range(1, 13)),
+            )
+        ]
+        for spec in _HERO_CURVE_SPECS:
+            source = self.table_source(spec.table_name)
+            rows = ()
+            if source is not None:
+                rows = tuple(
+                    row
+                    for row in source.table.rows
+                    if row.values
+                    and display_value(row.values[0], source.encoding) in hero_ids
+                )
+            guides.append(self._guide_from_spec(spec, rows, source))
+        return tuple(guides)
+
+    @staticmethod
+    def _numbered_value(
+        source: TableSource,
+        row: SoxRow,
+        prefix: str,
+        level: int,
+    ) -> int | None:
+        indices = source.table.column_indices(f"{prefix}{level}")
+        if not indices:
+            return None
+        value = row.values[indices[0]]
+        return value if isinstance(value, int) else None
+
+    def _guide_from_spec(
+        self,
+        spec: _FieldGuideSpec,
+        rows: Iterable[SoxRow],
+        source: TableSource | None = None,
+    ) -> FieldGuide:
+        source = source or self.table_source(spec.table_name)
+        values = []
+        if source is not None:
+            for row in rows:
+                for level in range(1, spec.field_count + 1):
+                    value = self._numbered_value(source, row, spec.prefix, level)
+                    if value is not None:
+                        values.append(value)
+        return FieldGuide(
+            key=spec.key,
+            label=spec.label,
+            source=(
+                f"{spec.table_name} / {spec.prefix}1..{spec.field_count}"
+            ),
+            description=spec.description,
+            units=spec.units,
+            evidence=spec.evidence,
+            known_limits=spec.known_limits,
+            observed_values=tuple(sorted(set(values))),
+        )
 
     def items(self) -> tuple[ItemRecord, ...]:
         item_source = self.table_source("ITEMTABLE.SOX")

@@ -239,6 +239,119 @@ class GameDataTests(unittest.TestCase):
         self.assertNotIn(str(self.game), serialized)
         self.assertNotIn("C_TEST", serialized)
 
+    def test_maps_playable_units_and_builds_hero_field_guides(self) -> None:
+        unit_ids = [
+            "C_LP_KM",
+            "C_LP_KF",
+            "C_LP_MF",
+            "C_LP_PM",
+            "C_LP_WM",
+            "C_DP_TR",
+            "C_DP_GB",
+        ]
+        character = build_sox(
+            [("name", 1), ("unit type", 3), ("MaxLevel", 3)],
+            [[unit_id.encode("ascii"), 1000 + index, 1] for index, unit_id in enumerate(unit_ids)],
+        )
+        families = (
+            "MoveSpeed",
+            "SlotCount",
+            "OrbDecrease",
+            "GuardianDefense",
+            "GuardianHP",
+            "GuardianControlTroopCount",
+            "GuardianControlTroopUnitCount",
+            "AttackRange",
+        )
+        hero_columns = [("UnitName", 1)] + [
+            (f"{family}{level}", 3)
+            for family in families
+            for level in range(1, 10)
+        ]
+        hero_rows = []
+        for index, unit_id in enumerate(unit_ids):
+            values: list[int | bytes] = [unit_id.encode("ascii")]
+            values += [100 + index * 5 + level for level in range(9)]
+            values += [min(1 + level // 2, 5) for level in range(9)]
+            values += [100] * 9
+            values += [65 + level for level in range(9)]
+            values += [800 + level * 100 for level in range(9)]
+            values += [1] * 4 + [2] * 5
+            values += [15 + level * 3 for level in range(9)]
+            values += [level * 5 for level in range(9)]
+            hero_rows.append(values)
+        hero = build_sox(hero_columns, hero_rows)
+        (self.packed / "res_init.pak").write_bytes(
+            build_pak(
+                [("CHARDATA.SOX", character), ("HEROTABLE.SOX", hero)],
+                wrapped=True,
+            )
+        )
+
+        data = gameplay.load_game_data(self.game)
+        names = {unit.unit_id: unit.display_name for unit in data.units()}
+        self.assertEqual(names["C_LP_MF"], "Tyurru")
+        self.assertEqual(names["C_LP_PM"], "Klarrann")
+        self.assertEqual(names["C_LP_WM"], "Myifee")
+        self.assertEqual(names["C_DP_TR"], "Vigk Vagk")
+        self.assertEqual(names["C_DP_GB"], "Dwingvatt")
+
+        guides = {guide.key: guide for guide in data.hero_field_guides()}
+        self.assertEqual(guides["level"].observed_range, (1, 9))
+        self.assertEqual(guides["speed"].observed_range, (100, 138))
+        self.assertEqual(guides["orb"].observed_values, (100,))
+        self.assertIn("1..5", guides["slots"].known_limits)
+        self.assertEqual(guides["total_units"].observed_range, (15, 78))
+        self.assertIn("Current value: 125", guides["speed"].tooltip_text("125"))
+
+    def test_builds_curve_guides_from_playable_rows_only(self) -> None:
+        hero = build_sox(
+            [("UnitName", 1)],
+            [[b"C_LP_MF"], [b"C_DP_GB"]],
+        )
+        attack_columns = [("UnitName", 1)] + [
+            (f"{prefix}{level}", 3)
+            for prefix in ("Attack_enemy", "Attack_friend")
+            for level in range(1, 12)
+        ]
+        attack = build_sox(
+            attack_columns,
+            [
+                [b"C_LP_MF"] + list(range(10, 21)) + list(range(100, 111)),
+                [b"C_DP_GB"] + list(range(20, 31)) + list(range(200, 211)),
+                [b"C_NOT_HERO"] + [999] * 22,
+            ],
+        )
+        matching_columns = [("name", 1)] + [
+            (f"Level{level}", 3) for level in range(1, 13)
+        ]
+        matching = build_sox(
+            matching_columns,
+            [
+                [b"C_LP_MF"] + list(range(1, 10)) + [9, 9, 9],
+                [b"C_DP_GB"] + list(range(1, 10)) + [9, 9, 9],
+                [b"C_NOT_HERO"] + [11] * 12,
+            ],
+        )
+        (self.packed / "res_init.pak").write_bytes(
+            build_pak(
+                [
+                    ("HEROTABLE.SOX", hero),
+                    ("ATTACKTABLE.SOX", attack),
+                    ("LEVELMATCHINGTABLE.SOX", matching),
+                ],
+                wrapped=True,
+            )
+        )
+
+        data = gameplay.load_game_data(self.game)
+        guides = {guide.key: guide for guide in data.hero_curve_guides()}
+        self.assertEqual(guides["level"].observed_range, (1, 12))
+        self.assertEqual(guides["atk_e"].observed_range, (10, 30))
+        self.assertEqual(guides["atk_f"].observed_range, (100, 210))
+        self.assertNotIn(999, guides["atk_f"].observed_values)
+        self.assertEqual(guides["match"].observed_values, tuple(range(1, 10)))
+
     def test_validates_synthetic_corpus(self) -> None:
         packed_table = build_sox([("Value", 3)], [[10]])
         loose_table = build_sox([("Name", 1)], [[b"test"]])

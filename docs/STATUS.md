@@ -1399,7 +1399,7 @@ strings, and missing footers. Structural JSON export records schemas, hashes,
 counts, archive comparisons, build identity, and warnings without row values
 or absolute extraction paths.
 
-Thirteen synthetic unit tests pass. A full owned-corpus run validates all 522
+Fifteen synthetic unit tests pass. A full owned-corpus run validates all 522
 packed-resource archives, 63,170 members, 29 duplicate-name archives with 76
 extra records and no non-identical duplicate groups, plus 238 packed and 72
 loose SOX tables representing 111 unique contents. Tkinter construction,
@@ -1459,3 +1459,39 @@ writer, changed-string launch, visual PAL pass, or complete new-language test
 was performed. The sheet contract, preservation rules, validation limits, and
 staged implementation plan are documented in
 [localization data](LOCALIZATION.md).
+
+## Playable hero field guidance
+
+The inspector's playable-character join was audited against `HEROTABLE.SOX`,
+`CHARDATA.SOX`, character resources, and voice identifiers. The hero table's
+row order does not match the English profile table's order, so the former
+row-position join mislabeled Tyurru, Klarrann, Myifee, Vigk Vagk, and
+Dwingvatt. The model now maps all seven supported internal unit IDs directly
+and retains the raw IDs alongside their corrected names.
+
+The hero progression grid now distinguishes nine direct progression levels
+from the generic unit curves. The attack, defense, HP, critical, Orb, and
+defense-probability tables expose eleven numbered slots;
+`LEVELMATCHINGTABLE.SOX` alone exposes twelve. Every playable row maps slots
+1-9 directly and clamps slots 10-12 to level 9, so the generic grid now labels
+them curve slots rather than hero levels. The unit list also separates raw
+`CHARDATA.SOX` `MaxLevel` from the nine-level playable progression.
+
+Hover guidance covers movement scale, accessory slots, Orb decrease, guard
+defense and HP, controllable troop groups, units per group, derived total
+capacity, attack-range bonus, and all displayed core-curve families. It
+reports the exact source fields, units or uncertainty, retail values observed
+across all seven heroes, and known limits. The supported UI domains are hero
+level 1-9, accessory count 1-5, and guard-group count 1-2. Other ranges are
+explicitly reported as observations rather than safe edit bounds.
+
+The owned-data smoke check loads the corrected seven names, nine progression
+rows, twelve structural curve rows, dynamic guides, and derived guard totals.
+Fifteen synthetic tests pass, including identity-order regression, range
+aggregation, and exclusion of nonhero rows. Python compilation and Tkinter
+construction/population checks also pass.
+
+No guest-code caller, damage formula, side-branch selector, Orb-decrease
+formula, guard-HP ownership, edited value, rebuilt SOX/PAK, gameplay route, or
+save compatibility was validated. These tooltips improve read-only
+interpretation; they do not establish writable ranges.

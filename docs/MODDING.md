@@ -275,6 +275,14 @@ slots, and localized ability lists while retaining raw tables and duplicate
 headings. Structural JSON export omits row values and absolute extraction
 paths.
 
+The playable-hero view now distinguishes the nine direct `HEROTABLE.SOX`
+progression levels from eleven stat-curve slots and the twelfth
+level-matching-only slot. Hover guidance reports exact source fields,
+interpretations, units, observed retail values, and independently supported
+UI limits. It also corrects the five hero names that were previously
+mismatched by joining hero and profile tables by row position. Observed ranges
+remain evidence for editor controls, not validated write limits.
+
 Launch it with:
 
 ```powershell
