@@ -159,15 +159,17 @@ formats and original data compatible until a migration is deliberately
 implemented and tested. Profiles, traces and original assets stay local.
 
 The companion manifest is now `0.14.1`, an ungated candidate rather than a
-completed release. Its Blender 5.2.2 source/save-reopen, Blender-built ZIP,
-and isolated-install gates are unexecuted; ZIPs remain local-only. Its
-configured CI covers synthetic Python and packaging, not Blender, private
-fixtures, or recomp parity.
+completed release, with nine read-only imports and zero exports. Synthetic
+Blender 5.2.2 source/save-reopen smoke passed on the integration changes, but the
+clean-pinned release gate, Blender-built ZIP and isolated install remain
+open; ZIPs remain local-only. Its configured CI covers synthetic Python and
+packaging, not Blender, private fixtures, or recomp parity.
 
 The companion evidence matrix separates the completed character/root source
-inventories from partial deformation, signal, and attachment research. The
-bounded animation capture counts pose-output calls without recording matrices
-and binds no actor; it cannot establish source FPS, interpolation, world root
+inventories from preview-only deformation and partial signal/attachment
+research. Later bounded animation probes matched one archive-content/member
+identity and sampled quaternion-helper values, but recorded no actor/root/child
+matrices and bound no actor. They cannot establish source FPS, interpolation, world root
 motion, an equipped attachment, or gameplay event effects. The next runtime
 work must bind winning package members and actors before synchronized
 controller/pose, root/child and dispatch/effect comparisons on at least two

@@ -1641,16 +1641,18 @@ They classify 36 character pairs, 3,121 candidates, and 67 unique animation
 payloads (49 accepted, 11 trailing-data, seven inverse-bind rejections).
 This is not a full release-corpus or in-game gate.
 
-The integration check used recomp HEAD
-`62ebd5c139ff9bd169dd3b8eca7c9cd5bb5c0a16` with uncommitted changes in
-both checkouts; a clean, explicitly pinned recomp commit is still required for
+The integration check used recomp base
+`62ebd5c139ff9bd169dd3b8eca7c9cd5bb5c0a16` with additional integration
+changes; a clean, explicitly pinned recomp commit is still required for
 release. The companion's 218 synthetic tests passed under ordinary Python
 3.12 and Blender's bundled Python 3.13 without launching Blender; the recomp
 mod and contract suites passed 29 tests. The configured CI checks synthetic
 Python and packaging only, and ZIPs remain local-only. The `0.14.1` Blender
 5.2.2 source/save-reopen, Blender-built archive, and isolated-install gates
-were not run and remain required. No exporter, native writer, or receipt
-consumer was added.
+were not run at that foundation checkpoint. Later synthetic source smoke and
+private preview measurements are described below; clean-pinned release
+gates remain required. No exporter, native writer, or receipt consumer was
+added.
 
 ## Character animation static trace
 
@@ -1681,7 +1683,7 @@ experiment must first verify member/row identity, then separately compare
 controller and dispatch-window behavior at known clock rates while preserving
 the original calls.
 
-## Bounded animation runtime instrumentation
+## Historical bounded animation-v2 instrumentation
 
 **Observed, implementation:** five opt-in retained-call wrappers now cover
 setup `0x82093BE8`, actor controller `0x82080158`, queue `0x82252BD8`,
@@ -1748,7 +1750,7 @@ unproven; posted keys do not establish that the title consumed them. This is
 not a 30-versus-60 FPS comparison, gameplay acceptance, animation fix, native
 writer gate, or Blender run.
 
-## Bounded signal/clip research
+## Historical bounded signal/clip research
 
 **Observed, static and private corpus:** an independent all-package inventory
 found 11 strict-add-on-rejected BA trailing profiles in 57 occurrences, and
@@ -1785,13 +1787,13 @@ hooks do not observe effects. Until that edge is proved, retain `Clip_###`,
 unsupported tails and no notify markers; source FPS and attachment semantics
 are also unproven.
 
-### Companion evidence closeout
+### Earlier companion evidence closeout
 
-The companion `0.14.1` candidate now ships detailed runtime evaluator,
+At that closeout the companion `0.14.1` candidate shipped detailed runtime evaluator,
 root-motion, and attachment evidence documents alongside its roadmap matrix.
-The closeout reference for this repository is HEAD
-`74897d56dfc9ed853a752a4ffd853040d63526a4`; both checkouts have uncommitted
-integration changes, so this is not clean release provenance. The earlier
+The closeout reference for this repository was base
+`74897d56dfc9ed853a752a4ffd853040d63526a4` with additional integration
+changes, not clean release provenance. The earlier
 `62ebd5c139ff9bd169dd3b8eca7c9cd5bb5c0a16` reference above describes the
 original foundation comparison.
 
@@ -1799,7 +1801,7 @@ The closeout inspected commit `74897d5`, authored and committed by
 Tzeentchnet with message `Research bounded signal and clip linkage`. Its four
 changed files are the intended signal research tool and synthetic tests plus
 the corresponding `NATIVE-CODE.md` and `STATUS.md` evidence. Its message has
-no trailers and no Copilot co-author. The branch is one commit ahead of
+no trailers and no Copilot co-author. At that closeout the branch was one commit ahead of
 `private/main`; neither history nor unrelated working-tree changes were
 rewritten.
 
@@ -1821,7 +1823,7 @@ contract plus standalone and cross-repository consistency. The locked recomp
 build and complete native CTest suite passed 50/50, including the three trace
 tests; full Python discovery passed 112 tests and the focused mod/trace/signal/
 contract suites passed 67. Scoped correctness lint and the recomp contract
-checker passed. These checks do not constitute a hosted CI run or Blender,
+checker passed. That local closeout itself did not constitute a hosted CI run or Blender,
 visual, staging, or runtime acceptance.
 
 The recomp trace and route validators, candidate scan and current local
@@ -1833,9 +1835,88 @@ Its recorded capture base remains
 closeout HEAD does not retroactively change that provenance or establish the
 candidate package winner.
 
-The source remains read-only with eight imports, zero exports, no writer and
-no Blender receipt consumer. `Clip_###`, `source_fps_unverified`, no notify
+At that closeout the source was read-only with eight imports, zero exports,
+no writer and no Blender receipt consumer. `Clip_###`, `source_fps_unverified`, no notify
 markers, no root extraction and detached unresolved attachments remain in
 force. The candidate's Blender 5.2.2, complete applicable corpus, visual,
 isolated install, staging and in-game acceptance gates remain open; the CI
 candidate ZIP is local-only.
+
+## Current P0 integration evidence
+
+**Observed, source/CI:** the companion `0.14.1` remains an ungated candidate,
+now with nine read-only imports, zero exports, 44 explicit shipped paths and
+45 archive files including the implicit manifest. The ninth is an explicitly
+selected detached attachment diagnostic, not a binding. The latest local
+lane passed 456 synthetic tests per Python interpreter. Hosted
+[run 41683738344](https://github.com/Tzeentchnet/N3_Blender/actions/runs/41683738344)
+passed 316 tests in each Ubuntu 24.04 and Windows 2022 Python 3.13 job at
+add-on `fd27105854501f2edd701c71f01a9578b78a53bd`, with zero artifacts.
+That run's 41-file archive check is historical and does not cover later
+integration changes, Blender or the private corpus. This integration lane
+began from clean base revisions add-on
+`fd27105854501f2edd701c71f01a9578b78a53bd` and recomp
+`bc062b2b7b148ae5f53cf14bfc69464f1ada2d37`; current changes were validated
+on top and are not included in those hashes. They are not release pins.
+The in-memory CI archive checked immediately before the documentation-only
+follow-up contained 45 files, 248,538 bytes, SHA-256
+`87690f9889c2e61753a4cadb7508a0932738466ba2e388fedcc6481fcdd596cc`.
+Later shipped-document edits change the archive bytes; that fingerprint is
+for the verified pre-follow-up snapshot, not a Blender-built release.
+Earlier recomp integration checks reported 51/51 CTests in each
+RelWithDebInfo and Release build, 25/25 portable CTests, and 132 Python
+tests; these are not gameplay approval.
+
+**Observed, source and preview:** the strict root inventory was rechecked:
+36 package pairs, 685 BA occurrences, 67 unique payloads, with 49 accepted,
+11 trailing and seven inverse-bind rejections; 565 accepted occurrences.
+Its snapshot SHA-256 is
+`9335eeecb6416167979dbfcf21bc1ed441ee466a4b696496e491ebf5822a090b`;
+two 90-byte `match` comparisons have SHA-256
+`cd702e8b3325f8237632b57b1daadbce9537ea2c278acbb803febc428a14409e`.
+The 49 unique profiles contain 2,349 root tracks, 77,820 translation and
+74,319 rotation keys; occurrence-weighted counts are 30,322, 1,007,015 and
+961,252. Root consumption and wraps remain unknown.
+
+Blender 5.2.2 synthetic source/save-reopen and detached-preview smoke passed.
+A private comparison measured six hash-selected animation/model pairs, 71
+candidate occurrences and 54 samples. Bone maximum and per-bone RMS preview
+limits passed; aggregate max/RMS were `3.67390857647365e-6` /
+`3.095875030562622e-7`. Vertex max/RMS were `4.3782152044794685e-6` /
+`5.383467364220015e-7` unverified preview units; no vertex threshold was
+applied. The result is `preview-regression-only`, with metre and release
+approval false, not visual or runtime conformance. The companion roadmap
+records every profile identity and residual.
+
+**Observed, bounded runtime:** trace-v3 30/40/60 resource runs resolved the
+same archive-content/member identity and retained 128 quaternion samples
+each, but all stopped `identity_changed` with sample losses and no actor.
+Original actor scope rejected 588 setups, 587 with a known getter. Historical
+v3/v4 routes without provenance are accepted as unverified. Both readers
+validate current v4 provenance; the recomp compares hashes while the add-on
+reports recorded-only provenance without host paths. Signal/quaternion losses
+and actor-generation mismatches gate correlation in both readers. Acquiring
+two loss-free actor-bound profiles with validated live ABI and identity remains a
+prerequisite, not completed conformance. Exact event/loss counts, hashes,
+residuals and discriminating experiments are in [Native code](NATIVE-CODE.md)
+and the companion runtime evidence.
+
+**Observed/inferred, signals and attachments:** pure AS-101/INFO-100 codecs
+have synthetic bounds/preservation tests, but two foreground-unowned probes
+posted zero inputs and observed zero selection, dispatch and effect. The
+occurrence inventory v2 retains indexed alternatives; 44 item rows remain
+name-based candidates. Two attachment attempts each saw 151 reads, verified
+20 and lost 131 to capacity; a third verified all 151. None observed an
+actor, attachment lifecycle or synchronized transform; residuals are
+unmeasured and detached preview does not authorize parenting. Detailed
+capture/report hashes, scope and next controlled two-character experiments
+are recorded in [Native code](NATIVE-CODE.md) and the companion evidence
+documents.
+
+**Unknown / blocked:** source FPS, interpolation, repeated-key behavior,
+root transfer, signal-to-clip/effect linkage, semantic names, socket and
+attachment-local transforms. Keep `Clip_###`, `source_fps_unverified`, no
+notify markers, no root extraction and no attachment parenting. No native
+writer or receipt consumer exists. Clean-pinned complete applicable corpus,
+Blender-built `0.14.1` ZIP, isolated install, visual, staging and in-game
+release gates remain open; no upload or release is authorized.

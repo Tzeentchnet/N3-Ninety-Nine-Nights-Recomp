@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import argparse
 import ast
-from collections import Counter
 import hashlib
 import html
 import json
 import os
-from pathlib import Path
 import re
 import sys
 import unicodedata
+from collections import Counter
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 IMPORT_OPERATORS = (
@@ -26,7 +25,9 @@ IMPORT_OPERATORS = (
     "import_scene.n3_level_package",
     "import_scene.n3_navigation_package",
     "import_scene.n3_camera_package",
+    "import_scene.n3_detached_attachment",
 )
+HISTORICAL_BASELINE_VERSION = "0.14.0"
 MARKER_NAME = "n3-blender-baseline"
 SCHEMA_PATH = "docs/schemas/n3-blender-export-v1.schema.json"
 SCOPED_DOCS = (
@@ -422,7 +423,7 @@ def _markdown_anchors(text: str) -> set[str]:
         previous_item_indent = None
     for tag in re.findall(r"<[A-Za-z][^>]*>", _mask_inline_code(visible)):
         tag_name = re.match(r"<([A-Za-z][A-Za-z0-9:-]*)", tag).group(1).lower()
-        for match in re.finditer(r"""(?:^|\s)(id|name)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))""", tag, re.I):
+        for match in re.finditer(r"""(?:^|\s)(id|name)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))""", tag, re.IGNORECASE):
             if match.group(1).lower() == "name" and tag_name != "a":
                 continue
             anchors.add(html.unescape(next(group for group in match.groups()[1:] if group is not None)))
@@ -617,7 +618,9 @@ def check_operator_table(text: str, context: str) -> None:
         ids.append(operator.group(1))
         index += 1
     if Counter(ids) != Counter(IMPORT_OPERATORS):
-        raise ConsistencyError(f"{context}: operator table must list the eight import IDs exactly once")
+        raise ConsistencyError(
+            f"{context}: operator table must list the {len(IMPORT_OPERATORS)} import IDs exactly once"
+        )
 
 
 def _require(pattern: str, value: str, message: str) -> None:
@@ -625,14 +628,20 @@ def _require(pattern: str, value: str, message: str) -> None:
         raise ConsistencyError(message)
 
 
+def _require_paragraph(pattern: str, value: str, message: str) -> None:
+    paragraphs = re.split(r"\n[ \t]*\n", value)
+    if not any(re.search(pattern, " ".join(part.split()), re.IGNORECASE) for part in paragraphs):
+        raise ConsistencyError(message)
+
+
 def _reject_conflicting_claims(text: str, context: str) -> None:
     prose = " ".join(_mask_blocks(text).split())
     patterns = (
-        r"(?<!no )\b(?:native (?:N3 )?writer|exporter|export operator) "
-        r"(?:is|has been) (?:implemented|enabled|registered|available)\b",
-        r"\b(?:recomp )?stager (?:now |currently |already )?"
-        r"(?:consumes|reads|validates|stages) (?:(?:a|an|the|optional|Blender) )*"
-        r"`?(?:receipt|n3-blender-export\.json)`?",
+        (r"(?<!no )\b(?:native (?:N3 )?writer|exporter|export operator) "
+         r"(?:is|has been) (?:implemented|enabled|registered|available)\b"),
+        (r"\b(?:recomp )?stager (?:now |currently |already )?"
+         r"(?:consumes|reads|validates|stages) (?:(?:a|an|the|optional|Blender) )*"
+         r"`?(?:receipt|n3-blender-export\.json)`?"),
         r"\b(?:optional |Blender )*receipt (?:is|has been) (?:now )?(?:consumed|read|validated|staged)\b",
     )
     if any(re.search(pattern, prose, re.IGNORECASE) for pattern in patterns):
@@ -641,6 +650,11 @@ def _reject_conflicting_claims(text: str, context: str) -> None:
 
 def check_claims(documents: dict[str, str], marker: dict) -> None:
     version = re.escape(marker["addon_version"])
+    historical = re.escape(HISTORICAL_BASELINE_VERSION)
+    if tuple(map(int, marker["addon_version"].split("."))) <= tuple(
+        map(int, HISTORICAL_BASELINE_VERSION.split("."))
+    ):
+        raise ConsistencyError("current candidate must be newer than the historical baseline")
     authoring = _mask_blocks(_section(documents[SCOPED_DOCS[0]], "Status and selected scope", SCOPED_DOCS[0]))
     check_operator_table(authoring, SCOPED_DOCS[0])
     modding_boundary = _mask_blocks(_section(documents[SCOPED_DOCS[1]], "Current boundary", SCOPED_DOCS[1]))
@@ -649,40 +663,52 @@ def check_claims(documents: dict[str, str], marker: dict) -> None:
     status = _mask_blocks(
         _section(
             documents[SCOPED_DOCS[3]],
-            f"Blender {marker['addon_version']} read-only authoring baseline",
+            f"Blender {HISTORICAL_BASELINE_VERSION} read-only authoring baseline",
             SCOPED_DOCS[3],
         )
     )
+    _require_paragraph(
+        rf"\b{version}\s+ungated candidate\b.*\bnine read-only imports\b",
+        authoring,
+        "missing or stale current candidate version or nine-import count",
+    )
+    _require_paragraph(
+        rf"\b{historical}\s+read-only baseline\b.*\beight bounded import operators\b.*"
+        r"\bnamed historical baseline\b",
+        authoring,
+        "missing or stale historical authoring baseline version or eight-import count",
+    )
     checks = (
-        (authoring, rf"\b{version}\s+read-only baseline\b", "authoring baseline version"),
-        (authoring, r"\beight import operators\b", "authoring operator count"),
         (authoring, r"\bno exporter or native N3 writer\b", "authoring no-writer claim"),
         (
             authoring,
             r"\bstager does not consume (?:the |optional |Blender )*receipt\b",
             "authoring receipt non-consumption",
         ),
-        (modding_boundary, rf"\b{version}\s+baseline:\s+eight read-only operators\b", "modding capability table"),
+        (modding_boundary, rf"\b{historical}\s+baseline:\s+eight read-only operators\b", "modding capability table"),
         (modding_boundary, r"\bno exporter or receipt consumer\b", "modding receipt table"),
-        (modding, rf"\b{version}\s+baseline\b", "modding baseline version"),
-        (modding, r"\beight read-only operators\b", "modding operator count"),
         (modding, r"\bno exporter or native writer exists\b", "modding no-writer claim"),
         (
             modding,
             r"\bstager neither reads nor validates (?:a |the )*`?n3-blender-export\.json`?\b",
             "modding receipt non-consumption",
         ),
-        (porting, rf"\b{version}\s+baseline\b", "porting baseline version"),
-        (porting, r"\beight read-only import operators\b", "porting operator count"),
         (porting, r"\bno exporter or native writer\b", "porting no-writer claim"),
         (porting, r"\bstager does not consume, validate, or stage a receipt\b", "porting receipt non-consumption"),
-        (status, rf"\b{version}\s+baseline\b", "status baseline version"),
-        (status, r"\beight import operators\b", "status operator count"),
         (status, r"\ban exporter, and a native writer are not implemented\b", "status no-writer claim"),
         (status, r"\bdoes not read or validate a receipt\b", "status receipt non-consumption"),
     )
     for section, pattern, description in checks:
         _require(pattern, section, f"missing or stale {description}")
+    for section, pattern, description in (
+        (modding, rf"\b{historical}\s+baseline\b.*\beight read-only operators\b",
+         "modding historical baseline version and operator count"),
+        (porting, rf"\b{historical}\s+baseline\b.*\beight read-only import operators\b",
+         "porting historical baseline version and operator count"),
+        (status, rf"\b{historical}\s+baseline\b.*\beight import operators\b",
+         "status historical baseline version and operator count"),
+    ):
+        _require_paragraph(pattern, section, f"missing or stale {description}")
     for name, section in (
         (SCOPED_DOCS[0], authoring), (SCOPED_DOCS[1], modding_boundary),
         (SCOPED_DOCS[1], modding), (SCOPED_DOCS[2], porting), (SCOPED_DOCS[3], status),
@@ -698,12 +724,12 @@ def check_stager_source(tree: FileTree) -> None:
     except SyntaxError as error:
         raise ConsistencyError(f"{path}: invalid Python: {error}") from error
     for node in ast.walk(module):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if "n3-blender-export" in node.value.casefold():
-                raise ConsistencyError(
-                    f"{path}:{node.lineno}: stager references the Blender receipt; "
-                    "the documented non-consumption claim requires review"
-                )
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str) and
+                "n3-blender-export" in node.value.casefold()):
+            raise ConsistencyError(
+                f"{path}:{node.lineno}: stager references the Blender receipt; "
+                "the documented non-consumption claim requires review"
+            )
         identifier = (
             node.id if isinstance(node, ast.Name)
             else node.attr if isinstance(node, ast.Attribute)

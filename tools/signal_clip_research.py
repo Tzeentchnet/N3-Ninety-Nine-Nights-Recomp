@@ -9,16 +9,16 @@ are candidates, not evidence that the runtime resolver selected those members.
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
-from dataclasses import dataclass
 import hashlib
 import importlib
 import json
-from pathlib import Path
 import re
 import struct
 import sys
-from typing import Callable
+from collections import Counter, defaultdict
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 
 if __name__ == "__main__":
     sys.dont_write_bytecode = True
@@ -278,7 +278,7 @@ def _table_stem(value, suffix: str) -> str | None:
         return None
     if not name:
         return None
-    return name[:-len(suffix)] if name.endswith(suffix) else name
+    return name.removesuffix(suffix)
 
 
 def _script_hits(data: bytes) -> dict[str, int]:
@@ -754,14 +754,13 @@ def _archive_hash(path: Path) -> str:
 
 def summarize_runtime_trace(path: Path) -> dict:
     """Validate an existing trace and expose only its identity and counts."""
-    if not _regular_file(path) or not 0 < path.stat().st_size <= 96 * 1024:
-        raise ResearchError("unsupported runtime trace")
     try:
-        from .animation_trace_manifest import parse_trace
+        from .animation_trace_manifest import read_trace
     except ImportError:
-        from animation_trace_manifest import parse_trace
-    raw = path.read_bytes()
-    trace = parse_trace(raw)
+        from animation_trace_manifest import read_trace
+    if not _regular_file(path):
+        raise ResearchError("unsupported runtime trace")
+    raw, trace = read_trace(path)
     identity = trace["identity"]
     return {
         "sha256": _hash(raw),
@@ -857,7 +856,7 @@ def main(argv=None) -> int:
             result["runtime_trace"] = summarize_runtime_trace(args.trace)
         print(json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
         return 0
-    except Exception:
+    except Exception:  # noqa: BLE001 -- never expose private paths from unexpected parser errors
         print("signal/clip research: input missing, malformed, or unsupported", file=sys.stderr)
         return 2
 

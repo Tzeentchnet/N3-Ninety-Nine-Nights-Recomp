@@ -52,9 +52,19 @@ target_include_directories(n3_animation_trace_model PUBLIC src)
 add_executable(n3_import tools/import_main.cpp)
 target_link_libraries(n3_import PRIVATE n3_game_data)
 if(BUILD_TESTING)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_executable(n3_animation_trace_model_test tests/animation_trace_model_test.cpp)
     target_link_libraries(n3_animation_trace_model_test PRIVATE n3_animation_trace_model)
+    if(WIN32)
+        target_link_options(n3_animation_trace_model_test PRIVATE "LINKER:/STACK:8388608")
+    endif()
     add_test(NAME animation_trace_model COMMAND n3_animation_trace_model_test)
+    add_test(NAME animation_trace_python
+        COMMAND ${CMAKE_COMMAND} -E env
+            "N3_ANIMATION_TRACE_MODEL_TEST=$<TARGET_FILE:n3_animation_trace_model_test>"
+            ${Python3_EXECUTABLE} -B -m unittest -q
+            tools.animation_trace_manifest_test tools.signal_clip_research_test)
+    set_tests_properties(animation_trace_python PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     add_executable(n3_native_clock_test tests/native_clock_test.cpp)
     target_link_libraries(n3_native_clock_test PRIVATE n3_native)
     add_test(NAME native_frame_clock COMMAND n3_native_clock_test)
@@ -205,12 +215,17 @@ target_link_libraries(n3 PRIVATE n3_native n3_game_data n3_menu_assets n3_voice_
 if(BUILD_TESTING)
     add_executable(n3_animation_trace_hooks_test tests/animation_trace_hooks_test.cpp
         src/animation_trace_hooks.cpp)
+    if(WIN32)
+        target_link_options(n3_animation_trace_hooks_test PRIVATE "LINKER:/STACK:8388608")
+    endif()
     target_include_directories(n3_animation_trace_hooks_test PRIVATE src tests)
     target_compile_definitions(n3_animation_trace_hooks_test PRIVATE N3_ANIMATION_TRACE_TEST)
     target_link_libraries(n3_animation_trace_hooks_test PRIVATE
         n3_animation_trace_model n3_game_data rex::runtime)
     rexglue_apply_target_settings(n3_animation_trace_hooks_test)
     add_test(NAME animation_trace_hooks COMMAND n3_animation_trace_hooks_test)
+    set_tests_properties(animation_trace_python PROPERTIES
+        ENVIRONMENT "N3_ANIMATION_TRACE_HOOKS_TEST=$<TARGET_FILE:n3_animation_trace_hooks_test>")
     add_executable(n3_animation_trace_registration_test tests/animation_trace_registration_test.cpp
         src/animation_trace_hooks.cpp)
     target_include_directories(n3_animation_trace_registration_test PRIVATE src)

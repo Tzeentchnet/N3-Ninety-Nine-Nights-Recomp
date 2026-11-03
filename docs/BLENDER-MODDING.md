@@ -3,21 +3,32 @@
 ## Status and selected scope
 
 The separate N3 Blender project's **0.14.0 read-only baseline**, recorded on
-2 November 2026, targets Blender 5.2 and implements bounded import. Its eight
-import operators are listed below. Package members are read in memory, not
-extracted. Redistributable tests use synthetic fixtures. There is no exporter
-or native N3 writer, and the recomp stager does not consume the optional
-Blender receipt. The visual and in-game/runtime acceptance gates below remain
-unmet; an import or a structurally valid reader is not proof of game-correct
-presentation. This is a named baseline, not a claim about a later working
-tree or release.
+2 November 2026, targets Blender 5.2 and implements eight bounded import
+operators. Package members are read in memory, not extracted. Redistributable
+tests use synthetic fixtures. There is no exporter or native N3 writer, and
+the recomp stager does not consume the optional Blender receipt. The visual
+and in-game/runtime acceptance gates below remain unmet; an import or a
+structurally valid reader is not proof of game-correct presentation. This is a
+named historical baseline, not a claim about a later working tree or release.
 
 The companion source manifest is now the **0.14.1 ungated candidate**,
-retaining those eight read-only imports and zero exports. Its Blender 5.2.2
-source/save-reopen, Blender-built archive, and isolated-install release gates
-have not been run for this candidate. Release ZIPs remain local-only; the
-configured CI runs synthetic Python and packaging checks, not Blender or the
-private corpus. The current stager still ignores the optional receipt.
+with nine read-only imports and zero exports. The ninth operator creates only
+an explicitly selected, detached attachment diagnostic; it does not infer a
+character, socket, local transform, parent, or constraint. The manifest has
+44 explicit shipped paths and 45 archive files including the implicit
+manifest. Blender 5.2.2 synthetic source/save-reopen smoke passed and a
+private deformation preview ran on the validated integration changes, not as
+clean-pinned release acceptance. No Blender-built `0.14.1` release ZIP or
+isolated install is claimed. Release ZIPs remain local-only; CI runs
+synthetic Python and packaging checks, not Blender or the private corpus.
+The current stager still ignores the optional receipt.
+
+The latest local lane passed 456 synthetic tests per Python interpreter.
+Hosted [run 41683738344](https://github.com/Tzeentchnet/N3_Blender/actions/runs/41683738344)
+passed 316 tests in each Ubuntu 24.04 and Windows 2022 Python 3.13 job for
+add-on commit `fd27105854501f2edd701c71f01a9578b78a53bd` with zero artifacts.
+That historical 41-file packaging run does not cover later integration
+changes, Blender, or private-corpus acceptance.
 
 The companion's source-only
 `docs\snapshots\character-animation-0.14.0.json` is the version-1 aggregate
@@ -37,30 +48,40 @@ python -B tools\character_corpus_report.py '<owned-packed-resource-root>' --chec
 ```
 
 The original snapshot comparison used this repository at HEAD
-`62ebd5c139ff9bd169dd3b8eca7c9cd5bb5c0a16`; closeout checks use
-`74897d56dfc9ed853a752a4ffd853040d63526a4`. Both checkouts contain
-uncommitted integration changes. These identify base commits, not clean
-release provenance; the companion release procedure requires a clean,
-explicitly pinned recomp commit and the remaining applicable format-corpus
-gates.
+`62ebd5c139ff9bd169dd3b8eca7c9cd5bb5c0a16`; an earlier closeout used
+`74897d56dfc9ed853a752a4ffd853040d63526a4`. This integration lane began from
+clean base revisions add-on `fd27105854501f2edd701c71f01a9578b78a53bd` and
+recomp `bc062b2b7b148ae5f53cf14bfc69464f1ada2d37`; the current changes were
+validated on top and are not included in those hashes. They are not release
+pins; the companion release procedure requires a clean, explicitly pinned
+recomp commit and the remaining applicable format-corpus gates.
 
 The companion's completed/partial/blocked evidence matrix and detailed
 `docs/RUNTIME-ANIMATION.md`, `docs/ROOT-MOTION.md`, and
-`docs/ATTACHMENT-EVIDENCE.md` distinguish source inventories from runtime and
-Blender acceptance. Six parser-eligible animation/model pairs cover 71
-candidate occurrences; no multi-profile Blender deformation or runtime
-comparison has passed. The root inventory covers 49 strict payloads and 565
-occurrences, but no runtime actor/root/child transforms or loop policy have
-been proven. The 44 item-to-weapon matches are name-based candidates, with no
-proven equipped actor, socket, local transform or attachment parenting.
-Unresolved imported assets remain detached.
+`docs/ATTACHMENT-EVIDENCE.md` distinguish source inventories, preview
+regressions and runtime acceptance. Six parser-eligible animation/model pairs
+cover 71 candidate occurrences. A private Blender comparison measured all
+six and 54 selected samples: bone preview max and per-bone RMS thresholds
+passed, while the result remains `preview-regression-only`. Vertex units are
+unverified; metre and release approval are false. Exact per-profile residuals
+and hash identities are in the
+companion roadmap; this is not visual or runtime conformance. The rechecked
+root snapshot covers 49 strict payloads and 565 occurrences (SHA-256
+`9335eeecb6416167979dbfcf21bc1ed441ee466a4b696496e491ebf5822a090b`);
+runtime actor/root/child transforms and loop policy remain unknown. The 44
+item-to-weapon matches are inferred name-based candidates, with no proven
+equipped actor, socket, local transform or attachment parenting. Occurrence
+inventory v2 and the explicitly selected detached preview retain ambiguity;
+unresolved assets remain unparented.
 
 The bounded signal study in `docs/NATIVE-CODE.md` found 85 AS payloads with
 4,300 groups and 18,477 records, and 86 heuristic BA/AS/INFO triples; a
 same-row static path is not a live member/actor/effect binding. The next
 discriminating experiment must correlate resolver-selected members, actor,
 row, dispatch and an independently observed effect for at least two
-characters. Keep `Clip_###`, `source_fps_unverified`, no notify markers,
+characters. Pure AS-101/INFO-100 readers and synthetic bounds/preservation
+tests now exist, but no record is linked to a live actor/clip/effect. Keep
+`Clip_###`, `source_fps_unverified`, no notify markers,
 no root extraction, and the 11 trailing/seven inverse-bind rejections until
 their separate gates pass.
 
@@ -72,10 +93,10 @@ non-ASCII characters. It is not an export receipt or a stager input.
 <!-- n3-blender-baseline
 {
   "marker_version": 1,
-  "addon_version": "0.14.0",
+  "addon_version": "0.14.1",
   "blender_minimum": "5.2.0",
   "read_only": true,
-  "import_operator_count": 8,
+  "import_operator_count": 9,
   "import_operators": [
     "import_scene.n3_bm",
     "import_scene.n3_skin",
@@ -84,7 +105,8 @@ non-ASCII characters. It is not an export receipt or a stager input.
     "import_scene.n3_bsmap_terrain_package",
     "import_scene.n3_level_package",
     "import_scene.n3_navigation_package",
-    "import_scene.n3_camera_package"
+    "import_scene.n3_camera_package",
+    "import_scene.n3_detached_attachment"
   ],
   "package_members": "in-memory",
   "redistributable_fixtures": "synthetic",
@@ -108,6 +130,7 @@ non-ASCII characters. It is not an export receipt or a stager input.
 | Level package | `import_scene.n3_level_package` |
 | Navigation package | `import_scene.n3_navigation_package` |
 | Camera package | `import_scene.n3_camera_package` |
+| Detached attachment diagnostic | `import_scene.n3_detached_attachment` |
 
 The companion's local corpus reports bounded parsing of all 187 loose `.bm`
 and 216 loose `.skin` files and mip-zero previews of 1,047 loose `.36t` files.
@@ -116,7 +139,7 @@ Its supported package profile covers 521 packages and 63,127 entries;
 structural results, not newly reproduced in this update or visual/runtime
 approval. The add-on's `tests/test_package.py` exercises synthetic package
 lookup, ambiguity, and malformed inputs; `tests/blender_smoke.py` checks all
-eight registrations and synthetic imports with scene save/reopen. The
+nine registrations and synthetic imports with scene save/reopen. The
 companion runs them with `python -m unittest discover -s tests` and
 `tools/test_blender.ps1`, respectively.
 

@@ -1344,9 +1344,101 @@ The static study itself did not perform a probe, Blender run, game run, timing
 fix, writer gate, or receipt/stager integration; see the separately labeled
 runtime experiment below.
 
-### Opt-in bounded runtime probe
+### Current bounded trace-v3, signal, and attachment evidence
 
-**Observed, implementation:** five retained-call wrappers in
+**Observed, implementation:** the opt-in trace-v3/route-v4 probes add
+archive-content/member identities and lifetime generations, nested timed
+event IDs, bounded quaternion-helper samples, signal source/selection/
+dispatch/effect observations, and an attachment resolver inventory. Original
+guest calls and bounded loss accounting remain required. Host performance
+counter time is not simulation time; nesting is not effect causality. Raw
+traces, payload words, matrices, private paths and game assets remain private;
+only reviewed hashes, counts and aggregate residuals may be recorded.
+
+**Observed, 30/40/60 resource runs:** each selected the same 75-bone/two-clip
+resource. Resolver-observed decompressed archive SHA-256
+`005d18eb412b3f74eeab5f57b23b76ecb0d98e8d04f78b1e0b164506e73ef240`,
+generation 4, slot 3, member index 5 and member SHA-256
+`5013c53b8444eb666a9dd239acd00fd5e844f9d3eb6f38036d43e35277b308a5`
+matched a scanned compressed archive candidate SHA-256
+`385d3a1acfc2a0a7429e68a0e61daacf9380967a8063f93b7cb0b48e44fc9655`.
+This establishes observed content, not a unique runtime mount path or actor.
+Each retained 64 queue, 64 evaluator and 128 quaternion samples; no
+controller sample or actor was bound.
+
+| Target | Trace SHA-256 | Queue / evaluator full | Events started / abandoned | Quaternion seen / parent / per-evaluation / total full |
+| ---: | --- | ---: | ---: | ---: |
+| 30 | `fa2c3461f1e755fb02062ea7875785a92be4f5444a44eb0e441c48016eaf2cfa` | 213 / 209 | 678 / 422 | 8,690 / 1,672 / 6,506 / 384 |
+| 40 | `819e0385d651bb9c5359ec2ff63e77fbc311c467837efa8064d4532eccb2da5b` | 236 / 232 | 724 / 468 | 9,447 / 1,856 / 7,079 / 384 |
+| 60 | `a962dd6467ba06ae0a484f579e39dec56c62b19e9903ae09de6753c7e6eb8594` | 446 / 442 | 1,144 / 888 | 16,380 / 3,536 / 12,332 / 384 |
+
+All three stopped `identity_changed`, with 11 invalid observations each;
+their loss and stop status make them ineligible for conformance. The
+Original actor attempt saw 588 unsupported-vtable setups, 587 with the
+known getter, but accepted none. Quaternion-helper raw-lerp candidate
+residuals were maximum `3.2209939269001175e-5` and RMS
+`6.867796401602378e-6` over the same 128 retained samples in each run;
+they are **preview-only comparisons**, not a proved interpolation rule.
+There was no fractional evaluator-frame input, negative-dot or unequal
+duplicate discriminator, simulation clock, completion/wrap/transition event,
+or synchronized actor/root/child transform. The root report's seven model
+residuals are `null`, not zero. Exact route hashes, competing residuals,
+event counts and next experiments are in the companion
+`docs/RUNTIME-ANIMATION.md` and `docs/ROOT-MOTION.md`.
+
+**Observed, reader parity:** historical v3 and v4 routes without
+`binary_provenance` are accepted as `unverified_legacy_route` and
+`unverified_historical_v4_route`, respectively. Both readers accept and
+validate present v4 provenance; the recomp compares recorded hashes with the
+inspected binaries, while the companion reports
+`recorded_not_independently_verified` without host paths. A matching hash is
+not independent proof of loaded runtime binaries. Signal/quaternion probe
+losses and actor-generation mismatches gate correlation eligibility in both
+readers. Do not edit historical routes or claim runtime conformance: fresh
+actor-bound capture, live ABI/identity evidence and diagnosis of
+`identity_changed` remain necessary.
+
+**Observed, signal:** the pure add-on AS-101 and INFO-100 readers retain
+bounded records, source offsets/hashes and opaque bytes, with synthetic
+malformed/bounds/preservation tests; no timeline markers follow. Original
+and 30-target probes posted zero input pairs because foreground ownership
+failed. Both saw one BA load and zero AS/INFO loads, selections, dispatches,
+effects or structural chains, with zero recorded losses. Their capture
+SHA-256 values are
+`929467ce173dc5fd65400e33d1693879e3fd2e5aefa056323375726a00b445a1` and
+`f343a64a0ccbb84ec79188fc028315231691ffa19ae0d7c0ff3f605a91c65cce`;
+sanitized reports are
+`e52406dddb7898de3ce4a9ba11c7dbdb0dd2677f85c91c71b1ccb234ea9d19ed` and
+`2239e6e89f4eb0754ee5f396e3f254c156265daf69d098a14581f56d2fdfb09b`.
+The observed BA is member 205 of decompressed archive content SHA-256
+`998476909ae77902c582f5f7001aaccaa355a2dcaf08f42ee51dbc70c5cb465b`,
+member SHA-256 `5133b115846a1395f6e26a6f3a78c24ac43f490048fbc325074f86ad04f6763f`;
+this does not bind actor, clip or effect. A 523-archive scan parsed 521,
+rejected two and parsed 85 AS plus 85 INFO payloads, not an exhaustive
+uniqueness proof. Caller-supplied binary hashes are not runtime attestation.
+Next, own the foreground and compare a controlled signal-triggering action
+against a no-action baseline on two independently identified characters,
+including resolver-matched BA/AS/INFO, row, clip, dispatch, independent
+effect, lifetime and a separately calibrated time base.
+
+**Observed, attachments:** the occurrence inventory v2 retains indexed
+members, bones/palettes, descriptors, effects and ambiguity, while the
+Blender diagnostic remains detached and unparented. Candidate and attempted
+alternate-control probes each saw 151 reads, verified 20 and lost 64
+descriptor plus 67 model observations to legacy capacities; the attempted
+second-character probe verified all 151 reads with no capacity loss. Only the
+candidate posted one input pair; controls had no foreground. None established
+an actor, equipped item, socket, attachment lifecycle or synchronized
+transform, so all residuals are unmeasured. The second-character run matched one
+local candidate for each read among 521 parsed of 522 archives, not global
+uniqueness. Capture/report hashes and exact table occurrences are in the
+companion `docs/ATTACHMENT-EVIDENCE.md`. Next verify actor/item consumption,
+an observed empty or different-item control, lifetime and synchronized
+bone/attachment transforms on two independently identified cases.
+
+### Historical opt-in v2 runtime probe
+
+**Observed, historical implementation:** five retained-call wrappers in
 `src\animation_trace_hooks.cpp` sample only the following concrete guest
 entries. They do not implement every candidate above:
 
@@ -1406,7 +1498,9 @@ source and candidate-asset hashes. A matching BA basename fingerprint is
 Both raw captures and route/log files belong under the ignored
 `private\traces\runtime-instrumentation\` directory. Do not commit them.
 
-Run from the recomp root with a verified local extraction. Each `RunId` must
+For a new v3 run, use the current runner from the recomp root with a verified
+local extraction and a new `RunId`; the v2 capture described below remains
+historical. Each `RunId` must
 be new; user/cache roots are isolated, the route requests a window close, and
 its deadline kills only the process it launched. The optional
 `-ActivateWindow` asks Windows to foreground only that process's window;
@@ -1425,7 +1519,7 @@ diagnostic build without modifying the installed SDK or the standard build:
 
 ```powershell
 pwsh -NoProfile -File tools\build_trace_audio.ps1 -Jobs 4
-pwsh -NoProfile -File tools\animation_trace_run.ps1 -RunId example-dummy-30 -Seconds 120 -FrameRate 30 -Scope resource -Clip all -ActivateWindow -AudioBackend dummy -Executable private\traces\runtime-instrumentation\local-sdl-dummy\game-build\n3.exe
+pwsh -NoProfile -File tools\animation_trace_run.ps1 -RunId example-dummy-30 -Seconds 120 -FrameRate 30 -Scope resource -Clip all -ActivateWindow -QuaternionProbe -AudioBackend dummy -Executable private\traces\runtime-instrumentation\local-sdl-dummy\game-build\n3.exe
 ```
 
 The alternate build verifies the locally cached pinned SDL archive and SDK
@@ -1455,11 +1549,11 @@ character archives without writing member names or bytes:
 
 ```powershell
 python -B tools\animation_trace_manifest.py `
-  --trace private\traces\runtime-instrumentation\example-dummy-30\user\animation-trace-v2.json `
+  --trace private\traces\runtime-instrumentation\example-dummy-30\user\animation-trace-v3.json `
   --route private\traces\runtime-instrumentation\example-dummy-30\route.json `
   --executable private\traces\runtime-instrumentation\local-sdl-dummy\game-build\n3.exe `
   --game-root private\game --character-archive-dir private\game\data\PackedResources `
-  --output private\traces\runtime-instrumentation\example-dummy-30\aggregate-v2.json `
+  --output private\traces\runtime-instrumentation\example-dummy-30\aggregate-v3.json `
   --frame-rate 30 --seconds 120 --audio-backend dummy `
   --audio-source-archive .tools\source-archives\libsdl-org-SDL-147a8ee32dbf9ac02f3794964490687b6bbda1bc.tar.gz `
   --audio-linked-library private\traces\runtime-instrumentation\local-sdl-dummy\sdl-install\lib\SDL3-static.lib `
@@ -1711,7 +1805,7 @@ payloads, 11 unsupported tails, and seven unsupported inverse-bind profiles.
 Its six parser-eligible deformation pairs and 44 name-based attachment
 candidates are not runtime-bound characters or equipped relationships.
 
-In the 30-target resource capture above, the 64 queue and 64 evaluator
+In the earlier v2 30-target resource capture above, the 64 queue and 64 evaluator
 samples are independently bounded, with 2,117 and 2,113 respective
 capacity drops; 163,275 pose-output spans were counted without capturing
 their matrix values. Actor/AS/INFO identities remain unbound. Correlate

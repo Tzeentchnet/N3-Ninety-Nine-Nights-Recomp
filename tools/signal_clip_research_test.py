@@ -1,14 +1,14 @@
 """Synthetic in-memory tests for the bounded signal/clip research helper."""
 
-from contextlib import redirect_stderr, redirect_stdout
-from hashlib import sha256
 import io
 import json
-from pathlib import Path
 import struct
 import sys
-from types import ModuleType, SimpleNamespace
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from hashlib import sha256
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
 from unittest import mock
 
 from tools import signal_clip_research as research
@@ -377,11 +377,11 @@ class AggregateTests(unittest.TestCase):
         path.stat.return_value.st_size = 24
         path.read_bytes.return_value = b"private synthetic trace"
         manifest = ModuleType("tools.animation_trace_manifest")
-        manifest.parse_trace = mock.Mock(return_value=source)
+        manifest.read_trace = mock.Mock(return_value=(b"private synthetic trace", source))
         with mock.patch.object(research, "_regular_file", return_value=True), \
              mock.patch.dict(sys.modules, {"tools.animation_trace_manifest": manifest}):
             result = research.summarize_runtime_trace(path)
-        manifest.parse_trace.assert_called_once_with(b"private synthetic trace")
+        manifest.read_trace.assert_called_once_with(path)
         self.assertFalse(result["actor_bound"])
         self.assertFalse(result["signal_bound"])
         self.assertFalse(result["info_bound"])
@@ -394,11 +394,11 @@ class AggregateTests(unittest.TestCase):
         path.stat.return_value.st_size = 24
         path.read_bytes.return_value = b"invalid"
         manifest = ModuleType("tools.animation_trace_manifest")
-        manifest.parse_trace = mock.Mock(side_effect=ValueError("private data"))
+        manifest.read_trace = mock.Mock(side_effect=ValueError("private data"))
         with mock.patch.object(research, "_regular_file", return_value=True), \
-             mock.patch.dict(sys.modules, {"tools.animation_trace_manifest": manifest}):
-            with self.assertRaises(ValueError):
-                research.summarize_runtime_trace(path)
+             mock.patch.dict(sys.modules, {"tools.animation_trace_manifest": manifest}), \
+             self.assertRaises(ValueError):
+            research.summarize_runtime_trace(path)
 
 
 if __name__ == "__main__":

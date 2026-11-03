@@ -13,7 +13,7 @@ and is never edited by the stager.
 | Deterministic load order, conflict winners, and staging report | **Implemented and fixture-tested** |
 | Whole-file replacement of loose assets or complete `.pak` files | **Implemented as opaque path replacement** |
 | Override `default.xex`, system-update files, or paths outside `data/` | **Rejected** |
-| Import N3 assets into Blender | **Separate add-on's 0.14.0 baseline: eight read-only operators; visual/runtime gates unmet** |
+| Import N3 assets into Blender | **Separate add-on's 0.14.0 baseline: eight read-only operators; current ungated 0.14.1 source has nine; visual/runtime gates unmet** |
 | Emit or consume a Blender export receipt | **Version 1 contract documented; no exporter or receipt consumer** |
 | Decode `.pak` containers and `.sox` tables | **Bounded read-only codec and full-corpus validation implemented** |
 | Inspect global character, unit, combat, troop, item, or ability tables | **Read-only visual application implemented and fixture-tested** |
@@ -30,10 +30,11 @@ This support proves safe path replacement, not that arbitrary replacement
 payloads are valid game resources.
 
 The companion's source manifest is now `0.14.1`, an ungated candidate carrying
-the historical `0.14.0` baseline. Its eight imports remain read-only, with
-zero exports and no native writer or receipt consumer. The `0.14.1` Blender
-5.2.2 source/save-reopen, archive-build, and isolated-install gates remain
-unexecuted; extension ZIPs are local-only.
+the historical `0.14.0` baseline. Its nine imports remain read-only, with
+zero exports and no native writer or receipt consumer. Synthetic Blender
+source/save-reopen smoke passed on the integration changes; the clean-pinned release gate,
+Blender-built ZIP and isolated install remain open. Extension ZIPs are
+local-only.
 
 ## Data flow
 
@@ -178,13 +179,16 @@ multi-character deformation, and evidence-backed attachments remain research,
 not writer guarantees.
 
 The companion's `0.14.1` source is an ungated read-only candidate, not a
-completed release. Source-only inventories and bounded runtime observations
-do not establish actor/member identity, root-motion extraction, notify
-markers, or attachment sockets; unresolved imported assets remain detached.
+completed release. Its ninth import is an explicit detached diagnostic.
+One bounded runtime probe matched an animation archive-content/member
+identity, not an actor or a unique runtime mount path; root-motion extraction,
+notify markers and attachment sockets remain unknown. Unresolved imported
+assets remain detached.
 See its `docs/ROADMAP.md` evidence matrix and detailed runtime/root/attachment
 records, and this repository's [signal and runtime trace](NATIVE-CODE.md).
-The `0.14.1` Blender source/save-reopen, Blender-built ZIP and isolated
-install gates remain unexecuted; local CI candidates must not be published.
+Synthetic Blender source/save-reopen smoke passed on the integration changes, but
+the clean-pinned release gate, Blender-built `0.14.1` ZIP and isolated install
+remain open; local CI candidates must not be published.
 
 A local scan found that every loose `.skin` sample contains exactly one
 NUL-terminated `.bm` reference and at least one `.fx` reference; 205 of 216

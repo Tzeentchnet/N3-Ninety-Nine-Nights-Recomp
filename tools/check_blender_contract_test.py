@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from contextlib import redirect_stderr, redirect_stdout
 import copy
 import hashlib
 import io
 import json
-from pathlib import Path, PurePosixPath
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path, PurePosixPath
 from unittest import mock
 
 from tools import check_blender_contract as checks
 from tools import mods
-
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -74,7 +73,7 @@ def fixture_marker(schema: dict) -> dict:
         "addon_version": "1.2.3",
         "blender_minimum": "5.2.0",
         "read_only": True,
-        "import_operator_count": 8,
+        "import_operator_count": 9,
         "import_operators": list(checks.IMPORT_OPERATORS),
         "package_members": "in-memory",
         "redistributable_fixtures": "synthetic",
@@ -102,9 +101,11 @@ def synthetic_tree() -> tuple[MemoryTree, dict]:
     schema = fixture_schema()
     authoring = (
         "# Blender contract\n\n## Status and selected scope\n\n"
-        "The **1.2.3 read-only baseline** has eight import operators. "
+        "The **0.14.0 read-only baseline** has eight bounded import operators. "
         "There is no exporter or native N3 writer, and the recomp stager "
-        "does not consume the optional Blender receipt.\n\n"
+        "does not consume the optional Blender receipt. This is a named historical baseline.\n\n"
+        "The **1.2.3 ungated candidate**, with nine read-only imports and zero exports, "
+        "is not a completed release.\n\n"
         + marker_comment(fixture_marker(schema))
         + "\n"
         + table()
@@ -113,22 +114,22 @@ def synthetic_tree() -> tuple[MemoryTree, dict]:
     )
     modding = (
         "# Modding\n\n## Current boundary\n\n"
-        "| Import | 1.2.3 baseline: eight read-only operators |\n"
+        "| Import | 0.14.0 baseline: eight read-only operators |\n"
         "| Receipt | no exporter or receipt consumer |\n\n"
         "## Blender authoring track\n\n"
-        "The 1.2.3 baseline has eight read-only operators. "
+        "The 0.14.0 baseline has eight read-only operators. "
         "No exporter or native writer exists. The current stager neither reads "
         "nor validates a `n3-blender-export.json` beside `mod.toml`.\n"
     )
     porting = (
         "# Porting\n\n## Deeper game changes\n\n"
-        "The 1.2.3 baseline has eight read-only import operators and has no "
+        "The 0.14.0 baseline has eight read-only import operators and has no "
         "exporter or native writer. The current stager does not consume, "
         "validate, or stage a receipt.\n"
     )
     status = (
-        "# Status\n\n## Blender 1.2.3 read-only authoring baseline\n\n"
-        "The 1.2.3 baseline has eight import operators. An exporter, and a "
+        "# Status\n\n## Blender 0.14.0 read-only authoring baseline\n\n"
+        "The 0.14.0 baseline has eight import operators. An exporter, and a "
         "native writer are not implemented. The stager does not read or "
         "validate a receipt.\n"
     )
@@ -227,7 +228,7 @@ class ContractTests(unittest.TestCase):
             (checks.SCOPED_DOCS[1], "neither reads nor validates", "reads and validates", "non-consumption"),
             (checks.SCOPED_DOCS[2], "does not consume, validate, or stage a receipt", "consumes, validates, and stages a receipt", "non-consumption"),
             (checks.SCOPED_DOCS[3], "does not read or validate a receipt", "reads and validates a receipt", "non-consumption"),
-            (checks.SCOPED_DOCS[2], "1.2.3 baseline", "1.2.2 baseline", "baseline version"),
+            (checks.SCOPED_DOCS[2], "0.14.0 baseline", "0.13.9 baseline", "baseline version"),
             (checks.SCOPED_DOCS[1], "eight read-only operators", "seven read-only operators", "capability table"),
         )
         for name, old, new, message in changes:
@@ -266,6 +267,36 @@ class ContractTests(unittest.TestCase):
                 self.tree.put(name, original.replace(row, replacement))
                 with self.assertRaisesRegex(checks.ConsistencyError, "operator table"):
                     checks.check_contract(self.tree)
+
+    def test_current_ninth_import_and_historical_count_are_distinct(self) -> None:
+        name = checks.SCOPED_DOCS[0]
+        original = self.tree.read(self.tree.path(name))
+        ninth_row = "| Synthetic 8 | `import_scene.n3_detached_attachment` |\n"
+        marker = marker_comment(fixture_marker(self.schema))
+        bad_count = fixture_marker(self.schema)
+        bad_count["import_operator_count"] = 8
+        bad_operators = fixture_marker(self.schema)
+        bad_operators["import_operators"][-1] = "import_scene.n3_camera_package"
+        historical_candidate = fixture_marker(self.schema)
+        historical_candidate["addon_version"] = checks.HISTORICAL_BASELINE_VERSION
+        changes = (
+            (original.replace(ninth_row, ""), "operator table"),
+            (original.replace(ninth_row, ninth_row.replace("n3_detached_attachment", "n3_unknown")),
+             "operator table"),
+            (original.replace(marker, marker_comment(bad_count)), "import_operator_count"),
+            (original.replace(marker, marker_comment(bad_operators)), "import_operators"),
+            (original.replace(marker, marker_comment(historical_candidate)), "newer than the historical"),
+            (original.replace("nine read-only imports", "eight read-only imports"), "current candidate"),
+            (original.replace("eight bounded import operators", "nine bounded import operators"),
+             "historical authoring"),
+            (original.replace("named historical baseline", "current baseline"), "historical authoring"),
+        )
+        for changed, message in changes:
+            with self.subTest(message=message):
+                self.tree.put(name, changed)
+                with self.assertRaisesRegex(checks.ConsistencyError, message):
+                    checks.check_contract(self.tree)
+        self.tree.put(name, original)
 
     def test_schema_version_shape_and_fingerprint_drift(self) -> None:
         changes = (
