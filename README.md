@@ -91,6 +91,7 @@ predates and does not include the fork-only changes listed above.
 | [Development and build](docs/DEVELOPMENT.md) | Bootstrap, extraction, builds, tests, and release workflow |
 | [Development launcher](docs/LAUNCHER.md) | Graphics, profiles, setup, custom paths, and mod staging |
 | [Modding](docs/MODDING.md) | Safe loose-file staging, manifests, load order, and format limits |
+| [Gameplay inspector](docs/GAMEPLAY-INSPECTOR.md) | Read-only character, enemy, item, ability, PAK, and SOX data browser |
 | [Blender authoring](docs/BLENDER-MODDING.md) | Read-only-first asset roadmap and versioned handoff |
 | [Native conversion](docs/NATIVE-CODE.md) | Typed native modules and translated-code equivalence |
 | [Porting roadmap](docs/PORTING.md) | SDK baseline, renderer/platform work, and portability boundaries |

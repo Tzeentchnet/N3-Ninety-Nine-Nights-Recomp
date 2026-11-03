@@ -15,8 +15,9 @@ and is never edited by the stager.
 | Override `default.xex`, system-update files, or paths outside `data/` | **Rejected** |
 | Import loose N3 assets into Blender | **Planned; no codec or add-on implementation yet** |
 | Emit a versioned Blender export receipt | **Version 1 contract documented; no exporter or stager validation yet** |
-| Decode `.pak` containers and `.sox` tables | **Format investigated and corpus-validated; no checked-in codec yet** |
-| Edit global character, unit, combat, troop, item, or ability tables | **Data surfaces identified; no editor or runtime-edited package validation yet** |
+| Decode `.pak` containers and `.sox` tables | **Bounded read-only codec and full-corpus validation implemented** |
+| Inspect global character, unit, combat, troop, item, or ability tables | **Read-only visual application implemented and fixture-tested** |
+| Edit global gameplay tables | **Not implemented; no runtime-edited package validation yet** |
 | Decode or encode `.36t`, `.bm`, or `.skin` formats | **Not implemented** |
 | Override individual members inside `.pak` containers | **Not implemented** |
 | Hot-load mods or change load order while the game is running | **Not implemented** |
@@ -193,11 +194,12 @@ zlib level 6 before restoring their original alignment padding. This is
 format evidence, not proof that the game accepts an edited archive.
 
 The current stager still permits only a complete package supplied by the user.
-No reader/writer is checked in, no malformed synthetic fixtures exist, and no
-rebuilt package has been loaded by the running game. A future writer must
-preserve member order, duplicate records, unknown bytes, alignment, and
-unmodified payloads. It should emit complete replacement archives into a mod
-rather than alter `private/game/`.
+The checked-in gameplay inspector provides a bounded read-only reader,
+malformed synthetic fixtures, and a full-corpus validation command. It does
+not contain a writer, and no rebuilt package has been loaded by the running
+game. A future writer must preserve member order, duplicate records, unknown
+bytes, alignment, and unmodified payloads. It should emit complete replacement
+archives into a mod rather than alter `private/game/`.
 
 ## Gameplay tables
 
@@ -263,13 +265,22 @@ control IDs. No executable handler or activation path has been identified.
 
 ## Editor path
 
-The lowest-risk first editor is an offline, read-only inspector for a verified
-user-owned extraction:
+The first offline read-only inspector is implemented. It validates the
+supported executable, both PAK variants, the core-table copies in all ten
+`res_init*.pak` archives, and every displayed SOX table. Its visual views join
+unit stat curves, hero progression, English item descriptions, item effect
+slots, and localized ability lists while retaining raw tables and duplicate
+headings. Structural JSON export omits row values and absolute extraction
+paths.
 
-1. validate the supported build and both PAK variants;
-2. display the known hero, unit, curve, troop, item, drop, set, reward, and
-   ability tables with raw names retained where semantics are incomplete; and
-3. export structural JSON or synthetic fixtures without retail payloads.
+Launch it with:
+
+```powershell
+python tools\gameplay_inspector.py --game private\game
+```
+
+See [gameplay data inspector](GAMEPLAY-INSPECTOR.md) for the visual views,
+headless report, full-corpus validation, tests, and extension boundaries.
 
 A first writable release should limit changes to existing numeric SOX cells.
 It should preserve schemas, row counts, strings, member order, duplicate

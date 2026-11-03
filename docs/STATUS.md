@@ -1379,3 +1379,35 @@ Duplicate-name lookup order, language-archive selection, loose authoring-file
 usage, item-effect meanings, AI/mission layouts, and runtime acceptance remain
 open. The format details and staged validation plan are recorded in
 [modding](MODDING.md).
+
+## Read-only gameplay data inspector
+
+A dependency-free Python/Tkinter inspector now turns the gameplay-format
+investigation into a visual application. It verifies the supported executable,
+loads `res_init.pak`, compares the fourteen central mechanics tables across all
+ten language-specific initialization archives, and parses every loose SOX
+table. Dedicated views expose 100 units and their related level curves, hero
+progression, 200 items joined with English descriptions, 257 localized
+per-character move rows for the selected language, and all 103 loaded packed
+and loose tables. Wide and duplicate-heading tables retain their raw fields.
+
+The underlying bounded reader supports both observed PAK variants and all three
+observed SOX field types. It rejects unsupported reserved values, invalid
+alignment and ranges, zlib size/trailing-data errors, malformed descriptors,
+impossible row declarations, unsupported types, nonsequential IDs, truncated
+strings, and missing footers. Structural JSON export records schemas, hashes,
+counts, archive comparisons, build identity, and warnings without row values
+or absolute extraction paths.
+
+Thirteen synthetic unit tests pass. A full owned-corpus run validates all 522
+packed-resource archives, 63,170 members, 29 duplicate-name archives with 76
+extra records and no non-identical duplicate groups, plus 238 packed and 72
+loose SOX tables representing 111 unique contents. Tkinter construction,
+populated-view, row-selection, joined unit/item/ability, raw-table, headless
+report, and report-cleanup smoke checks pass.
+
+These checks establish bounded read-only decoding and UI population only. No
+SOX or PAK writer exists, no game data or save was modified, no rebuilt archive
+was launched, and no field's runtime ownership, units, gameplay behavior, or
+save compatibility was established. The user workflow and current boundary are
+documented in [gameplay data inspector](GAMEPLAY-INSPECTOR.md).
