@@ -16,6 +16,7 @@ a section explicitly says otherwise.
 | [Native code and platform roadmap](PORTING.md) | Portable components, renderer/platform work, and deeper game changes |
 | [Modding](MODDING.md) | Safe loose-file staging, manifests, load order, verified asset inventory, and future mod hooks |
 | [Gameplay data inspector](GAMEPLAY-INSPECTOR.md) | Read-only visual and command-line browser for gameplay PAK and SOX data |
+| [AI and navigation architecture](AI-NAVIGATION.md) | Mission, troop, unit, NAV, route-search, dynamic-topology, and modernization findings |
 | [Localization data](LOCALIZATION.md) | PAL text inventory, sheet identity, safe replacement path, and asset/font limits |
 | [Blender asset authoring](BLENDER-MODDING.md) | Blender 5.2 import/export roadmap, format gates, and versioned mod handoff |
 | [Reference projects](REFERENCES.md) | Reviewed projects, exact revisions, adopted ideas, and licensing boundaries |

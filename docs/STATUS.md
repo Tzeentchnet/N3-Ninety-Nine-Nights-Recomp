@@ -1543,3 +1543,50 @@ attribute rows. No AIB, AI-function, attack-script, unit-info, SOX, or PAK
 writer was added; no edited resource was loaded; and no runtime AI, tier
 selector, physical-unit, sound, crowd, inheritance, gameplay, or save behavior
 was validated.
+
+## AI architecture and offline navigation analysis
+
+The mission, troop, unit, formation, and navigation layers are now documented
+in [AI and navigation architecture](AI-NAVIGATION.md). Static tracing
+establishes the 60-tick compiled troop evaluator, seven condition cases,
+23-case command dispatcher, non-stopping `Stop` semantics, formation breadcrumb
+queue, separate movement-speed scaling, capability-gated `UNIT_FLOCKABLE`
+formation-recovery path, category-specific melee, ranged, flying, siege, and
+special engagement slots, 252-byte runtime NAV node, guest route-list ABI, and
+dynamic topology mutation behavior. Unrepresented troop-category branches,
+the identities of two external-construction troop variants, and the broader
+collision/local-avoidance path remain incomplete.
+
+A dependency-free bounded analyzer now parses the 36 big-endian stage NAV
+files, validates adjacency and dynamic ranges, models active topology, emulates
+the original backward one-state-per-triangle search, isolates its
+portal-transition indexing defect, computes an expanded portal-state Dijkstra
+reference, and string-pulls corridors in X/Z. Thirteen synthetic tests cover
+malformed inputs, reciprocal geometry, invalid dynamic metadata, activation and
+deactivation, observed versus corrected transition selection, endpoint-aware
+routing, portal orientation, funnel length, basic radius rejection,
+deterministic reporting, and strict JSON output.
+
+The owned corpus contains 26,815 triangles, 531 dynamic triangles, and 112
+dynamic-range records. All adjacency is reciprocal across exact shared edges.
+The 111 valid ranges cover every dynamic triangle exactly once;
+`VZ_MY.NAV` also retains an invalid `(1708, 17)` record beyond its 889
+triangles.
+
+With 40 deterministic largest-static-component centroid pairs per stage and
+seed `0x4E335241`, all 1,440 route requests succeeded. The original emitted
+corridor was longer than endpoint-aware portal-state Dijkstra in 500 cases
+(34.7%), with mean ratio 1.01314, 95th percentile 1.06975, and maximum 1.36300.
+Correcting only distinct portal-pair selection reduced the mean ratio to
+1.00176. Point-agent funneling had zero planar-length invariant failures,
+reduced mean waypoint count from 43.29 to 8.15, and produced a mean
+midpoint/funnel length ratio of 1.17529.
+
+These are deterministic offline measurements over centroid pairs, not observed
+mission traffic. Radius-aware corner clearance, formation width, derived troop
+state interactions, broader local avoidance, runtime heap tie equivalence,
+route-list allocation, and gameplay correctness remain unvalidated. Static
+code also shows no route invalidation when dynamic NAV groups change, but a
+troop stalling at a closing gate has not yet been reproduced. No runtime
+AI/pathfinding behavior, generated translation, manifest entry, game asset, or
+private-derived report changed in this milestone.

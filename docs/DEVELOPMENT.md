@@ -71,6 +71,9 @@ pwsh -NoProfile -File tools\launch_test.ps1
 # Gameplay PAK/SOX reader and inspector models
 python -m unittest tools.n3_gameplay_data_test
 
+# Offline NAV parser, topology, route search, and funnel model
+python -m unittest tools.n3_nav_test
+
 # SDK lock, generated CMake repair, and release packaging
 python -m unittest `
   tools.sdk_lock_test `
