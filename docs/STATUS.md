@@ -1342,3 +1342,40 @@ These checks establish option construction and offline staging behavior only.
 No launcher-driven visual run, native picker interaction, imported-game reset,
 real-mod compatibility check, gameplay route, or performance comparison was
 performed for this milestone.
+
+## Gameplay data format investigation
+
+A read-only investigation on 2 November 2026 decoded both packed-resource
+variants used by all 522 archives beneath `data/PackedResources/`. Of those,
+521 wrap an aligned zlib stream and one stores the shared inner archive
+directly. All 63,170 member records have valid ranges and aligned offsets.
+Twenty-nine archives contain duplicate names with 76 extra records; every
+duplicate payload is byte-identical, while runtime lookup precedence remains
+unknown. Four representative compressed archives were reproduced exactly with
+zlib level 6 plus their original padding.
+
+The investigation also parsed all 72 loose and 238 packed SOX tables. Every
+sample completed a byte-identical parse/serialize round trip, covering 310
+tables and 111 unique contents. SOX is a generic tabular format. Fourteen
+byte-identical global mechanics tables across the ten `res_init*.pak` variants
+expose unit definitions; attack, defense, HP, critical, Orb/experience and
+defense-probability curves; level matching; hero and troop progression; items;
+item levels; drop probabilities; and item sets. Separate tables expose ability
+unlock levels and localized move lists.
+
+Stage archives also contain compiled unit and troop AI, attack scripts, unit
+metadata, mission triggers, maps, navigation, effects, and runtime event
+sequences. Their retained strings expose level branches, target selection,
+counterattacks, troop commands, reinforcement and item-bearing groups, but
+their binary layouts are not sufficiently decoded for writing. A dormant
+two-list debug-menu layout was found without a traced activation path.
+
+These results establish a practical route to a read-only gameplay-data
+inspector and then a numeric SOX editor that emits complete replacement PAKs
+through the existing mod stager. No codec or editor was added, no extracted
+game data was modified, no rebuilt archive was loaded by the game, and no
+gameplay or save-compatibility claim follows from structural round trips.
+Duplicate-name lookup order, language-archive selection, loose authoring-file
+usage, item-effect meanings, AI/mission layouts, and runtime acceptance remain
+open. The format details and staged validation plan are recorded in
+[modding](MODDING.md).

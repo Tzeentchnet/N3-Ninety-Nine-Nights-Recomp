@@ -15,7 +15,9 @@ and is never edited by the stager.
 | Override `default.xex`, system-update files, or paths outside `data/` | **Rejected** |
 | Import loose N3 assets into Blender | **Planned; no codec or add-on implementation yet** |
 | Emit a versioned Blender export receipt | **Version 1 contract documented; no exporter or stager validation yet** |
-| Decode or encode `.36t`, `.bm`, `.skin`, or N3 `.pak` formats | **Not implemented** |
+| Decode `.pak` containers and `.sox` tables | **Format investigated and corpus-validated; no checked-in codec yet** |
+| Edit global character, unit, combat, troop, item, or ability tables | **Data surfaces identified; no editor or runtime-edited package validation yet** |
+| Decode or encode `.36t`, `.bm`, or `.skin` formats | **Not implemented** |
 | Override individual members inside `.pak` containers | **Not implemented** |
 | Hot-load mods or change load order while the game is running | **Not implemented** |
 | Distribute original game files as mods | **Not permitted by this project** |
@@ -139,7 +141,7 @@ The owned image contains these relevant file counts:
 | `.bpf` | 143 | Binary data; format not decoded |
 | `.xwb` | 113 | XACT wave banks; use the validated voice-directory path for full voice sets |
 | `.bfx` | 105 | Effect-related binary; format not decoded |
-| `.sox` | 72 | Audio-related binary; format not decoded |
+| `.sox` | 72 | Generic tabular data; loose and packed samples include gameplay and localization definitions |
 | `.n3sb` | 36 | N3-specific binary; format not decoded |
 | `.xsb` | 35 | XACT sound banks; cues must remain compatible with their wave banks |
 | `.uitb` | 34 | UI-related binary; format not decoded |
@@ -168,21 +170,131 @@ ladder, and future versioned export receipt are in
 nor validates that optional receipt. Blender support remains planned until code
 and tests establish it.
 
-## Packed-resource limitation
+## Packed-resource format
 
-Many character and level resources are grouped in paired `*_res.pak` and
-`*_tex.pak` files. Their entry tables, compression, alignment, checksums, and
-duplicate-name behavior are not verified. The stager therefore permits only a
-complete package supplied by the user; it does not unpack or repack members.
+A read-only investigation on 2 November 2026 decoded all 522 archives beneath
+`data/PackedResources/`:
 
-Per-entry package mods require either:
+- 521 use a four-byte big-endian uncompressed size, zero padding through
+  offset `0x7ff`, and a standard zlib stream beginning at `0x800`;
+- `portrait_cache.pak` stores the same inner archive directly, without the
+  outer size, padding, or zlib stream;
+- the inner archive begins with a big-endian member count followed by 268-byte
+  records: a 256-byte NUL-padded name, a four-byte reserved field, a
+  big-endian offset, and a big-endian size;
+- every observed reserved field is zero, every member offset is `0x800`
+  aligned, and compressed streams use zero padding to an `0x800` boundary; and
+- all 63,170 member records have valid ranges. Twenty-nine archives contain
+  duplicate names, accounting for 76 extra records. Every duplicate payload
+  is byte-identical, but runtime lookup precedence has not been traced.
 
-1. a bounded, deterministic reader/writer verified against multiple owned
-   samples and synthetic corruption fixtures; or
-2. a runtime archive hook that checks a mod overlay before the original member.
+Four representative zlib archives were reproduced byte-for-byte with Python
+zlib level 6 before restoring their original alignment padding. This is
+format evidence, not proof that the game accepts an edited archive.
 
-Neither exists yet. A recognized extension or sample header is not sufficient
-evidence for a writer.
+The current stager still permits only a complete package supplied by the user.
+No reader/writer is checked in, no malformed synthetic fixtures exist, and no
+rebuilt package has been loaded by the running game. A future writer must
+preserve member order, duplicate records, unknown bytes, alignment, and
+unmodified payloads. It should emit complete replacement archives into a mod
+rather than alter `private/game/`.
+
+## Gameplay tables
+
+SOX is a generic table format rather than an audio-specific format. The
+investigation parsed 72 loose and 238 packed tables, representing 111 unique
+contents. All 310 samples completed byte-identical parse/serialize round trips:
+
+- offset `0x00` contains a preserved four-byte table key;
+- big-endian column and row counts follow at offsets `0x04` and `0x08`;
+- the header reserves 128 descriptors, each containing a 64-byte padded field
+  name and a big-endian type;
+- row data begins at fixed offset `0x220c`, with a sequential big-endian row ID
+  at the start of every row;
+- observed type 1 values are length-prefixed byte strings, while types 2 and 3
+  are signed big-endian 32-bit integers; and
+- a `THEND` footer and its variable padding must be preserved.
+
+The ten language-specific `res_init*.pak` archives contain byte-identical
+copies of fourteen central mechanics tables:
+
+| Table | Observed data |
+| --- | --- |
+| `CHARDATA.SOX` | 100 unit definitions, resource paths, unit/troop types, scale, maximum level, level offsets, size, weight, sound, and crowd metadata |
+| `ATTACKTABLE.SOX` | Enemy and friendly attack curves for 100 units |
+| `DEFENSETABLE.SOX` | Defense curves and True Orb attenuation |
+| `HPTABLE.SOX` | Enemy and friendly HP curves |
+| `CRITICALTABLE.SOX` | Critical values and ratios |
+| `ORBTABLE.SOX` | Orb Spark and experience values |
+| `DEFENSEPROBTABLE.SOX` | Enemy, friendly, and hero defense probabilities |
+| `LEVELMATCHINGTABLE.SOX` | Twelve level-matching slots per unit |
+| `HEROTABLE.SOX` | Nine hero levels with movement speed, equipment slots, Orb consumption, guard stats, troop limits, and attack range |
+| `TROOPTABLE.SOX` | Twelve troop levels with movement and range values |
+| `ITEMTABLE.SOX` | 200 item rows with seven effect/value pairs, conditions, minimum level, hero restrictions, and item type |
+| `ITEMLEVELTABLE.SOX` | Item-level availability |
+| `ITEMDROPTABLE.SOX` | Item-drop probability data |
+| `ITEMSETTABLE.SOX` | Item-set composition |
+
+Additional loose tables expose 70 character ability rows with unlock levels
+and localized move lists. Shipped source-like definitions expose nine
+experience thresholds, kill/combo reward thresholds, item IDs, AI operations,
+troop behavior, trigger parameters, animation signals, and UI control IDs.
+It has not been established whether each loose authoring file is read at
+runtime or is a leftover input whose values were compiled elsewhere.
+
+The seven playable unit IDs can be correlated with Aspharr, Inphyy, Tyurru,
+Klarrann, Myifee, Vigk Vagk, and Dwingvatt through character resources and
+voice identifiers. Item descriptions correlate many effect IDs with maximum
+HP, guard HP, attack, defense, Orb charging, drop rate, attack range, automatic
+guard, and conditional effects. The complete effect-ID enum remains unnamed.
+
+Compiled AI and mission resources are also information-rich but are not yet
+safe editor targets. Unit `.aib` and `.ai_funcb` files retain function names,
+parameters, includes, original source paths, target searches, level branches,
+counterattacks, and troop commands. Stage groups contain attack scripts and
+unit metadata in `*_res2_res.pak`, mission triggers in `*_res3_res.pak`, and
+runtime/event sequences in `*_pak_res.pak`. The shipped trigger list names 52
+conditions and 299 actions covering areas, HP, attacks, units, items, AI,
+camera, sound, variables, and mission state. Binary layouts and runtime
+semantics remain incomplete.
+
+The shipped debug-menu layout also defines two list boxes and matching debug
+control IDs. No executable handler or activation path has been identified.
+
+## Editor path
+
+The lowest-risk first editor is an offline, read-only inspector for a verified
+user-owned extraction:
+
+1. validate the supported build and both PAK variants;
+2. display the known hero, unit, curve, troop, item, drop, set, reward, and
+   ability tables with raw names retained where semantics are incomplete; and
+3. export structural JSON or synthetic fixtures without retail payloads.
+
+A first writable release should limit changes to existing numeric SOX cells.
+It should preserve schemas, row counts, strings, member order, duplicate
+members, footers, alignment, and every unknown byte. Global-table changes
+should be applied consistently to all ten `res_init*.pak` variants unless
+language-selection tracing proves a narrower rule.
+
+The first runtime experiment should alter one unmistakable, reversible value,
+such as one hero's level-1 HP or movement speed, stage the rebuilt archives
+through the existing mod system, and use an isolated profile. Successful
+round trips and a surviving process do not establish that the game loaded the
+changed value, that gameplay is correct, or that saves remain compatible.
+
+Attack-script, AI, mission, spawn, map, and navigation editing should follow
+only after their binary layouts have the same corpus, corruption-fixture, and
+runtime-validation coverage. Save editing is a separate track: a historical
+closed-source N3 save editor advertised a Max ORB operation, but no public
+payload schema, offsets, checksum, or source code were found.
+
+Public manuals and contemporary guides corroborate the seven characters,
+level-9 cap, level-gated moves, red/blue Orb behavior, equipment stat domains,
+and mission-result categories. They provide useful test cases, not binary
+schemas. No credible public numeric enemy-stat table, N3 archive writer,
+mission-spawn format, or open-source save editor was found during this
+investigation.
 
 ## Runtime and gameplay hooks
 
