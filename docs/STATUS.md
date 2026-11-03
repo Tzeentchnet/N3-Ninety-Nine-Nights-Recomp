@@ -1387,9 +1387,10 @@ investigation into a visual application. It verifies the supported executable,
 loads `res_init.pak`, compares the fourteen central mechanics tables across all
 ten language-specific initialization archives, and parses every loose SOX
 table. Dedicated views expose 100 units and their related level curves, hero
-progression, 200 items joined with English descriptions, 257 localized
-per-character move rows for the selected language, and all 103 loaded packed
-and loose tables. Wide and duplicate-heading tables retain their raw fields.
+progression, NPC relationships and compiled AI composition, 200 items joined
+with English descriptions, 257 localized per-character move rows for the
+selected language, and all 103 loaded packed and loose tables. Wide and
+duplicate-heading tables retain their raw fields.
 
 The underlying bounded reader supports both observed PAK variants and all three
 observed SOX field types. It rejects unsupported reserved values, invalid
@@ -1399,7 +1400,7 @@ strings, and missing footers. Structural JSON export records schemas, hashes,
 counts, archive comparisons, build identity, and warnings without row values
 or absolute extraction paths.
 
-Fifteen synthetic unit tests pass. A full owned-corpus run validates all 522
+Nineteen synthetic unit tests pass. A full owned-corpus run validates all 522
 packed-resource archives, 63,170 members, 29 duplicate-name archives with 76
 extra records and no non-identical duplicate groups, plus 238 packed and 72
 loose SOX tables representing 111 unique contents. Tkinter construction,
@@ -1495,3 +1496,50 @@ No guest-code caller, damage formula, side-branch selector, Orb-decrease
 formula, guard-HP ownership, edited value, rebuilt SOX/PAK, gameplay route, or
 save compatibility was validated. These tooltips improve read-only
 interpretation; they do not establish writable ranges.
+
+## NPC relationships and compiled AI guidance
+
+The 100 `CHARDATA.SOX` definitions were split into seven playable heroes, 86
+named NPCs, and seven `noname` placeholders. The retained `GameObj_ClassID`
+enum identifies 49 ordinary units, 28 adjutants, five archers, and one each
+for flying unit, catapult, moving tower, and the Vigk Vagk hero subclass among
+the named NPC rows. The inspector now labels those exact class IDs and
+provides observed-value guidance for 19 numeric or enum-like fields covering
+class/troop categories, scale, physical dimensions, level tiers, sound and
+crowd selectors, weight, and job linkage.
+
+Five nonnegative `Second Job Index` values resolve as zero-based CHARDATA
+positions: `C_LS_SL4_AR` to `C_LS_SL1_OH`, `C_DS_GB1_AR` to
+`C_DS_GB1_OH`, `C_DS_GBC` to `C_DS_GBC_OH`, `C_DS_GB2_AR` to
+`C_DS_GB2_OH`, and `C_LS_SL_EX4_AR` to `C_LS_SL_EX1_OH`. Linked rows still
+carry their own class, animation, attack-script, unit-info, sound, and other
+fields. The view therefore separates this explicit job-row relation from
+exact shared-resource groups, five exact seven-table stat-profile groups, and
+14 inferred naming families. None is labeled as generic record inheritance.
+
+The background loader indexes 39 relevant stage archives and verifies
+same-name content before collapsing repeated instances. The supported corpus
+contains 664 AIB instances / 95 names, 350 AI-function instances / 19 names,
+637 attack-script instances / 85 names, and 637 unit-info instances / 85
+names, with no same-name payload conflicts. Seventy-eight of the 86 named NPC
+rows have a direct `<UNIT>_DEFAULT.AIB` match; the eight absent programs remain
+visibly absent rather than receiving an inferred fallback.
+
+Length-prefixed retained strings expose each indexed AIB's source path,
+included functions, function-call occurrences, and `iflevel` branch count.
+Forty-seven of the 78 directly matched NPC programs contain level gates and
+the programs collectively include 27 function names. Available standalone
+`.ai_funcb` resources also expose parameter names. This supports a composition
+model in which independently compiled unit programs reuse behavior modules;
+it does not establish a single AI template pointer or a complete AIB binary
+grammar.
+
+Nineteen synthetic tests pass, including bounded AI-string extraction,
+function/parameter recovery, identical repeated-resource collapsing,
+same-name conflict rejection, explicit job-link direction, stat twins, and
+separate shared-resource and naming-family evidence. Python compilation and a
+real Tkinter population check pass for relationship, AI, module, and all 19
+attribute rows. No AIB, AI-function, attack-script, unit-info, SOX, or PAK
+writer was added; no edited resource was loaded; and no runtime AI, tier
+selector, physical-unit, sound, crowd, inheritance, gameplay, or save behavior
+was validated.

@@ -22,11 +22,13 @@ from tools.n3_gameplay_data import (
     GameData,
     GameplayDataError,
     ItemRecord,
+    NpcProfile,
     SoxRow,
     TableSource,
     UnitRecord,
     display_value,
     load_game_data,
+    unit_class_name,
     validate_corpus,
     write_structural_report,
 )
@@ -64,7 +66,7 @@ class _TreeviewTooltip:
         self,
         tk_module,
         tree,
-        text_provider: Callable[[str, str | None], str | None],
+        text_provider: Callable[[str, str | None, str], str | None],
     ):
         self.tk = tk_module
         self.tree = tree
@@ -90,7 +92,7 @@ class _TreeviewTooltip:
         column = str(columns[index])
         row = self.tree.identify_row(event.y) if region == "cell" else ""
         current = self.tree.set(row, column) if row else None
-        text = self.text_provider(column, current)
+        text = self.text_provider(column, current, row)
         if not text:
             self._hide()
             return
@@ -155,6 +157,9 @@ class GameplayInspectorApp:
         self._generic_rows: dict[str, SoxRow] = {}
         self._curve_guides: dict[str, FieldGuide] = {}
         self._hero_guides: dict[str, FieldGuide] = {}
+        self._npc_guides: dict[str, FieldGuide] = {}
+        self._npc_profiles: dict[str, NpcProfile] = {}
+        self._npc_guide_rows: dict[str, FieldGuide] = {}
         self._current_table: TableSource | None = None
         self._loading = False
 
@@ -341,7 +346,7 @@ class GameplayInspectorApp:
         for column, label, width in (
             ("name", "Display name", 150),
             ("id", "Internal ID", 115),
-            ("type", "Unit type", 75),
+            ("type", "Unit type", 135),
             ("max", "Unit MaxLevel", 90),
             ("hero_levels", "Hero levels", 80),
         ):
@@ -361,10 +366,12 @@ class GameplayInspectorApp:
         identity = ttk.Frame(unit_tabs, padding=6)
         curves = ttk.Frame(unit_tabs, padding=6)
         hero = ttk.Frame(unit_tabs, padding=6)
+        npc = ttk.Frame(unit_tabs, padding=6)
         related = ttk.Frame(unit_tabs, padding=6)
         unit_tabs.add(identity, text="Identity")
         unit_tabs.add(curves, text="Level curves")
         unit_tabs.add(hero, text="Hero progression")
+        unit_tabs.add(npc, text="NPC relationships & AI")
         unit_tabs.add(related, text="All related fields")
 
         self.unit_identity_tree = self._field_tree(identity)
@@ -428,7 +435,7 @@ class GameplayInspectorApp:
         self._curve_tooltip = _TreeviewTooltip(
             self.tk,
             self.unit_curve_tree,
-            lambda column, current: self._guide_text(
+            lambda column, current, _row: self._guide_text(
                 self._curve_guides, column, current
             ),
         )
@@ -474,10 +481,97 @@ class GameplayInspectorApp:
         self._hero_tooltip = _TreeviewTooltip(
             self.tk,
             self.hero_tree,
-            lambda column, current: self._guide_text(
+            lambda column, current, _row: self._guide_text(
                 self._hero_guides, column, current
             ),
         )
+
+        ttk.Label(
+            npc,
+            text=(
+                "Exact job links, shared resources, and identical stat profiles "
+                "are kept separate from inferred naming families. Compiled AI is "
+                "read only; missing resources are reported rather than inherited."
+            ),
+            style="Muted.TLabel",
+            wraplength=900,
+        ).pack(anchor="w", pady=(0, 5))
+        npc_tabs = ttk.Notebook(npc)
+        npc_tabs.pack(fill="both", expand=True)
+        relationships = ttk.Frame(npc_tabs, padding=5)
+        ai = ttk.Frame(npc_tabs, padding=5)
+        attributes = ttk.Frame(npc_tabs, padding=5)
+        npc_tabs.add(relationships, text="Relationships")
+        npc_tabs.add(ai, text="AI composition")
+        npc_tabs.add(attributes, text="Tweakable fields")
+
+        self.npc_relationship_tree = self._scrolled_tree(
+            relationships, ("relationship", "basis", "related", "evidence")
+        )
+        for column, label, width in (
+            ("relationship", "Relationship", 150),
+            ("basis", "Exact basis", 230),
+            ("related", "Related units / value", 300),
+            ("evidence", "Evidence class", 210),
+        ):
+            self.npc_relationship_tree.heading(column, text=label)
+            self.npc_relationship_tree.column(
+                column, width=width, minwidth=100
+            )
+
+        ai_pane = ttk.Panedwindow(ai, orient="vertical")
+        ai_pane.pack(fill="both", expand=True)
+        ai_summary = ttk.LabelFrame(
+            ai_pane, text="Selected unit resources", padding=5
+        )
+        ai_modules = ttk.LabelFrame(
+            ai_pane, text="Included reusable function modules", padding=5
+        )
+        ai_pane.add(ai_summary, weight=2)
+        ai_pane.add(ai_modules, weight=3)
+        self.npc_ai_summary_tree = self._field_tree(ai_summary)
+        self.npc_ai_module_tree = self._scrolled_tree(
+            ai_modules, ("module", "calls", "parameters", "compiled")
+        )
+        for column, label, width in (
+            ("module", "Included module", 230),
+            ("calls", "Calls", 60),
+            ("parameters", "Retained parameters", 330),
+            ("compiled", "Indexed module", 170),
+        ):
+            self.npc_ai_module_tree.heading(column, text=label)
+            self.npc_ai_module_tree.column(
+                column, width=width, minwidth=60
+            )
+
+        ttk.Label(
+            attributes,
+            text=(
+                "These are candidate numeric or enum-like SOX fields. Ranges "
+                "describe named retail NPC rows, not validated edit limits."
+            ),
+            style="Muted.TLabel",
+            wraplength=900,
+        ).pack(anchor="w", pady=(0, 5))
+        self.npc_attribute_tree = self._scrolled_tree(
+            attributes, ("field", "value", "observed", "limits")
+        )
+        for column, label, width in (
+            ("field", "Field", 190),
+            ("value", "Current value", 110),
+            ("observed", "Retail NPC values", 210),
+            ("limits", "Known limits", 440),
+        ):
+            self.npc_attribute_tree.heading(column, text=label)
+            self.npc_attribute_tree.column(
+                column, width=width, minwidth=80
+            )
+        self._npc_attribute_tooltip = _TreeviewTooltip(
+            self.tk,
+            self.npc_attribute_tree,
+            self._npc_attribute_guide_text,
+        )
+
         self.unit_related_tree = self._scrolled_tree(
             related, ("table", "field", "value")
         )
@@ -745,6 +839,12 @@ class GameplayInspectorApp:
         self._hero_guides = {
             guide.key: guide for guide in data.hero_field_guides()
         }
+        self._npc_guides = {
+            guide.key: guide for guide in data.npc_field_guides()
+        }
+        self._npc_profiles = {
+            profile.unit_id: profile for profile in data.npc_profiles()
+        }
         self.game_path.set(str(data.game_root))
         self._populate_overview()
         self._populate_units()
@@ -782,6 +882,19 @@ class GameplayInspectorApp:
             f"{data.archive_name}: {archive_format}, "
             f"{data.archive_member_count} members, "
             f"{data.archive_duplicate_extra_count} extra duplicate records.\n",
+        )
+
+        resource_counts = Counter(
+            resource.kind for resource in data.compiled_resources.resources
+        )
+        text.insert("end", "\nCompiled NPC resources\n", "heading")
+        text.insert(
+            "end",
+            f"{data.compiled_resources.archive_count} stage archives provide "
+            f"{resource_counts['.aib']} unique AIB programs, "
+            f"{resource_counts['.ai_funcb']} reusable AI function modules, "
+            f"{resource_counts['.as']} attack scripts, and "
+            f"{resource_counts['.info']} unit-info files.\n",
         )
 
         categories = Counter(source.category for source in data.tables)
@@ -847,7 +960,14 @@ class GameplayInspectorApp:
                 values=(
                     record.display_name,
                     record.unit_id,
-                    display_value(record.row.values[unit_type], source.encoding),
+                    (
+                        f"{record.row.values[unit_type]} "
+                        f"({unit_class_name(record.row.values[unit_type])})"
+                        if isinstance(record.row.values[unit_type], int)
+                        else display_value(
+                            record.row.values[unit_type], source.encoding
+                        )
+                    ),
                     display_value(record.row.values[max_level], source.encoding),
                     hero_levels,
                 ),
@@ -868,6 +988,8 @@ class GameplayInspectorApp:
             for related, _row in record.tables
         ):
             subtitle += " — playable hero, progression levels 1..9"
+        elif profile := self._npc_profiles.get(record.unit_id):
+            subtitle += f" — NPC, {profile.class_name}"
         self.unit_subtitle.configure(text=subtitle)
 
         self._fill_field_tree(
@@ -877,6 +999,7 @@ class GameplayInspectorApp:
         )
         self._populate_unit_curves(record)
         self._populate_hero_progression(record)
+        self._populate_npc_details(record, source)
 
         self._clear_tree(self.unit_related_tree)
         for related_source, row in record.tables:
@@ -969,6 +1092,231 @@ class GameplayInspectorApp:
                     _number(source, row, f"AttackRange{level}"),
                 ),
             )
+
+    def _populate_npc_details(
+        self, record: UnitRecord, source: TableSource
+    ) -> None:
+        if self.data is None:
+            return
+        self._clear_tree(self.npc_relationship_tree)
+        self._clear_tree(self.npc_ai_summary_tree)
+        self._clear_tree(self.npc_ai_module_tree)
+        self._clear_tree(self.npc_attribute_tree)
+        self._npc_guide_rows.clear()
+
+        profile = self._npc_profiles.get(record.unit_id)
+        if profile is None:
+            kind = (
+                "Playable hero"
+                if record.display_name != record.unit_id
+                else "Placeholder or unsupported row"
+            )
+            self.npc_relationship_tree.insert(
+                "",
+                "end",
+                values=(
+                    "Not an NPC profile",
+                    record.unit_id,
+                    kind,
+                    "NPC-only relationships are intentionally not inferred.",
+                ),
+            )
+            self.npc_ai_summary_tree.insert(
+                "", "end", values=("Status", "No named NPC profile")
+            )
+            return
+
+        self.npc_relationship_tree.insert(
+            "",
+            "end",
+            values=(
+                "Runtime class",
+                f"CHARDATA unit type = {profile.class_id}",
+                profile.class_name,
+                "Exact GameObj_ClassID match from retained aidef.h.",
+            ),
+        )
+        if profile.second_job_target is not None:
+            self.npc_relationship_tree.insert(
+                "",
+                "end",
+                values=(
+                    "Explicit job-row link",
+                    (
+                        f"Second Job Index {profile.second_job_index} -> "
+                        f"row {profile.second_job_target_row_id}"
+                    ),
+                    profile.second_job_target,
+                    "Exact zero-based row link; does not imply field inheritance.",
+                ),
+            )
+        else:
+            self.npc_relationship_tree.insert(
+                "",
+                "end",
+                values=(
+                    "Explicit job-row link",
+                    f"Second Job Index = {profile.second_job_index}",
+                    "None",
+                    "-1 is the retail no-link sentinel.",
+                ),
+            )
+        for shared in profile.shared_resources:
+            self.npc_relationship_tree.insert(
+                "",
+                "end",
+                values=(
+                    f"Shared {shared.label}",
+                    f"{shared.field} = {shared.value}",
+                    ", ".join(shared.peers),
+                    "Exact case-insensitive resource-field equality.",
+                ),
+            )
+        self.npc_relationship_tree.insert(
+            "",
+            "end",
+            values=(
+                "Identical stat profile",
+                "Seven complete core curve rows",
+                (
+                    ", ".join(profile.identical_stat_peers)
+                    if profile.identical_stat_peers
+                    else "No exact peer"
+                ),
+                "Exact value equality; not proof of runtime inheritance.",
+            ),
+        )
+        self.npc_relationship_tree.insert(
+            "",
+            "end",
+            values=(
+                "Naming family",
+                "Weapon suffix removed; trailing digits normalized",
+                (
+                    ", ".join(profile.naming_family_peers)
+                    if profile.naming_family_peers
+                    else "No inferred peer"
+                ),
+                "Naming-convention inference only.",
+            ),
+        )
+
+        def add_ai_field(field: str, value: str) -> None:
+            self.npc_ai_summary_tree.insert(
+                "", "end", values=(field, value)
+            )
+
+        program = profile.ai_program
+        add_ai_field("Expected default AIB", profile.expected_ai_program)
+        if program is None:
+            add_ai_field(
+                "Default AIB status",
+                (
+                    "Not found in the "
+                    f"{self.data.compiled_resources.archive_count} indexed "
+                    "stage-resource archives"
+                ),
+            )
+        else:
+            add_ai_field("Default AIB status", "Indexed")
+            add_ai_field("Retained source", program.source_path)
+            add_ai_field(
+                "Stage copies",
+                (
+                    f"{program.resource.occurrences} copies in "
+                    f"{len(program.resource.archives)} archives"
+                ),
+            )
+            add_ai_field("SHA-256", program.resource.sha256)
+            add_ai_field(
+                "Included functions", str(len(program.included_functions))
+            )
+            add_ai_field(
+                "Function calls", str(len(program.called_functions))
+            )
+            add_ai_field(
+                "iflevel branches", str(program.level_branch_count)
+            )
+
+        for label, name, resource in (
+            ("Attack script", profile.attack_script_name, profile.attack_script),
+            ("Unit-info file", profile.unit_info_name, profile.unit_info),
+        ):
+            status = (
+                f"{resource.occurrences} indexed stage copies"
+                if resource is not None
+                else "not found in indexed stage archives"
+            )
+            add_ai_field(label, f"{name or '(empty)'} — {status}")
+
+        if program is None:
+            self.npc_ai_module_tree.insert(
+                "",
+                "end",
+                values=(
+                    "(default AIB unavailable)",
+                    "",
+                    "",
+                    "No composition inferred",
+                ),
+            )
+        else:
+            call_counts = Counter(
+                name.casefold() for name in program.called_functions
+            )
+            for function_name in program.included_functions:
+                module = self.data.compiled_resources.find_function_module(
+                    function_name
+                )
+                self.npc_ai_module_tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        function_name,
+                        call_counts[function_name.casefold()],
+                        (
+                            ", ".join(module.parameters)
+                            if module is not None and module.parameters
+                            else "(none retained)"
+                        ),
+                        (
+                            f"{module.resource.occurrences} stage copies"
+                            if module is not None
+                            else "not indexed separately"
+                        ),
+                    ),
+                )
+
+        for index, guide in enumerate(self._npc_guides.values()):
+            indices = source.table.column_indices(guide.key)
+            if not indices:
+                continue
+            current = display_value(
+                record.row.values[indices[0]], source.encoding
+            )
+            iid = f"npc-guide:{index}"
+            self._npc_guide_rows[iid] = guide
+            self.npc_attribute_tree.insert(
+                "",
+                "end",
+                iid=iid,
+                values=(
+                    guide.label,
+                    current,
+                    guide.observed_summary,
+                    guide.known_limits,
+                ),
+            )
+
+    def _npc_attribute_guide_text(
+        self, _column: str, _current: str | None, row: str
+    ) -> str | None:
+        guide = self._npc_guide_rows.get(row)
+        if guide is None:
+            return None
+        return guide.tooltip_text(
+            self.npc_attribute_tree.set(row, "value")
+        )
 
     def _populate_items(self) -> None:
         self._clear_tree(self.item_tree)

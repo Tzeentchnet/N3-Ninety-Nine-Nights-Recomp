@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
+import re
 import struct
 from typing import Callable, Iterable
 import zlib
@@ -24,6 +25,52 @@ SOX_FOOTER = b"THEND"
 MAX_ARCHIVE_SIZE = 512 * 1024 * 1024
 MAX_PAK_MEMBERS = 1_000_000
 MAX_SOX_ROWS = 1_000_000
+MAX_COMPILED_AI_RESOURCE_SIZE = 16 * 1024 * 1024
+MAX_COMPILED_AI_STRING_SIZE = 1024
+
+AI_RESOURCE_SUFFIXES = (".aib", ".ai_funcb", ".as", ".info")
+AI_STAGE_EXTRA_ARCHIVES = (
+    "ev_ty_res3_res.pak",
+    "vf_in2_res3_res.pak",
+    "vz_dw2_res3_res.pak",
+)
+
+UNIT_CLASS_NAMES = {
+    -1: "Unknown",
+    0: "Unit",
+    1: "Flying unit",
+    2: "Horse",
+    3: "Archer",
+    4: "Catapult",
+    5: "Moving tower",
+    6: "Adjutant",
+    1000: "Hero",
+    1001: "Hero Aspharr",
+    1002: "Hero Inphy",
+    1003: "Hero Klarrann",
+    1004: "Hero Vigk Vagk",
+    1005: "Hero Myifee",
+    1006: "Hero Dwingvatt",
+    1007: "Hero Tyurru",
+}
+
+NPC_SHARED_RESOURCE_FIELDS = (
+    ("unit folder", "Unit folder"),
+    ("skin name", "Skin"),
+    ("ani name", "Animation"),
+    ("AS file", "Attack script"),
+    ("Parts file", "Unit-info file"),
+)
+
+NPC_STAT_PROFILE_TABLES = (
+    "ATTACKTABLE.SOX",
+    "DEFENSETABLE.SOX",
+    "HPTABLE.SOX",
+    "CRITICALTABLE.SOX",
+    "ORBTABLE.SOX",
+    "DEFENSEPROBTABLE.SOX",
+    "LEVELMATCHINGTABLE.SOX",
+)
 
 EXPECTED_XEX_SHA256 = (
     "0fe8973b6ff45d3f8bd03a51a8c0d8cdf278b3d43e793497777e075f4e94a804"
@@ -260,6 +307,7 @@ class FieldGuide:
     evidence: str
     known_limits: str
     observed_values: tuple[int, ...]
+    population_label: str = "Retail hero values"
 
     @property
     def observed_range(self) -> tuple[int, int] | None:
@@ -291,12 +339,107 @@ class FieldGuide:
         lines.extend(
             (
                 f"Units: {self.units}",
-                f"Retail hero values: {self.observed_summary}",
+                f"{self.population_label}: {self.observed_summary}",
                 f"Known limits: {self.known_limits}",
                 f"Evidence: {self.evidence}",
             )
         )
         return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class CompiledResource:
+    name: str
+    kind: str
+    sha256: str
+    archives: tuple[str, ...]
+    occurrences: int
+
+
+@dataclass(frozen=True)
+class AiProgram:
+    resource: CompiledResource
+    source_path: str
+    included_functions: tuple[str, ...]
+    called_functions: tuple[str, ...]
+    level_branch_count: int
+
+    @property
+    def unique_called_functions(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(self.called_functions))
+
+
+@dataclass(frozen=True)
+class AiFunctionModule:
+    resource: CompiledResource
+    source_path: str
+    parameters: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CompiledResourceIndex:
+    archive_count: int
+    resources: tuple[CompiledResource, ...]
+    programs: tuple[AiProgram, ...]
+    function_modules: tuple[AiFunctionModule, ...]
+
+    def find_resource(self, name: str) -> CompiledResource | None:
+        folded = name.casefold()
+        return next(
+            (resource for resource in self.resources if resource.name.casefold() == folded),
+            None,
+        )
+
+    def find_program(self, name: str) -> AiProgram | None:
+        folded = name.casefold()
+        return next(
+            (
+                program
+                for program in self.programs
+                if program.resource.name.casefold() == folded
+            ),
+            None,
+        )
+
+    def find_function_module(self, name: str) -> AiFunctionModule | None:
+        stem = _compiled_resource_stem(name)
+        return next(
+            (
+                module
+                for module in self.function_modules
+                if _compiled_resource_stem(module.resource.name) == stem
+            ),
+            None,
+        )
+
+
+@dataclass(frozen=True)
+class SharedUnitResource:
+    field: str
+    label: str
+    value: str
+    peers: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class NpcProfile:
+    unit_id: str
+    row_id: int
+    class_id: int | None
+    class_name: str
+    second_job_index: int | None
+    second_job_target: str | None
+    second_job_target_row_id: int | None
+    naming_family_peers: tuple[str, ...]
+    shared_resources: tuple[SharedUnitResource, ...]
+    identical_stat_peers: tuple[str, ...]
+    expected_ai_program: str
+    ai_program: AiProgram | None
+    attack_script_name: str
+    attack_script: CompiledResource | None
+    unit_info_name: str
+    unit_info: CompiledResource | None
+    function_modules: tuple[AiFunctionModule, ...]
 
 
 @dataclass(frozen=True)
@@ -306,6 +449,16 @@ class _FieldGuideSpec:
     table_name: str
     prefix: str
     field_count: int
+    description: str
+    units: str
+    evidence: str
+    known_limits: str
+
+
+@dataclass(frozen=True)
+class _NpcFieldGuideSpec:
+    field: str
+    label: str
     description: str
     units: str
     evidence: str
@@ -571,6 +724,196 @@ _HERO_CURVE_SPECS = (
     ),
 )
 
+_NPC_FIELD_SPECS = (
+    _NpcFieldGuideSpec(
+        "unit type",
+        "Runtime class ID",
+        (
+            "Selects the runtime unit class. Retained aidef.h names IDs 0..6 as "
+            "Unit, Fly, Horse, Archer, Catapult, MoveTower, and Adjutant, with "
+            "hero subclasses at 1000..1007."
+        ),
+        "GameObj_ClassID enum value",
+        "The CHARDATA values exactly match the retained GameObj_ClassID enum.",
+        "The enum domain is known, but changing an NPC to another runtime class is untested.",
+    ),
+    _NpcFieldGuideSpec(
+        "troop type",
+        "Troop category",
+        (
+            "Category used by troop range data and mission filters. Numeric labels "
+            "have not been mapped to a complete retained enum."
+        ),
+        "unmapped troop-category ID",
+        "Direct CHARDATA and TROOPTABLE field names plus trigger references to TroopType.",
+        "Observed retail values only; do not substitute the unrelated TAI_PARAM enum.",
+    ),
+    _NpcFieldGuideSpec(
+        "skin variation num",
+        "Skin variation count",
+        "Count-like selector associated with the unit's skin resource.",
+        "variation count",
+        "Direct field name and correlation with shared skin families.",
+        "Observed retail values only; zero and out-of-range behavior are untested.",
+    ),
+    _NpcFieldGuideSpec(
+        "unit size",
+        "Unit size",
+        "Horizontal size or collision-scale metadata; exact runtime consumers are untraced.",
+        "unknown engine spatial units",
+        "Direct field name and larger retail values on physically larger unit classes.",
+        "Observed retail values only; no safe collision or rendering bounds are known.",
+    ),
+    _NpcFieldGuideSpec(
+        "Unit Height",
+        "Unit height",
+        "Vertical unit dimension metadata; exact collision and targeting use is untraced.",
+        "unknown engine spatial units",
+        "Direct field name and unit-specific retail values.",
+        "Observed retail values only; no safe runtime bounds are known.",
+    ),
+    _NpcFieldGuideSpec(
+        "billboard size",
+        "Billboard size",
+        "Size metadata for the optional distant-unit billboard representation.",
+        "unknown rendering units",
+        "Direct field name and correlation with billboard resource fields.",
+        "Zero is valid for units without a named billboard; other edit bounds are unknown.",
+    ),
+    _NpcFieldGuideSpec(
+        "unit min scale",
+        "Minimum spawn scale",
+        "Lower endpoint of the per-unit retail scale-variation interval.",
+        "percentage-like scale; 100 is baseline",
+        "Paired min/max field names, 100-centered values, and min <= max for every retail NPC.",
+        "Observed retail values only; negative, zero, and extreme scales are untested.",
+    ),
+    _NpcFieldGuideSpec(
+        "unit max scale",
+        "Maximum spawn scale",
+        "Upper endpoint of the per-unit retail scale-variation interval.",
+        "percentage-like scale; 100 is baseline",
+        "Paired min/max field names, 100-centered values, and min <= max for every retail NPC.",
+        "Must remain at least the minimum for the observed relationship; engine limits are unknown.",
+    ),
+    _NpcFieldGuideSpec(
+        "MaxLevel",
+        "Configured unit level ceiling",
+        (
+            "Highest configured stat-curve level for tiered NPC definitions. It is "
+            "not the nine-level playable-hero progression cap."
+        ),
+        "curve level",
+        "Direct field name plus the four nondecreasing A/B/C/D level-offset patterns.",
+        "Observed NPC values are not proven writer bounds or mission difficulty levels.",
+    ),
+    _NpcFieldGuideSpec(
+        "A_LevelOffset",
+        "A tier level",
+        "First of four nondecreasing NPC level-tier selectors.",
+        "curve level",
+        "All 86 named retail NPC rows satisfy A <= B <= C <= D.",
+        "The A/B/C/D selector owner is untraced; observed values only.",
+    ),
+    _NpcFieldGuideSpec(
+        "B_LevelOffset",
+        "B tier level",
+        "Second of four nondecreasing NPC level-tier selectors.",
+        "curve level",
+        "All 86 named retail NPC rows satisfy A <= B <= C <= D.",
+        "The A/B/C/D selector owner is untraced; observed values only.",
+    ),
+    _NpcFieldGuideSpec(
+        "C_LevelOffset",
+        "C tier level",
+        "Third of four nondecreasing NPC level-tier selectors.",
+        "curve level",
+        "All 86 named retail NPC rows satisfy A <= B <= C <= D.",
+        "The A/B/C/D selector owner is untraced; observed values only.",
+    ),
+    _NpcFieldGuideSpec(
+        "D_LevelOffset",
+        "D tier level",
+        "Fourth and highest of four nondecreasing NPC level-tier selectors.",
+        "curve level",
+        "All 86 named retail NPC rows satisfy A <= B <= C <= D.",
+        "The A/B/C/D selector owner is untraced; observed values only.",
+    ),
+    _NpcFieldGuideSpec(
+        "Use Level",
+        "Use configured level",
+        "Boolean-like switch associated with MaxLevel and the four level-tier fields.",
+        "0 or 1 flag",
+        "Only 0 and 1 occur in named retail NPC definitions.",
+        "The runtime branch and mission override behavior remain untraced.",
+    ),
+    _NpcFieldGuideSpec(
+        "SoundAmor",
+        "Armor-sound selector",
+        "Numeric armor-impact sound selector. The source field retains the shipped spelling.",
+        "unmapped sound ID",
+        "Direct CHARDATA field name and small enum-like retail domain.",
+        "-1 is a retail sentinel; sound-bank ownership and safe substitutions are unknown.",
+    ),
+    _NpcFieldGuideSpec(
+        "SoundWeapon",
+        "Weapon-sound selector",
+        "Numeric weapon-impact sound selector.",
+        "unmapped sound ID",
+        "Direct CHARDATA field name and small enum-like retail domain.",
+        "-1 is a retail sentinel; sound-bank ownership and safe substitutions are unknown.",
+    ),
+    _NpcFieldGuideSpec(
+        "Weight",
+        "Weight",
+        "Weight-like physics or reaction scalar; the exact formula is untraced.",
+        "unknown; 100-based scalar is plausible",
+        "Direct field name; every named retail NPC uses 100.",
+        "Only 100 is observed, so direction and safe alternatives are unknown.",
+    ),
+    _NpcFieldGuideSpec(
+        "CrowdUnitType",
+        "Crowd unit type",
+        "Numeric category paired with the named crowd/voice resource field.",
+        "unmapped crowd-category ID",
+        "Direct field name and correlation with crowd resource names.",
+        "Observed retail values only; the category enum is not independently named.",
+    ),
+    _NpcFieldGuideSpec(
+        "Second Job Index",
+        "Explicit job-row link",
+        (
+            "A nonnegative value is a zero-based CHARDATA row position. All five "
+            "retail links resolve to a related combat-job row."
+        ),
+        "zero-based CHARDATA row index; -1 means no link",
+        (
+            "All five nonnegative retail values resolve exactly, including "
+            "C_DS_GBC to C_DS_GBC_OH; retained AI has a first/second-job condition."
+        ),
+        "Use -1 or a valid row position structurally; runtime-safe retargeting is untested.",
+    ),
+)
+
+
+def unit_class_name(class_id: int | None) -> str:
+    if class_id is None:
+        return "Unavailable"
+    return UNIT_CLASS_NAMES.get(class_id, f"Unmapped class {class_id}")
+
+
+def _npc_family_key(unit_id: str) -> str:
+    stem = re.sub(r"_(?:OH|SP|TH|AR)$", "", unit_id, flags=re.IGNORECASE)
+    return re.sub(r"\d+$", "#", stem).casefold()
+
+
+def _compiled_resource_stem(name: str) -> str:
+    stem = name.replace("\\", "/").rsplit("/", 1)[-1].casefold()
+    for suffix in (".ai_funcb", ".ai_func", ".aib", ".as", ".info"):
+        if stem.endswith(suffix):
+            return stem[: -len(suffix)]
+    return stem
+
 
 @dataclass
 class GameData:
@@ -582,6 +925,7 @@ class GameData:
     archive_duplicate_extra_count: int
     tables: tuple[TableSource, ...]
     variants: tuple[VariantVerification, ...]
+    compiled_resources: CompiledResourceIndex
     warnings: tuple[str, ...]
 
     def table_source(self, name: str) -> TableSource | None:
@@ -658,6 +1002,232 @@ class GameData:
                 )
             )
         return tuple(units)
+
+    def npc_profiles(self) -> tuple[NpcProfile, ...]:
+        character_source = self.table_source("CHARDATA.SOX")
+        if character_source is None:
+            return ()
+
+        units = self.units()
+        rows = character_source.table.rows
+        hero_ids = set(PLAYABLE_UNIT_NAMES)
+        hero_source = self.table_source("HEROTABLE.SOX")
+        if hero_source is not None:
+            hero_ids.update(
+                display_value(row.values[0], hero_source.encoding)
+                for row in hero_source.table.rows
+                if row.values
+            )
+        npc_units = tuple(
+            unit
+            for unit in units
+            if unit.unit_id not in hero_ids and unit.unit_id.casefold() != "noname"
+        )
+
+        def value(row: SoxRow, field: str) -> SoxValue | None:
+            indices = character_source.table.column_indices(field)
+            return row.values[indices[0]] if indices else None
+
+        def text(row: SoxRow, field: str) -> str:
+            field_value = value(row, field)
+            return (
+                display_value(field_value, character_source.encoding)
+                if field_value is not None
+                else ""
+            )
+
+        def number(row: SoxRow, field: str) -> int | None:
+            field_value = value(row, field)
+            return field_value if isinstance(field_value, int) else None
+
+        family_groups: defaultdict[str, list[str]] = defaultdict(list)
+        for unit in npc_units:
+            family_groups[_npc_family_key(unit.unit_id)].append(unit.unit_id)
+
+        shared_groups: dict[str, defaultdict[str, list[str]]] = {}
+        for field, _label in NPC_SHARED_RESOURCE_FIELDS:
+            groups: defaultdict[str, list[str]] = defaultdict(list)
+            for unit in npc_units:
+                resource_value = text(unit.row, field)
+                if resource_value and resource_value.casefold() != "noname":
+                    groups[resource_value.casefold()].append(unit.unit_id)
+            shared_groups[field] = groups
+
+        stat_groups: defaultdict[tuple[object, ...], list[str]] = defaultdict(list)
+        stat_fingerprints: dict[str, tuple[object, ...]] = {}
+        stat_sources = tuple(
+            self.table_source(table_name) for table_name in NPC_STAT_PROFILE_TABLES
+        )
+        if all(source is not None for source in stat_sources):
+            stat_rows: list[dict[str, SoxRow]] = []
+            for source in stat_sources:
+                assert source is not None
+                stat_rows.append(
+                    {
+                        display_value(row.values[0], source.encoding): row
+                        for row in source.table.rows
+                        if row.values
+                    }
+                )
+            for unit in npc_units:
+                if not all(unit.unit_id in by_unit for by_unit in stat_rows):
+                    continue
+                fingerprint = tuple(
+                    (
+                        NPC_STAT_PROFILE_TABLES[index],
+                        stat_rows[index][unit.unit_id].values[1:],
+                    )
+                    for index in range(len(NPC_STAT_PROFILE_TABLES))
+                )
+                stat_fingerprints[unit.unit_id] = fingerprint
+                stat_groups[fingerprint].append(unit.unit_id)
+
+        profiles = []
+        for unit in npc_units:
+            second_job_index = number(unit.row, "Second Job Index")
+            target_id = None
+            target_row_id = None
+            if second_job_index is not None and second_job_index >= 0:
+                if second_job_index >= len(rows):
+                    raise GameplayDataError(
+                        f"CHARDATA.SOX row {unit.row.row_id} {unit.unit_id!r} "
+                        f"has out-of-range Second Job Index {second_job_index}"
+                    )
+                target_row = rows[second_job_index]
+                target_id = display_value(
+                    target_row.values[0], character_source.encoding
+                )
+                target_row_id = target_row.row_id
+
+            shared = []
+            for field, label in NPC_SHARED_RESOURCE_FIELDS:
+                resource_value = text(unit.row, field)
+                peers = tuple(
+                    peer
+                    for peer in shared_groups[field].get(
+                        resource_value.casefold(), ()
+                    )
+                    if peer != unit.unit_id
+                )
+                if peers:
+                    shared.append(
+                        SharedUnitResource(
+                            field=field,
+                            label=label,
+                            value=resource_value,
+                            peers=peers,
+                        )
+                    )
+
+            fingerprint = stat_fingerprints.get(unit.unit_id)
+            stat_peers = (
+                tuple(
+                    peer
+                    for peer in stat_groups[fingerprint]
+                    if peer != unit.unit_id
+                )
+                if fingerprint is not None
+                else ()
+            )
+            family_peers = tuple(
+                peer
+                for peer in family_groups[_npc_family_key(unit.unit_id)]
+                if peer != unit.unit_id
+            )
+
+            expected_ai = f"{unit.unit_id}_DEFAULT.AIB"
+            program = self.compiled_resources.find_program(expected_ai)
+            attack_script_name = text(unit.row, "AS file")
+            unit_info_name = text(unit.row, "Parts file")
+            modules = []
+            if program is not None:
+                for function_name in program.included_functions:
+                    module = self.compiled_resources.find_function_module(
+                        function_name
+                    )
+                    if module is not None and module not in modules:
+                        modules.append(module)
+
+            class_id = number(unit.row, "unit type")
+            profiles.append(
+                NpcProfile(
+                    unit_id=unit.unit_id,
+                    row_id=unit.row.row_id,
+                    class_id=class_id,
+                    class_name=unit_class_name(class_id),
+                    second_job_index=second_job_index,
+                    second_job_target=target_id,
+                    second_job_target_row_id=target_row_id,
+                    naming_family_peers=family_peers,
+                    shared_resources=tuple(shared),
+                    identical_stat_peers=stat_peers,
+                    expected_ai_program=expected_ai,
+                    ai_program=program,
+                    attack_script_name=attack_script_name,
+                    attack_script=self.compiled_resources.find_resource(
+                        attack_script_name
+                    ),
+                    unit_info_name=unit_info_name,
+                    unit_info=self.compiled_resources.find_resource(
+                        unit_info_name
+                    ),
+                    function_modules=tuple(modules),
+                )
+            )
+        return tuple(profiles)
+
+    def npc_field_guides(self) -> tuple[FieldGuide, ...]:
+        character_source = self.table_source("CHARDATA.SOX")
+        if character_source is None:
+            return ()
+        hero_ids = set(PLAYABLE_UNIT_NAMES)
+        hero_source = self.table_source("HEROTABLE.SOX")
+        if hero_source is not None:
+            hero_ids.update(
+                display_value(row.values[0], hero_source.encoding)
+                for row in hero_source.table.rows
+                if row.values
+            )
+        rows = tuple(
+            row
+            for row in character_source.table.rows
+            if row.values
+            and display_value(row.values[0], character_source.encoding)
+            not in hero_ids
+            and display_value(
+                row.values[0], character_source.encoding
+            ).casefold()
+            != "noname"
+        )
+
+        guides = []
+        for spec in _NPC_FIELD_SPECS:
+            indices = character_source.table.column_indices(spec.field)
+            if not indices:
+                continue
+            values = tuple(
+                sorted(
+                    {
+                        row.values[indices[0]]
+                        for row in rows
+                        if isinstance(row.values[indices[0]], int)
+                    }
+                )
+            )
+            guides.append(
+                FieldGuide(
+                    key=spec.field,
+                    label=spec.label,
+                    source=f"CHARDATA.SOX / {spec.field}",
+                    description=spec.description,
+                    units=spec.units,
+                    evidence=spec.evidence,
+                    known_limits=spec.known_limits,
+                    observed_values=values,
+                    population_label="Retail NPC values",
+                )
+            )
+        return tuple(guides)
 
     def hero_field_guides(self) -> tuple[FieldGuide, ...]:
         source = self.table_source("HEROTABLE.SOX")
@@ -870,8 +1440,14 @@ class GameData:
         )
 
     def structural_report(self) -> dict[str, object]:
+        resource_counts = Counter(
+            resource.kind for resource in self.compiled_resources.resources
+        )
+        resource_instances = Counter()
+        for resource in self.compiled_resources.resources:
+            resource_instances[resource.kind] += resource.occurrences
         return {
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "readOnly": True,
             "build": {
                 "status": self.build.status,
@@ -884,6 +1460,21 @@ class GameData:
                 "format": "zlib-wrapped" if self.archive_wrapped else "raw",
                 "memberCount": self.archive_member_count,
                 "duplicateExtraRecords": self.archive_duplicate_extra_count,
+            },
+            "compiledNpcResources": {
+                "stageArchiveCount": self.compiled_resources.archive_count,
+                "uniqueByType": {
+                    kind: resource_counts[kind]
+                    for kind in AI_RESOURCE_SUFFIXES
+                },
+                "instancesByType": {
+                    kind: resource_instances[kind]
+                    for kind in AI_RESOURCE_SUFFIXES
+                },
+                "aiPrograms": len(self.compiled_resources.programs),
+                "aiFunctionModules": len(
+                    self.compiled_resources.function_modules
+                ),
             },
             "variants": [
                 {
@@ -1062,6 +1653,225 @@ def read_pak(path: Path) -> PakArchive:
         payload=payload,
         members=tuple(members),
         compressed_size=compressed_size,
+    )
+
+
+@dataclass
+class _CompiledResourceAccumulator:
+    name: str
+    kind: str
+    sha256: str
+    archives: list[str]
+    occurrences: int
+    payload: bytes | None
+
+
+def extract_compiled_ai_strings(
+    data: bytes, source_name: str
+) -> tuple[str, ...]:
+    if len(data) > MAX_COMPILED_AI_RESOURCE_SIZE:
+        raise GameplayDataError(
+            f"{source_name}: compiled AI resource size {len(data)} exceeds "
+            f"{MAX_COMPILED_AI_RESOURCE_SIZE}"
+        )
+
+    strings = []
+    offset = 0
+    while offset + 4 <= len(data):
+        length = struct.unpack_from(">I", data, offset)[0]
+        end = offset + 4 + length
+        if (
+            2 <= length <= MAX_COMPILED_AI_STRING_SIZE
+            and end <= len(data)
+            and data[end - 1] == 0
+            and all(0x20 <= byte <= 0x7E for byte in data[offset + 4 : end - 1])
+        ):
+            strings.append(data[offset + 4 : end - 1].decode("ascii"))
+            offset = end
+            continue
+        offset += 1
+    return tuple(strings)
+
+
+def parse_ai_program(resource: CompiledResource, data: bytes) -> AiProgram:
+    strings = extract_compiled_ai_strings(data, resource.name)
+    source_path = next(
+        (
+            token
+            for token in strings
+            if token.casefold().startswith("ai\\unit\\")
+            and token.casefold().endswith(".ai")
+        ),
+        "",
+    )
+    if not source_path:
+        raise GameplayDataError(
+            f"{resource.name}: retained unit-AI source path was not found"
+        )
+
+    included = []
+    for index, token in enumerate(strings[:-1]):
+        if token.casefold() != "include_ai":
+            continue
+        candidate = strings[index + 1].replace("/", "\\")
+        folded = candidate.casefold()
+        if folded.startswith("function\\") and folded.endswith(".ai_func"):
+            function_name = candidate[len("function\\") : -len(".ai_func")]
+            if function_name and function_name.casefold() not in {
+                name.casefold() for name in included
+            }:
+                included.append(function_name)
+
+    included_by_name = {name.casefold(): name for name in included}
+    calls = []
+    in_function_block = False
+    for token in strings:
+        folded = token.casefold()
+        if folded == "ai_func":
+            in_function_block = True
+            continue
+        if folded == "ai_func_end":
+            in_function_block = False
+            continue
+        if in_function_block and folded in included_by_name:
+            calls.append(included_by_name[folded])
+
+    return AiProgram(
+        resource=resource,
+        source_path=source_path,
+        included_functions=tuple(included),
+        called_functions=tuple(calls),
+        level_branch_count=sum(
+            token.casefold() == "iflevel" for token in strings
+        ),
+    )
+
+
+def parse_ai_function_module(
+    resource: CompiledResource, data: bytes
+) -> AiFunctionModule:
+    strings = extract_compiled_ai_strings(data, resource.name)
+    source_path = next(
+        (
+            token
+            for token in strings
+            if token.casefold().startswith("ai\\unit\\function\\")
+            and token.casefold().endswith(".ai_func")
+        ),
+        "",
+    )
+    if not source_path:
+        raise GameplayDataError(
+            f"{resource.name}: retained AI-function source path was not found"
+        )
+
+    parameters = []
+    in_parameters = False
+    for token in strings:
+        folded = token.casefold()
+        if folded == "ai_function_parameter":
+            in_parameters = True
+            continue
+        if folded == "ai_function_parameter_end":
+            in_parameters = False
+            continue
+        if in_parameters and token.startswith("v_") and token not in parameters:
+            parameters.append(token)
+    return AiFunctionModule(
+        resource=resource,
+        source_path=source_path,
+        parameters=tuple(parameters),
+    )
+
+
+def _compiled_resource_kind(name: str) -> str | None:
+    folded = name.casefold()
+    return next(
+        (suffix for suffix in AI_RESOURCE_SUFFIXES if folded.endswith(suffix)),
+        None,
+    )
+
+
+def load_compiled_resource_index(
+    packed_root: Path,
+    progress: Callable[[str], None] | None = None,
+) -> CompiledResourceIndex:
+    notify = progress or (lambda _message: None)
+    archive_paths = list(packed_root.glob("*_res2_res.pak"))
+    archive_paths.extend(
+        path
+        for name in AI_STAGE_EXTRA_ARCHIVES
+        if (path := packed_root / name).is_file()
+    )
+    archive_paths = sorted(set(archive_paths), key=lambda path: path.name.casefold())
+
+    accumulated: dict[str, _CompiledResourceAccumulator] = {}
+    for index, path in enumerate(archive_paths, 1):
+        notify(
+            f"NPC resources {index}/{len(archive_paths)}: {path.name}"
+        )
+        archive = read_pak(path)
+        for member in archive.members:
+            kind = _compiled_resource_kind(member.name)
+            if kind is None:
+                continue
+            payload = archive.read_member(member)
+            digest = hashlib.sha256(payload).hexdigest()
+            key = member.name.casefold()
+            existing = accumulated.get(key)
+            if existing is not None:
+                if existing.sha256 != digest:
+                    first_archive = existing.archives[0]
+                    raise GameplayDataError(
+                        f"Compiled resource {member.name!r} differs between "
+                        f"{first_archive} and {path.name}"
+                    )
+                existing.occurrences += 1
+                if path.name not in existing.archives:
+                    existing.archives.append(path.name)
+                continue
+            accumulated[key] = _CompiledResourceAccumulator(
+                name=member.name,
+                kind=kind,
+                sha256=digest,
+                archives=[path.name],
+                occurrences=1,
+                payload=payload if kind in {".aib", ".ai_funcb"} else None,
+            )
+
+    resources = tuple(
+        CompiledResource(
+            name=entry.name,
+            kind=entry.kind,
+            sha256=entry.sha256,
+            archives=tuple(entry.archives),
+            occurrences=entry.occurrences,
+        )
+        for entry in sorted(
+            accumulated.values(), key=lambda entry: entry.name.casefold()
+        )
+    )
+    resources_by_name = {
+        resource.name.casefold(): resource for resource in resources
+    }
+    programs = []
+    function_modules = []
+    for key, entry in sorted(accumulated.items()):
+        if entry.payload is None:
+            continue
+        resource = resources_by_name[key]
+        if entry.kind == ".aib":
+            programs.append(parse_ai_program(resource, entry.payload))
+        elif entry.kind == ".ai_funcb":
+            function_modules.append(
+                parse_ai_function_module(resource, entry.payload)
+            )
+
+    return CompiledResourceIndex(
+        archive_count=len(archive_paths),
+        resources=resources,
+        programs=tuple(programs),
+        function_modules=tuple(function_modules),
     )
 
 
@@ -1393,6 +2203,8 @@ def load_game_data(
     tables = _load_tables(game_root, archive)
     notify("Comparing language-specific res_init archives")
     variants = _verify_variants(packed_root, archive)
+    notify("Indexing compiled NPC resources")
+    compiled_resources = load_compiled_resource_index(packed_root, notify)
 
     warnings: list[str] = []
     if build.status != "verified":
@@ -1413,8 +2225,7 @@ def load_game_data(
             f"Expected 10 res_init variants, found {len(variants)}."
         )
 
-    notify("Ready")
-    return GameData(
+    data = GameData(
         game_root=game_root,
         build=build,
         archive_name=archive.path.name,
@@ -1423,8 +2234,13 @@ def load_game_data(
         archive_duplicate_extra_count=archive.duplicate_extra_count,
         tables=tables,
         variants=variants,
+        compiled_resources=compiled_resources,
         warnings=tuple(warnings),
     )
+    notify("Validating NPC relationships")
+    data.npc_profiles()
+    notify("Ready")
+    return data
 
 
 def write_structural_report(data: GameData, destination: Path) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import struct
@@ -75,6 +76,16 @@ def build_pak(entries: list[tuple[str, bytes]], *, wrapped: bool) -> bytes:
     return bytes(result)
 
 
+def build_compiled_ai_tokens(tokens: list[str]) -> bytes:
+    data = bytearray(b"\0" * 8)
+    for token in tokens:
+        encoded = token.encode("ascii")
+        data += struct.pack(">I", len(encoded) + 1)
+        data += encoded + b"\0"
+        data += b"\0" * 8
+    return bytes(data)
+
+
 class PakTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -143,6 +154,147 @@ class PakTests(unittest.TestCase):
 
         with self.assertRaisesRegex(gameplay.GameplayDataError, "exceeds archive"):
             gameplay.read_pak(path)
+
+
+class CompiledAiTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    @staticmethod
+    def resource(name: str, kind: str, data: bytes) -> gameplay.CompiledResource:
+        return gameplay.CompiledResource(
+            name=name,
+            kind=kind,
+            sha256=hashlib.sha256(data).hexdigest(),
+            archives=("stage_res2_res.pak",),
+            occurrences=1,
+        )
+
+    @staticmethod
+    def program_payload(source: str = "C_TEST_Default.ai") -> bytes:
+        return build_compiled_ai_tokens(
+            [
+                "include_ai",
+                "Function\\TroopCommand.ai_func",
+                "include_ai",
+                "Function\\BattleMeleeAttack.ai_func",
+                "AI_ELEMENT",
+                "AI_FUNC",
+                "TroopCommand",
+                "iflevel",
+                "BattleMeleeAttack",
+                "TroopCommand",
+                "endlevel",
+                "AI_FUNC_END",
+                "AI_ELEMENT_END",
+                f"ai\\unit\\{source}",
+                "AIDef.h",
+            ]
+        )
+
+    @staticmethod
+    def module_payload() -> bytes:
+        return build_compiled_ai_tokens(
+            [
+                "AI_FUNCTION_PARAMETER",
+                "v_SlotIndex",
+                "v_Probability",
+                "AI_FUNCTION_PARAMETER_END",
+                "AI_ELEMENT",
+                "AI_ELEMENT_END",
+                "ai\\unit\\function\\TroopCommand.ai_func",
+                "AIDef.h",
+            ]
+        )
+
+    def test_extracts_ai_composition_level_gates_and_module_parameters(self) -> None:
+        program_data = self.program_payload()
+        program = gameplay.parse_ai_program(
+            self.resource("C_TEST_DEFAULT.AIB", ".aib", program_data),
+            program_data,
+        )
+        self.assertEqual(program.source_path, "ai\\unit\\C_TEST_Default.ai")
+        self.assertEqual(
+            program.included_functions,
+            ("TroopCommand", "BattleMeleeAttack"),
+        )
+        self.assertEqual(
+            program.called_functions,
+            ("TroopCommand", "BattleMeleeAttack", "TroopCommand"),
+        )
+        self.assertEqual(program.unique_called_functions, (
+            "TroopCommand",
+            "BattleMeleeAttack",
+        ))
+        self.assertEqual(program.level_branch_count, 1)
+
+        module_data = self.module_payload()
+        module = gameplay.parse_ai_function_module(
+            self.resource("TROOPCOMMAND.AI_FUNCB", ".ai_funcb", module_data),
+            module_data,
+        )
+        self.assertEqual(
+            module.parameters, ("v_SlotIndex", "v_Probability")
+        )
+        self.assertEqual(
+            module.source_path,
+            "ai\\unit\\function\\TroopCommand.ai_func",
+        )
+
+    def test_collapses_identical_stage_resources_by_logical_name(self) -> None:
+        program = self.program_payload()
+        module = self.module_payload()
+        entries = [
+            ("C_TEST_DEFAULT.AIB", program),
+            ("TROOPCOMMAND.AI_FUNCB", module),
+            ("C_TEST.as", b"attack script"),
+            ("C_TEST.info", b"unit info"),
+        ]
+        for name in ("one_res2_res.pak", "two_res2_res.pak"):
+            (self.root / name).write_bytes(build_pak(entries, wrapped=True))
+
+        index = gameplay.load_compiled_resource_index(self.root)
+        self.assertEqual(index.archive_count, 2)
+        self.assertEqual(len(index.programs), 1)
+        self.assertEqual(len(index.function_modules), 1)
+        resource = index.find_resource("c_test_default.aib")
+        self.assertIsNotNone(resource)
+        assert resource is not None
+        self.assertEqual(resource.occurrences, 2)
+        self.assertEqual(resource.archives, (
+            "one_res2_res.pak",
+            "two_res2_res.pak",
+        ))
+        self.assertIsNotNone(index.find_function_module("TroopCommand"))
+
+    def test_rejects_conflicting_stage_resources_with_the_same_name(self) -> None:
+        (self.root / "one_res2_res.pak").write_bytes(
+            build_pak(
+                [("C_TEST_DEFAULT.AIB", self.program_payload())],
+                wrapped=True,
+            )
+        )
+        (self.root / "two_res2_res.pak").write_bytes(
+            build_pak(
+                [
+                    (
+                        "C_TEST_DEFAULT.AIB",
+                        self.program_payload("C_OTHER_Default.ai"),
+                    )
+                ],
+                wrapped=True,
+            )
+        )
+
+        with self.assertRaisesRegex(
+            gameplay.GameplayDataError,
+            "differs between one_res2_res.pak and two_res2_res.pak",
+        ):
+            gameplay.load_compiled_resource_index(self.root)
 
 
 class SoxTests(unittest.TestCase):
@@ -351,6 +503,215 @@ class GameDataTests(unittest.TestCase):
         self.assertEqual(guides["atk_f"].observed_range, (100, 210))
         self.assertNotIn(999, guides["atk_f"].observed_values)
         self.assertEqual(guides["match"].observed_values, tuple(range(1, 10)))
+
+    def test_builds_separate_npc_job_resource_stat_and_ai_relationships(self) -> None:
+        character_columns = [
+            ("name", 1),
+            ("unit folder", 1),
+            ("skin name", 1),
+            ("skin variation num", 3),
+            ("ani name", 1),
+            ("unit type", 3),
+            ("unit size", 3),
+            ("AS file", 1),
+            ("Second Job Index", 3),
+            ("Parts file", 1),
+            ("Unit Height", 3),
+            ("troop type", 3),
+            ("billboard size", 3),
+            ("unit min scale", 3),
+            ("unit max scale", 3),
+            ("MaxLevel", 3),
+            ("A_LevelOffset", 3),
+            ("B_LevelOffset", 3),
+            ("C_LevelOffset", 3),
+            ("D_LevelOffset", 3),
+            ("Use Level", 3),
+            ("SoundAmor", 3),
+            ("SoundWeapon", 3),
+            ("Weight", 3),
+            ("CrowdUnitType", 3),
+        ]
+
+        def character_row(
+            unit_id: str,
+            folder: str,
+            skin: str,
+            animation: str,
+            class_id: int,
+            script: str,
+            second_job: int,
+            info: str,
+            troop_type: int,
+        ) -> list[int | str]:
+            return [
+                unit_id,
+                folder,
+                skin,
+                2,
+                animation,
+                class_id,
+                35,
+                script,
+                second_job,
+                info,
+                180,
+                troop_type,
+                200,
+                95,
+                105,
+                4,
+                1,
+                2,
+                3,
+                4,
+                1,
+                1,
+                1,
+                100,
+                4,
+            ]
+
+        character = build_sox(
+            character_columns,
+            [
+                character_row(
+                    "C_TEST1_OH",
+                    "char\\C_TEST1\\",
+                    "C_TEST1",
+                    "C_TEST1_OH.ba",
+                    0,
+                    "C_TEST1_OH.as",
+                    -1,
+                    "C_TEST1_OH.info",
+                    2,
+                ),
+                character_row(
+                    "C_TEST1_AR",
+                    "char\\C_TEST1\\",
+                    "C_TEST1",
+                    "C_TEST1_AR.ba",
+                    3,
+                    "C_TEST1_AR.as",
+                    0,
+                    "C_TEST1_AR.info",
+                    3,
+                ),
+                character_row(
+                    "C_TWIN",
+                    "char\\C_TWIN\\",
+                    "C_TWIN",
+                    "C_TWIN.ba",
+                    0,
+                    "C_TWIN.as",
+                    -1,
+                    "C_TWIN.info",
+                    2,
+                ),
+                character_row(
+                    "C_LP_KM",
+                    "char\\C_LP_KM\\",
+                    "C_LP_KM",
+                    "C_LP_KM.ba",
+                    1001,
+                    "C_LP_KM.as",
+                    -1,
+                    "C_LP_KM.info",
+                    2,
+                ),
+                character_row(
+                    "noname",
+                    "noname",
+                    "noname",
+                    "noname",
+                    0,
+                    "noname",
+                    -1,
+                    "noname",
+                    2,
+                ),
+            ],
+        )
+        hero = build_sox([("UnitName", 1)], [[b"C_LP_KM"]])
+        stat_entries = []
+        for table_name in gameplay.NPC_STAT_PROFILE_TABLES:
+            stat_entries.append(
+                (
+                    table_name,
+                    build_sox(
+                        [("UnitName", 1), ("Value1", 3)],
+                        [
+                            [b"C_TEST1_OH", 10],
+                            [b"C_TEST1_AR", 20],
+                            [b"C_TWIN", 10],
+                            [b"C_LP_KM", 99],
+                            [b"noname", 0],
+                        ],
+                    ),
+                )
+            )
+        (self.packed / "res_init.pak").write_bytes(
+            build_pak(
+                [
+                    ("CHARDATA.SOX", character),
+                    ("HEROTABLE.SOX", hero),
+                    *stat_entries,
+                ],
+                wrapped=True,
+            )
+        )
+        program = CompiledAiTests.program_payload("C_TEST1_AR_Default.ai")
+        module = CompiledAiTests.module_payload()
+        (self.packed / "test_res2_res.pak").write_bytes(
+            build_pak(
+                [
+                    ("C_TEST1_AR_DEFAULT.AIB", program),
+                    ("TROOPCOMMAND.AI_FUNCB", module),
+                    ("C_TEST1_AR.as", b"attack script"),
+                    ("C_TEST1_AR.info", b"unit info"),
+                ],
+                wrapped=True,
+            )
+        )
+
+        data = gameplay.load_game_data(self.game)
+        profiles = {profile.unit_id: profile for profile in data.npc_profiles()}
+        self.assertEqual(set(profiles), {
+            "C_TEST1_OH",
+            "C_TEST1_AR",
+            "C_TWIN",
+        })
+        archer = profiles["C_TEST1_AR"]
+        self.assertEqual(archer.class_name, "Archer")
+        self.assertEqual(archer.second_job_index, 0)
+        self.assertEqual(archer.second_job_target, "C_TEST1_OH")
+        self.assertEqual(archer.second_job_target_row_id, 1)
+        self.assertIn("C_TEST1_OH", archer.naming_family_peers)
+        self.assertTrue(
+            any(
+                shared.field == "unit folder"
+                and shared.peers == ("C_TEST1_OH",)
+                for shared in archer.shared_resources
+            )
+        )
+        self.assertEqual(
+            profiles["C_TEST1_OH"].identical_stat_peers,
+            ("C_TWIN",),
+        )
+        self.assertIsNotNone(archer.ai_program)
+        self.assertEqual(
+            archer.attack_script_name,
+            "C_TEST1_AR.as",
+        )
+        self.assertEqual(len(archer.function_modules), 1)
+
+        guides = {guide.key: guide for guide in data.npc_field_guides()}
+        self.assertEqual(guides["unit type"].observed_values, (0, 3))
+        self.assertEqual(guides["Weight"].observed_values, (100,))
+        self.assertIn(
+            "Retail NPC values",
+            guides["unit type"].tooltip_text("3"),
+        )
 
     def test_validates_synthetic_corpus(self) -> None:
         packed_table = build_sox([("Value", 3)], [[10]])

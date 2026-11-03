@@ -36,6 +36,8 @@ The overview displays:
 - the supported executable SHA-256 result;
 - the `res_init.pak` container variant and member counts;
 - loaded SOX table counts grouped by category;
+- unique and repeated compiled NPC-resource counts from the indexed stage
+  archives;
 - the comparison result for all ten language-specific `res_init*.pak`
   archives; and
 - explicit warnings and validation limits.
@@ -51,7 +53,9 @@ The unit view joins `CHARDATA.SOX` with related unit-keyed tables. It presents:
 - eleven stat-curve slots plus a twelfth row used only by level matching;
 - nine hero-progression rows for movement, accessory slots, Orb decrease,
   guard stats, troop groups, units per group, derived total guard capacity, and
-  attack-range bonus; and
+  attack-range bonus;
+- separate NPC relationship, compiled-AI composition, and candidate-attribute
+  views; and
 - every related raw field without renaming duplicate or unknown headings.
 
 The unit list labels the raw `CHARDATA.SOX` value as `Unit MaxLevel` and shows
@@ -114,6 +118,72 @@ Therefore the grid now calls these rows **curve slots**, not hero levels.
 Playable `ORBTABLE.SOX` EXP values are all zero and are not the hero level-up
 thresholds.
 
+#### NPC relationships and compiled AI
+
+The supported `CHARDATA.SOX` contains seven playable heroes, 86 named NPC
+definitions, and seven `noname` placeholders. The NPC view deliberately keeps
+four relationship classes separate:
+
+- **explicit job-row links** from `Second Job Index`;
+- **shared resources** established by exact unit-folder, skin, animation,
+  attack-script, or unit-info field equality;
+- **identical stat profiles** established only when all seven core curve rows
+  match; and
+- **naming families**, an explicitly inferred convenience grouping that
+  removes common weapon suffixes and normalizes trailing digits.
+
+Shared assets or identical values do not imply that one row inherits another.
+The five nonnegative `Second Job Index` values are zero-based positions in
+`CHARDATA.SOX` and all resolve:
+
+| Unit carrying link | Index | Target row | Target unit |
+| --- | ---: | ---: | --- |
+| `C_LS_SL4_AR` | 7 | 8 | `C_LS_SL1_OH` |
+| `C_DS_GB1_AR` | 28 | 29 | `C_DS_GB1_OH` |
+| `C_DS_GBC` | 84 | 85 | `C_DS_GBC_OH` |
+| `C_DS_GB2_AR` | 62 | 63 | `C_DS_GB2_OH` |
+| `C_LS_SL_EX4_AR` | 85 | 86 | `C_LS_SL_EX1_OH` |
+
+Linked rows still carry their own class, animation, attack script, unit-info
+file, and other fields. The view therefore calls this an explicit job-row
+link, not generic object inheritance.
+
+The retained `GameObj_ClassID` enum maps `unit type` values exactly. Across the
+86 named NPC definitions, the retail distribution is 49 ordinary units, 28
+adjutants, five archers, and one each for flying unit, catapult, moving tower,
+and the Vigk Vagk hero subclass. The latter is used by `C_DS_TR1`; a hero-class
+ID alone does not make a row a playable hero.
+
+The loader indexes 39 relevant stage archives on its background worker and
+collapses exact logical names only after verifying identical SHA-256 content:
+
+| Resource | Instances | Unique logical names |
+| --- | ---: | ---: |
+| `.aib` unit programs | 664 | 95 |
+| `.ai_funcb` function modules | 350 | 19 |
+| `.as` attack scripts | 637 | 85 |
+| `.info` unit metadata | 637 | 85 |
+
+No same-name payload conflicts occur in the supported corpus. Seventy-eight of
+the 86 named NPCs have a direct `<UNIT>_DEFAULT.AIB` match. The other eight are
+shown as missing rather than assigned another unit's program.
+
+Each indexed AIB retains its original source path, `include_ai` module names,
+function calls, and `iflevel` markers. The inspector shows those references
+and, where a standalone `.ai_funcb` is present, its retained parameter names.
+This demonstrates composition: units have separately compiled programs that
+reuse function modules, sometimes with level-gated call sequences. It does not
+establish a writable AIB grammar or a single inherited AI-template pointer.
+
+The **Tweakable fields** subview provides evidence-labeled guidance for 19
+numeric or enum-like `CHARDATA.SOX` fields, including class and troop IDs,
+scale bounds, physical dimensions, level tiers, sound selectors, crowd type,
+and the explicit job index. Hover text reports the current value and values
+observed across the 86 named NPCs. These are retail observations, not safe edit
+ranges. Notably, all retail NPC level offsets are nondecreasing
+`A <= B <= C <= D`, all minimum scales are at most their paired maximums, and
+all retail weights are 100; runtime formulas remain untraced.
+
 ### Items
 
 The item view joins the 200 `ITEMTABLE.SOX` rows with
@@ -140,8 +210,8 @@ and show a vertical field/value view for wide rows.
 ## Structural report
 
 Use **File > Export Structural Report** to write deterministic JSON containing
-schemas, counts, hashes, archive comparisons, and warnings. It intentionally
-omits row values and absolute extraction paths.
+schemas, counts, hashes, archive comparisons, compiled-resource counts, and
+warnings. It intentionally omits row values and absolute extraction paths.
 
 The same operation is available without opening the UI:
 
@@ -202,9 +272,10 @@ Run the synthetic regression suite with:
 python -m unittest tools.n3_gameplay_data_test
 ```
 
-The fifteen tests include playable-identity joins, retail-range guide
-generation, and exclusion of nonhero rows from hero ranges. The fixtures
-contain no retail game bytes.
+The nineteen tests include playable-identity joins, hero and NPC range-guide
+generation, explicit zero-based job links, separate resource/stat/name-family
+relationships, bounded AIB token extraction, repeated-resource collapsing,
+and conflicting-payload rejection. The fixtures contain no retail game bytes.
 
 ## Current boundary
 
@@ -214,7 +285,7 @@ The inspector does not:
 - alter `private\game`, a staged game, saves, or profiles;
 - prove which language-specific archive the runtime selects;
 - assign meanings to unnamed item-effect IDs;
-- decode attack, AI, mission, map, navigation, or save payloads; or
+- fully decode or write attack, AI, mission, map, navigation, or save payloads; or
 - establish that an observed field is loaded, writable, or save-compatible at
   runtime.
 

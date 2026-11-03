@@ -262,6 +262,23 @@ conditions and 299 actions covering areas, HP, attacks, units, items, AI,
 camera, sound, variables, and mission state. Binary layouts and runtime
 semantics remain incomplete.
 
+The read-only inspector now indexes the 39 relevant stage-resource archives.
+It verifies and collapses 664 AIB instances to 95 logical programs, 350
+AI-function instances to 19 modules, and 637 instances each to 85 attack
+scripts and 85 unit-info files. Same-name payloads are identical on the
+supported corpus; a conflict is treated as an error. Seventy-eight of 86 named
+NPC definitions have a direct `<UNIT>_DEFAULT.AIB` match. Per-unit programs
+compose shared functions and 47 of those 78 programs contain `iflevel`
+branches, so this is composition rather than a single inherited template
+pointer.
+
+`CHARDATA.SOX` has a separate inheritance-like surface: five nonnegative
+`Second Job Index` values resolve as zero-based row positions. The linked rows
+still define their own resources and core fields, so the inspector presents
+these as explicit job links rather than general record inheritance. Exact
+shared assets, exact seven-table stat profiles, and inferred naming families
+remain separate relationship classes.
+
 The shipped debug-menu layout also defines two list boxes and matching debug
 control IDs. No executable handler or activation path has been identified.
 
@@ -271,9 +288,10 @@ The first offline read-only inspector is implemented. It validates the
 supported executable, both PAK variants, the core-table copies in all ten
 `res_init*.pak` archives, and every displayed SOX table. Its visual views join
 unit stat curves, hero progression, English item descriptions, item effect
-slots, and localized ability lists while retaining raw tables and duplicate
-headings. Structural JSON export omits row values and absolute extraction
-paths.
+slots, localized ability lists, NPC variant relationships, compiled AI
+composition, and observed NPC attribute ranges while retaining raw tables and
+duplicate headings. Structural JSON export omits row values and absolute
+extraction paths.
 
 The playable-hero view now distinguishes the nine direct `HEROTABLE.SOX`
 progression levels from eleven stat-curve slots and the twelfth
