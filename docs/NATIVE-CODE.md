@@ -1024,6 +1024,499 @@ Subsequent builds, 120 process replays and per-processor pinned runs passed; the
 do not establish its cause or a fix. First-byte diagnostics now accompany that
 suite. See `docs/STATUS.md` for the observed failure and limits.
 
+## Character animation: static trace and probe candidates
+
+The static analysis in this section investigates the pinned generated
+translation, **not** a native replacement. The separate runtime-probe status
+below distinguishes live observations from these static paths. Addresses are
+guest addresses; source references below are under `generated\default`. An
+**Observed** statement describes instructions or bounded structural counts;
+**Inferred** connects compatible observed paths; **Candidate** identifies a
+testable interpretation; **Unknown** marks an unproven edge or meaning.
+Generated function names remain address-based.
+
+### Package, resource, and actor identity
+
+- **Observed:** `sub_8223F6F0` calls `sub_820EB110` at `0x8223F9E0`
+  (`n3_recomp.49.cpp:12302`, `n3_recomp.85.cpp:2512`). The latter formats
+  `d:\data\PackedResources\%s_Char_Res.pak` at `0x8204723C` and calls
+  `sub_82272EC0` at `0x820EB6BC`. It also formats `_Char_Tex.pak`
+  (`0x82047264`), `_Res2_Res.pak` (`0x8204728C`), and `_Res2_Tex.pak`
+  (`0x820472B4`) and calls the same entry at `0x820EB6E0`, `0x820EB708`,
+  and `0x820EB72C`. The character and Res2 resource handles are passed to
+  `sub_82272F58` at `0x820EB7B4` and `0x820EB7C4`, after the metadata
+  loading call below. Earlier, at `0x820EB428`, it calls
+  `sub_820DF800` with `SkinList.dat`: `sub_820DF800`
+  (`n3_recomp.73.cpp:2445`) operates on 208-byte records, copies the name at
+  `+16`, removes its extension, appends `.ba` (`0x82047140`), calls
+  `sub_820EDD90` at `0x820E0228`, and stores the result at record `+12`.
+  The ordering does **not** prove that this earlier call reads the subsequently
+  opened character package.
+- **Observed:** `sub_820EDD90` (`n3_recomp.19.cpp:2729`) tracks resource
+  handles/refcounts and calls `sub_8224E6F0` (`n3_recomp.83.cpp:11949`).
+  The latter searches manager entries, compares basenames and increments a
+  cached resource's `+4`, or resolves a name through `sub_82272470`, obtains
+  stream bytes through `sub_82273000`, allocates a 304-byte BA object, calls
+  `sub_82298E78`, copies the name to `+28`, and releases the input allocation
+  through `sub_82249030`. **Unknown:** a particular basename's winning
+  archive/member, cache lifetime, and duplicate-name resolution.
+- **Observed:** after package setup, `sub_820EB110` calls `sub_820ED8F0` at
+  `0x820EB774`, which calls `sub_820F3618` at `0x820ED900`
+  (`n3_recomp.65.cpp:2587`, `n3_recomp.68.cpp:2682`). On that path metadata
+  `+260` supplies a BA name to `sub_820EDD90` at `0x820F3DCC`; its return is
+  stored at stack `+256`. Names at metadata `+344` and `+408` are formatted
+  with `as\%s` (`0x82040828`) and sent to `sub_8210C2C0` at `0x820F3DF4`
+  and `sub_8210D168` at `0x820F3E84`, respectively; their output indices are
+  written through stack `+260` and `+264`.
+- **Observed:** the 92-byte setup record begins at stack `+208`; therefore
+  those three fields are setup `+48`, `+52`, and `+56`. At `0x820F437C`,
+  `sub_820F3618` passes that record to `sub_820F7620`
+  (`n3_recomp.69.cpp:2941`). Its insertion paths reach `sub_820FABE0`
+  (`n3_recomp.55.cpp:3225`), which explicitly copies all three fields into
+  the 92-byte vector element. `sub_820E9B60` (`n3_recomp.32.cpp:2377`)
+  installs owner `0x82B59050` at global pointer `0x82B60080`;
+  `sub_820F53F8` (`n3_recomp.37.cpp:2845`) reads that owner's vector at
+  `+2220/+2224`, searches 92-byte records using fields `+4` and `+88`, and
+  returns a record or follows its fallback. `sub_82132588`
+  (`n3_recomp.16.cpp:4417`) calls it at `0x82132668`, forwards the returned
+  pointer in `r4`, and calls the actor's virtual `+0x8C` at `0x821326A0`.
+  Actor vtable `0x82040170` has `+0x8C = sub_82093BE8`; vtable
+  `0x82041570` has `+0x8C = sub_820AF768`, which calls `sub_82093BE8` at
+  `0x820AF798` (`n3_recomp.38.cpp:1036`). **Inferred:** when the initialized
+  owner and either of those vtables are in use, this connects the metadata
+  outputs to the actor setup. **Unknown:** the actual selected record and
+  winning package members for a given actor; other derived vtables may differ.
+- **Observed:** `sub_82093BE8` (`n3_recomp.4.cpp:281`) passes setup `+48` to
+  `sub_8224D1E8` at `0x82093C80` and stores its result in actor `+16`. Setup
+  `+52` indexes global vector `0x82B4814C`; setup `+56` indexes
+  `0x82B4815C`; each entry's `+4` is stored at actor `+312` and `+316`,
+  respectively. Bounds failures trap. `sub_8224D1E8`
+  (`n3_recomp.5.cpp:11998`) allocates an 868-byte instance, installs the BA
+  handle at `+216` and BA object pointer at `+220`, and calls
+  `sub_822669A0` (`n3_recomp.47.cpp:12794`), which iterates bound objects and
+  invokes virtual `+28` with the binding argument. The handle, object, setup
+  pointer, and input stream do not have interchangeable lifetimes.
+
+### BA nodes, state rows, and selection
+
+- **Observed:** `sub_82298E78` (`n3_recomp.34.cpp:13201`) reads a 24-byte BA
+  header using stream vtable `0x82051140`, slot `+8 = sub_82265930`, checks
+  its third word against 12, puts clip count at BA `+8` and bone count at
+  `+12`, allocates frame counts at `+24`, and builds the node pointer array
+  at `+20`. It calls `sub_822D55E0` per node and subsequently
+  `sub_822D5AF0` and `sub_8229C100`. `sub_822D55E0`
+  (`n3_recomp.14.cpp:14917`) reads two 255-byte names into a 1,040-byte node
+  (`+21` and `+276`) and calls `sub_822D5820`
+  (`n3_recomp.25.cpp:15291`). That routine stores a clip count at node
+  `+616`, allocates per-clip arrays at `+884/+888`, constructs 112-byte tracks,
+  and calls `sub_822D41F0` at `0x822D5ACC`. The latter
+  (`n3_recomp.64.cpp:15221`) reads counts, two-byte key arrays and converted
+  channel storage. The track table at `0x8205293C` contains `0x822D40D0`,
+  `0x822D49D8`, `0x822D5468`, and `0x822D65C0`; `sub_822D49D8` is
+  destructor-like, not the evaluation routine below.
+- **Observed:** `sub_8210D168` (`n3_recomp.42.cpp:3543`) caches a separate
+  state object and calls `sub_8210CB78` (`n3_recomp.84.cpp:3609`), which
+  checks the first word for 100, associated with `Invalid Unit Info Data
+  Version` at `0x82048258`, reads the row count into object `+440`, and
+  allocates 32-byte rows at `+444`. `sub_8210BC98`
+  (`n3_recomp.48.cpp:3284`) reads row fields in `+8/+12/+16/+20/+24/+28/+4`
+  order and skips 58 bytes. The 86-byte file-row stride follows from these
+  reads, not from the 32-byte runtime stride.
+- **Observed:** the diagnostic at `0x82040298` contains `UnitID`, `AniAttr`,
+  `AniType`, and `AniIndex`. `sub_82097868` (`n3_recomp.66.cpp:352`) calls
+  `sub_8210CFE8` at `0x820978D8`; the latter
+  (`n3_recomp.59.cpp:3212`) compares runtime row `+8` with argument `r4`
+  (type), `+4` with `r6` (attribute), and `+12` with `r5` (index). Index
+  `-1` gathers matching type/attribute row indices and chooses using a
+  pseudorandom state, or tries index 0 if none exist. Otherwise it searches an
+  exact triple, then returns the first matching type with requested index or
+  zero, irrespective of attribute. A later attribute-only assignment is
+  skipped when its accumulator is `-1`, its initial value; do not assume that
+  fallback is reachable. These are **runtime** type/index values, not AniTool
+  signal IDs.
+- **Observed:** on success, `sub_82097868` calls `sub_82097958` at
+  `0x82097940`. This direct-row installation entry
+  (`n3_recomp.9.cpp:352`) copies row `+8/+4/+12` into actor
+  `+496/+500/+504`, reads `instance+220 -> BA+24[row]` into actor `+508`,
+  sets row `+192`, clears frame-like floats `+196/+200`, stores argument `r6`
+  at `+512`, and conditionally captures previous row/time at `+208/+212` and
+  transition values at `+220/+224`. Argument `r5` affects reapplying the same
+  row; `r7` can cause immediate `sub_82097D00` dispatch. **Unknown:** the
+  full semantic meaning of each transition field. Direct callers must supply
+  a valid index; this entry is not a universal bounds check.
+
+### Step, transition, evaluation, and matrix output
+
+- **Observed:** actor vtable `0x82040170` maps `+8` to `sub_820913D0`,
+  `+40` to `sub_8209D430`, `+44` to `sub_82080068` (returns float actor
+  `+204`), and `+56` to `sub_82094F98`. `sub_820913D0`
+  (`n3_recomp.27.cpp:227`) calls `sub_820948B8`
+  (`n3_recomp.51.cpp:288`), which calls `sub_82080158` at `0x82094B5C`
+  then `sub_82097D00` at `0x82094B64` on the observed path.
+  `sub_82080158` (`n3_recomp.5.cpp:3`) copies actor float `+196` to `+200`,
+  calls virtual `+44`, adds returned `f1` to `+196`, then calls
+  `sub_82080390`. Constructor `sub_82092D28` (`n3_recomp.14.cpp:249`)
+  initializes `+204` from `0x8205B614 = 1.0f`; `sub_820A3C78`
+  (`n3_recomp.17.cpp:598`) can change it. One frame-like unit per controller
+  invocation is the observed default, **not** a source-FPS measurement.
+- **Observed:** `sub_82080390` (`n3_recomp.10.cpp:3`) compares current time
+  with selected frame count minus one. Only when current time exceeds that
+  limit, a nonzero actor `+228` is decremented and the virtual step is
+  subtracted and clamped to zero; that value is also copied to `+200`.
+  Otherwise on that exceeded-limit path it calls virtual `+40`. For the
+  table above, `sub_8209D430`
+  (`n3_recomp.48.cpp:472`) decrements `+512`, inspects `+660`, row `+16`,
+  and runtime type values 9–11. Depending on branches it subtracts/clamps
+  time, reselects through `sub_8210CFE8`/`sub_82097958`, or reinstalls the
+  current row. These are **Candidate** loop, completion, and transition
+  paths; they do not prove all clips loop or complete alike.
+- **Observed:** `sub_820954B0` (`n3_recomp.74.cpp:289`) and
+  `sub_82080218` (`n3_recomp.7.cpp:3`) use `fctiwz` on current `+196`,
+  convert the integer back to float, and call `sub_82252BD8`
+  (`n3_recomp.17.cpp:11843`) with manager `r3`, instance handle `r4`, row
+  index `r5`, and frame `f1`. If previous row `+208 != -1`, the paths also
+  pass previous time `+212` and blend-related `+216` to `sub_82252C38`.
+  `sub_82252BD8` resolves the instance, resets queue fields, stores row at
+  instance `+232`, frame at `+252`, and queue count at `+228`. **Unknown:**
+  whether every caller truncates; do not generalize this observed path.
+- **Observed:** `sub_8229E6B0` (`n3_recomp.73.cpp:14867`) consumes queue
+  entries. For selector zero it walks `instance+220 -> BA+20`, stores the row
+  at each node `+544` and frame at `+548`; a nonzero selector calls
+  `sub_822D5D68`. Instance vtable `0x82051F88`, installed by
+  `sub_8229CF30` (`n3_recomp.2.cpp:14116`), maps `+0x20` to
+  `sub_822A1840`, `+0x64` to `sub_8229E898`, `+0x68` to
+  `sub_8229EE40`, and `+0x90` to `sub_8229F860`.
+  `sub_8229E898` (`n3_recomp.84.cpp:14578`) calls `sub_8229E6B0` then
+  `sub_82298FF0` at `0x8229EA94`, with BA in `r3` and instance in `r4`;
+  the `+0x20` and `+0x68` targets also call `sub_82298FF0`, the latter
+  passing null `r4`.
+- **Observed:** `sub_82298FF0` (`n3_recomp.16.cpp:14509`) iterates BA
+  nodes, uses `node+888[clip]`, track `+16` count and `+32` 16-bit keys,
+  performs comparisons/interpolation, calls `sub_8229CA98` and
+  `sub_8229C5C0`, and computes node matrices. If instance `r4` was non-null,
+  its call at `0x8229AD60` invokes instance virtual `+64` with the node's
+  `+960` matrix and node index. For vtable `0x82051F88`, this resolves to
+  `sub_82249628` (`n3_recomp.69.cpp:11979`), which copies 16 floats into
+  the instance matrix array. BA nodes are within a potentially shared cached
+  resource: **Unknown:** concurrency, snapshot timing, matrix convention, and
+  whether this is every render path.
+- **Candidate:** `sub_8229F860` (`n3_recomp.71.cpp:13555`), instance virtual
+  `+0x90`, calls `sub_8229B348` at `0x8229FF9C` and `sub_8229B7D0` at
+  `0x8229FFC8` with a BA, index, frame and output pointers. The separate
+  `sub_822A2CA8` (`n3_recomp.50.cpp:14355`) calls `sub_8229B7D0` at
+  `0x822A30D0` using instance fields `+220/+232/+252/+384`; its indirect
+  table/context still needs confirmation. These are additional sampling
+  candidates, not proof of the universal render route.
+- **Inferred:** the companion add-on's strict read-only BA profile identifies
+  the header word at file `+0x14` as mode 2 and its clip and bone counts at
+  `+0x0C/+0x10`. The paths above connect that accepted profile to candidate
+  mode-2 evaluation, but do not reconstruct every interpolation rule.
+  **Unknown:** source animation FPS and the controller's invocation count per
+  simulation clock tick. The existing `0x82248D38` clock initializer's
+  recognized 30/40/60 Hz and clock `+8` seconds per simulation step are
+  separate facts, not BA FPS. Script strings `SET_ANI_SPEED`
+  (`0x8204DF84`), `SET_ANI_FRAME_COUNT` (`0x8204DF94`), and `SET_ANI_FRAME`
+  (`0x8204DFA8`) are compared in `sub_821D11B0`
+  (`n3_recomp.24.cpp`); those comparisons populate script-object fields and
+  do not alone prove writes to actor `+204` or source FPS.
+
+### Signal-like records and root-derived displacement
+
+- **Observed:** `sub_8210C2C0` (`n3_recomp.0.cpp:3521`) caches a named
+  44-byte object in vector `0x82B4814C` and calls `sub_8210BF78`
+  (`n3_recomp.23.cpp:3466`). The latter reads two header words, stores the
+  second at object `+4`, advances 512 bytes, allocates 12-byte entries at
+  `+8`, and calls `sub_8210C728` per entry. It does not establish a version
+  check on the first word. `sub_8210C728` (`n3_recomp.52.cpp:3648`) reads a
+  record count into entry `+4`, allocates 20-byte runtime records at `+8`,
+  uses stream slot `+4 = sub_822658D0` to seek through a type/offset table,
+  and fills record `+0/+4/+8/+12/+16`: a frame-like integer, kind, bounded
+  integer, payload-word count, and pointer to allocated four-byte words,
+  respectively. It filters records with signed `+0 < 0` or `+8` outside
+  `[0,16)`. Individual payload meanings remain **Unknown**.
+- **Observed:** `sub_82097D00` (`n3_recomp.60.cpp:335`) indexes 12-byte
+  entries at `actor+312 -> +8` using selected row `actor+192`, then calls
+  actor virtual `+164` for each record at `0x82097D64`; it stops if the
+  selected row changes. For vtable `0x82040170`, this resolves to
+  `sub_820927C0` (`n3_recomp.65.cpp:254`), which special-cases kind 24
+  and otherwise calls `sub_82097D90` (`n3_recomp.11.cpp:282`). The latter
+  branches on record kinds 1–37. Several cases test record `+0` in the
+  half-open interval `[actor+196, actor+196 + virtual(+44))` before using
+  payload `+16`. **Candidate:** event/signal dispatch and timing windows;
+  not proof that every kind is an event or uses that window. **Unknown:**
+  per-kind payload semantics, event ordering across transitions, and whether
+  specific AniTool records correspond to these runtime values. AniTool's
+  signal schema IDs, its animation vocabulary, runtime state type IDs, and
+  runtime record kinds are separate namespaces.
+- **Observed:** `sub_8229C100` (`n3_recomp.51.cpp:13943`) searches node name
+  `Bip01` (`0x8204096C`), falls back to the root, and precomputes per-clip
+  samples in a BA `+288` vector structure using track keys and
+  interpolation. `sub_8229ADA0` (`n3_recomp.12.cpp:14447`) compares two
+  descriptor clip indices and times with BA counts, later checks vector
+  indices, truncates times, subtracts two three-component samples, and writes
+  via descriptor `+16`. The early frame-count lookup does not prove a
+  lower-bound check for negative indices.
+  `sub_82097B10` (`n3_recomp.6.cpp:483`) builds that descriptor from actor
+  row `+192` and current/previous floats `+196/+200`, calls `sub_8229ADA0`
+  at `0x82097BA0`, conditionally combines the result with actor basis-like
+  vectors `+32/+48/+64` using flags `+840`, and adds it to actor `+592` and
+  `+564`. Actor virtual `+56`, `sub_82094F98` (`n3_recomp.7.cpp:301`),
+  calls it at `0x82094FBC` and also adds `+628/+636` to `+564/+572`.
+  **Candidate:** root-derived actor displacement. **Unknown:** axes, scale,
+  coordinate convention, and whether every clip drives gameplay motion.
+
+### Bounded private-corpus correlations
+
+**Observed:** three read-only fixture pairs below have mode word 2, AS first
+word 101, INFO version 100, and equal BA clip / AS entry / INFO row counts.
+BA members are in each mission's `_char_res.pak`; AS and INFO members are in
+its separate `_res2_res.pak`. The nonempty count and retained-record count
+come from the bounded AS parser matching the reads and filters above; payload
+word **values** were not recorded. `9–11` counts INFO rows whose runtime type
+field is one of the values inspected by `sub_8209D430`; the second number is
+how many same-index AS groups contain retained records.
+
+| Mission | BA | AS / INFO | Bones | BA / AS / INFO count | Nonempty AS groups | Retained records | Rows type 9–11 / with AS records |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `ph_in` | `C_LP_KF1.BA` | `C_LP_KF.AS`, `C_LP_KF.INFO` | 75 | 162 / 162 / 162 | 149 | 2,029 | 11 / 11 |
+| `ph_ty` | `C_LP_MF.BA` | `C_LP_MF.AS`, `C_LP_MF.INFO` | 91 | 97 / 97 / 97 | 77 | 485 | 11 / 10 |
+| `ph_my` | `C_LP_WM.BA` | `C_LP_WM.AS`, `C_LP_WM.INFO` | 94 | 117 / 117 / 117 | 101 | 1,761 | 8 / 8 |
+
+**Candidate:** same-index correspondence is supported by the observed
+actor-to-BA and actor-to-AS pointer paths and these aggregates, but matching
+names/counts do not establish which archive member the resolver actually
+selected. The AS member can have additional trailing structures; these counts
+do not decode them. Neither the add-on's stem fallback nor equal counts prove
+game lookup behavior.
+
+**Observed:** `tools\animation_static_trace.py` performs read-only generated
+call/xref searches, in-memory XEX decoding, and aggregate BA/AS/INFO checks;
+its `xrefs` are bounded straight-line candidates, not complete control-flow
+analysis. Verify significant sites against generated `ctx.lr` and actual
+vtable words. For example, from the recomp root:
+
+```powershell
+python -B tools\animation_static_trace.py correlate --char-pak private\game\data\PackedResources\ph_in_char_res.pak --data-pak private\game\data\PackedResources\ph_in_res2_res.pak --ba-member C_LP_KF1.BA --signal-member C_LP_KF.AS --info-member C_LP_KF.INFO
+python -B -m unittest -v tools.animation_static_trace_test
+```
+
+The helper does not write decoded images or fixture payloads; its tests use
+synthetic bytes. Its in-memory XEX path requires the pinned basic-compressed
+executable and local SDK source archive; other compression is rejected.
+
+### Static candidate instrumentation design
+
+The following are **Candidate** entry/exit probes. Inputs are guest ABI
+observations for the cited paths, not permission to change game behavior.
+Capture only a whitelisted actor/resource identity, bounded counters and
+aggregate results; do not log retail payload words or private-derived files.
+
+| Guest entry / indirect site | Observed inputs and output/side effects to preserve | Question and memory lifetime |
+| --- | --- | --- |
+| `0x82093BE8`, via virtual `+0x8C` | `r3` actor, `r4` setup, `r5`–`r8`, `f1/f2`; original constructs actor bindings | Does setup `+48/+52/+56` resolve to the intended BA/AS/INFO members? Setup may be borrowed/vector-backed; manager objects are cached/refcounted. Snapshot validated IDs only during the call. |
+| `0x82097958` | `r3` actor, `r4` row, `r5` reapply flag, `r6` stored control, `r7` dispatch flag; original changes row/time and can dispatch | Is the same bounded row selected in INFO, BA and AS, including immediate dispatch and transition? Validate all three counts before reading. |
+| `0x82080158` / `0x82080390` and virtual `+40/+44` | `r3` actor; `+44` returns step in `f1`; original advances/clamps/reselects | How many invocations and what step occur per known simulation-clock tick at 30 and 60 Hz? Preserve the virtual calls and record pre/post values without assuming FPS. |
+| `0x82252BD8` and `0x82252C38` | Manager `r3`, instance handle `r4`, row `r5`, frame `f1`; previous/blend entry has additional arguments | Does each observed current/previous value reach the correct queue slot, including truncation and blending? Resolve the handle only while its manager entry is live; verify the latter ABI before touching it. |
+| `0x8229E6B0` / `0x82298FF0` / `0x8229AD60` | `r3` instance at queue consumer; evaluator takes BA `r3`, nullable instance `r4`; output call takes instance `r3`, matrix `r4`, node index `r5` | Is the selected track used and is the output finite/stable? Matrices and nodes may be shared or overwritten; copy no pointer for later use, sample only bounded counts/checksums at the original call boundary. |
+| `0x82097D00` / virtual `+164` / `0x820927C0` | `r3` actor; virtual call additionally receives record `r4`; original may change row | Do counts and frame-window boundaries correspond to the same selected row? Records and payloads are borrowed; observe kind/count only, not words, and stop if dispatch changes row. |
+| `0x8229ADA0` / `0x82094F98` | BA `r3`, descriptor `r4` with clip indices `+0/+4`, times `+8/+12`, output pointer `+16`; `0x82094F98` takes actor `r3` | Does the bounded before/after delta reach actor accumulators? Descriptor/output may be stack-backed, and node/precomputed samples shared; validate spans and observe only during the call. |
+
+**Candidate procedure:** first establish one actor's package/member, vector
+record, BA handle, and AS/INFO indices at initialization, without assuming
+the filename correlation. Then separately sample at most 256 controller
+invocations and 64 record dispatches per run for that actor, at known 30 and
+60 Hz clock settings, stopping earlier after two observed transitions or
+completion. Compare invocation counts, steps, row changes, and dispatch-window
+aggregates; a duration/FPS conclusion requires independent source evidence.
+If the limits miss the desired transition, report that as a missing observation
+instead of enlarging the capture silently.
+
+**Required preservation and stops:** keep original call count/order, arguments,
+return values, memory side effects and exceptional behavior unchanged; save
+and restore any logger-clobbered GPRs, FPRs, VMX registers, LR, CTR, CR, XER
+and FPSCR without undoing the original function's results. Do not retain guest
+stack pointers, dereference stale caches, make extra guest calls, allocate in
+the hooked path, or inspect unbounded payloads. Stop on a changed executable or
+vtable, invalid/nonfinite time or count, failed span/handle check, reentrancy
+or concurrent shared-BA mutation, unexpected call ordering, altered behavior,
+or any privacy risk. These stops end capture, not the original guest call.
+The static study itself did not perform a probe, Blender run, game run, timing
+fix, writer gate, or receipt/stager integration; see the separately labeled
+runtime experiment below.
+
+### Opt-in bounded runtime probe
+
+**Observed, implementation:** five retained-call wrappers in
+`src\animation_trace_hooks.cpp` sample only the following concrete guest
+entries. They do not implement every candidate above:
+
+| Guest entry | Observed ABI assumption and recorded structural information |
+| --- | --- |
+| `0x82093BE8` | `r3` actor, `r4` setup record. Snapshot setup BA handle and AS/INFO vector indices before the call; afterwards bind a validated actor, manager, instance, BA, signal and INFO identity, including bounded counts and an ASCII-case-folded BA basename fingerprint. |
+| `0x82080158` | `r3` selected actor. Read clip row and finite current/previous/step floats at actor `+192/+196/+200/+204` around the original; record before/after row/time, step and guest LR. |
+| `0x82252BD8` | `r3` manager, `r4` instance handle, `r5` clip row and `f1` frame. Record the finite frame and LR only for the selected validated handle. |
+| `0x82298FF0` | `r3` BA, `r4` instance. For the selected BA/instance, sample current queue count/clip/time and count pose-output calls during that original evaluation. |
+| `0x82249628` | `r3` instance, `r4` matrix span, `r5` bone index. Count a valid 64-byte mapped span only within the selected evaluator and at guest LR `0x8229AD64`, the return from the indirect call at `0x8229AD60`; never read or serialize matrix contents. This does **not** test matrix finiteness. |
+
+The matching static identities are manager global `0x825E12F0`, AS/INFO
+vectors `0x82B4814C`/`0x82B4815C`, supported actor vtables
+`0x82040170`/`0x82041570`, instance vtable `0x82051F88`, BA vtable
+`0x82051F14`, and step getter `0x82080068`. Hook registration is checked
+against the generated indirect dispatch table. The translated original is
+called exactly once even when filtered, stopped, or disabled; the probe does
+not modify `PPCContext`, allocate in the hook, make extra guest calls or keep
+guest stack pointers. Observation guards restore the host FP environment,
+MXCSR, `errno` and Windows last-error state; ordinary compiler ABI rules
+preserve host nonvolatile registers. Synthetic tests exercise guest context,
+floating-point/thread state, nesting and call counts, but do not prove every
+gameplay path or exception behavior.
+
+Capture is disabled unless `N3_ANIM_TRACE=1`. The default
+`N3_ANIM_TRACE_SCOPE=actor` uses `N3_ANIM_TRACE_ACTOR=first` or
+`0x<guest address>` to select one actor. Explicit `N3_ANIM_TRACE_SCOPE=resource`
+instead selects the first validated manager/instance/BA at the queue entry;
+it rejects an explicit actor address rather than ignoring it. In this scope,
+the actor, AS and INFO identities are explicitly unbound, not inferred from
+names or timing, and there are no controller samples. Both scopes accept
+`N3_ANIM_TRACE_CLIP=all` (default) or `0`–`4095` to filter recorded clips.
+Resource binding validates the manager global, bounded handle/table entries,
+instance and BA vtables and handles, clip/bone bounds, and the bounded
+basename fingerprint before publishing its instance identity. Fixed arrays hold at most 256
+controller, 64 queue and 64 evaluation samples, with a 96 KiB serialization
+limit. Counts distinguish filter misses, invalid values/spans, full buffers,
+lock drops, reentrancy, concurrent activity, work in flight and stops. A failed
+checked guest range, mapping, object/handle identity or finite-value check
+prevents unsafe reads; capture stops on invalid identity/mapping, reentrancy,
+concurrent selected-actor/shared-BA evaluation, or two observed clip
+transitions. Checks use validated 32-bit spans and the physical-shadow
+mapping, `VirtualQuery`, and bounded `ReadProcessMemory` copies. This is
+best-effort observation, not an atomic guest snapshot: address reuse and
+mutation between checks cannot be ruled out.
+
+The deterministic v2 trace and aggregate JSON omit host paths, member names, retail bytes, decoded chunks,
+signal words and matrix contents. One bounded `CREATE_NEW` file is written and flushed when an accepted window
+close is requested, with an idempotent `N3App::OnShutdown` fallback. The SDK
+normally calls `std::_Exit` from its window-closing callback before
+`OnShutdown`, so the earlier close-request callback is necessary. A hard kill,
+crash, or programmatic `RequestClose` that bypasses close-request listeners
+cannot guarantee the flush. `tools\animation_trace_manifest.py` validates bounds, identities,
+counters and schema before producing a sorted aggregate with executable,
+source and candidate-asset hashes. A matching BA basename fingerprint is
+**Candidate** evidence only, not proof of the resolver's winning archive.
+Both raw captures and route/log files belong under the ignored
+`private\traces\runtime-instrumentation\` directory. Do not commit them.
+
+Run from the recomp root with a verified local extraction. Each `RunId` must
+be new; user/cache roots are isolated, the route requests a window close, and
+its deadline kills only the process it launched. The optional
+`-ActivateWindow` asks Windows to foreground only that process's window;
+keyboard events are posted only while its process owns the foreground.
+Foreground ownership and posted events do not prove the title consumed them.
+
+```powershell
+pwsh -NoProfile -File tools\build.ps1 -Configuration RelWithDebInfo -Jobs 4
+python -B -m unittest -q tools.animation_trace_manifest_test
+pwsh -NoProfile -File tools\animation_trace_run.ps1 -RunId example-30 -Seconds 120 -FrameRate 30 -Actor first -Clip all
+```
+
+If the host has no usable playback device, the locally archived SDL source
+can be built with its standard **silent dummy sink** in a separate ignored
+diagnostic build without modifying the installed SDK or the standard build:
+
+```powershell
+pwsh -NoProfile -File tools\build_trace_audio.ps1 -Jobs 4
+pwsh -NoProfile -File tools\animation_trace_run.ps1 -RunId example-dummy-30 -Seconds 120 -FrameRate 30 -Scope resource -Clip all -ActivateWindow -AudioBackend dummy -Executable private\traces\runtime-instrumentation\local-sdl-dummy\game-build\n3.exe
+```
+
+The alternate build verifies the locally cached pinned SDL archive and SDK
+source bundle, uses the locked compiler and SDK, does not download anything,
+and refuses to overwrite an existing diagnostic build. The host executable
+alone is insufficient: the SDK's `rexruntimerd.dll` contains its own static
+SDL, so the helper also rebuilds that runtime from the pinned SDK sources with
+the private SDL library and stages it only beside the private executable. It
+checks the actual executable and GPU-plugin imports against the rebuilt DLL.
+The rebuilt DLL's complete export set is not byte- or export-identical to
+the installed SDK DLL; it is a diagnostic configuration, not a supported SDK
+replacement. Dummy audio is not evidence of audible playback, normal audio
+timing, or gameplay equivalence.
+
+The manifest tool requires the matching private route JSON and capture, and
+rejects routes without a window/input-idle observation, or with a forced stop,
+unsuccessful exit, or mismatched parameters. It
+records the actual backend and hashes of the host executable, runtime/GPU
+libraries, SDL source/library, SDK source bundle and candidate packages; its
+aggregate is created once beneath `private` and cannot overwrite a prior
+result. Invoke `python -B tools\animation_trace_manifest.py --help` for the
+required paths. Run a corresponding `-Disabled` route with the same
+executable/backend when comparing basic startup and shutdown.
+
+For the example dummy route above, validate and hash its bounded candidate
+character archives without writing member names or bytes:
+
+```powershell
+python -B tools\animation_trace_manifest.py `
+  --trace private\traces\runtime-instrumentation\example-dummy-30\user\animation-trace-v2.json `
+  --route private\traces\runtime-instrumentation\example-dummy-30\route.json `
+  --executable private\traces\runtime-instrumentation\local-sdl-dummy\game-build\n3.exe `
+  --game-root private\game --character-archive-dir private\game\data\PackedResources `
+  --output private\traces\runtime-instrumentation\example-dummy-30\aggregate-v2.json `
+  --frame-rate 30 --seconds 120 --audio-backend dummy `
+  --audio-source-archive .tools\source-archives\libsdl-org-SDL-147a8ee32dbf9ac02f3794964490687b6bbda1bc.tar.gz `
+  --audio-linked-library private\traces\runtime-instrumentation\local-sdl-dummy\sdl-install\lib\SDL3-static.lib `
+  --audio-sdk-source-bundle out\release\ReXGlue-bd833a2-corresponding-source.zip
+```
+
+#### Bounded local capture, 30 FPS target
+
+**Observed, local runtime:** the following exact diagnostic route was run with
+isolated user/cache roots and a 120-second deadline:
+
+```powershell
+pwsh -NoProfile -File tools\animation_trace_run.ps1 -RunId trace-resource-30-d -Seconds 120 -FrameRate 30 -Scope resource -Clip all -ActivateWindow -AudioBackend dummy -Executable private\traces\runtime-instrumentation\local-sdl-dummy\game-build\n3.exe
+```
+
+PID `15172` owned a responsive window, was observed in the foreground, and
+exited normally after 113.475 seconds; 21 Enter/Space pairs were posted,
+without proof of consumption. No forced stop was needed. The v3 route and v2
+trace were validated into the ignored
+`private\traces\runtime-instrumentation\trace-resource-30-d\aggregate-v2.json`
+(SHA-256 `9812d435178f029eb9179f2ff0e12314a8c20ee46a92b646e9ee95e2e5e46302`).
+The diagnostic host SHA-256 was
+`0ac0580eafeb68cc4ae355231cac8e8c8b479529a86c941373cd2cab64027807`;
+the pinned XEX SHA-256 was
+`0fe8973b6ff45d3f8bd03a51a8c0d8cdf278b3d43e793497777e075f4e94a804`.
+
+The selected **resource**, not an identified actor, had manager
+`0x82B48938`, instance handle `13`/address `0x40B74890`, BA handle
+`1`/address `0x40BA7720`, two clips and 75 bones. Its basename fingerprint
+was `0x9ded20c7cf964a29` (length 16). The trace stored 64 queue and 64
+evaluator samples, all clip `0`; there were no setup or controller calls.
+Queue LRs were `0x82179FBC` (one sample) and `0x8217AD4C` (63); evaluator
+LR was `0x8229EA98` (64). Of 2,181 queue calls and 4,354 evaluator calls,
+the bounded arrays dropped 2,117 and 2,113 respectively; 2,177 other
+evaluator calls were filtered. The 64 retained evaluations contain 4,800
+validated pose-output calls, versus 163,275 observed overall. Invalid values,
+invalid outputs, lock drops, reentrancy, concurrent activity and in-flight
+calls at flush were all zero.
+
+**Candidate:** 21 members in the bounded set of 36 character archives matched
+that basename fingerprint. All 21 yielded the same member SHA-256
+`5013c53b8444eb666a9dd239acd00fd5e844f9d3eb6f38036d43e35277b308a5`
+(94,850 bytes). This is not proof of the resolver's winning archive or of
+an actor/package/AS/INFO association. The aggregate records all archive
+hashes, candidate indices, source identities, clip/return histograms, buffer
+counters and build inputs without member names or bytes.
+
+**Observed, rejected development attempts:** an actor-scoped run saw 2,180
+queue and 4,352 evaluator calls but no setup call or selected actor; it had no
+retained samples. An earlier resource run stored five queue samples, then
+flagged 75 pose outputs because the initial guard used call-site
+`0x8229AD60` instead of LR `0x8229AD64`; generated code and the subsequent
+capture above establish the corrected return identity. Two other attempts
+produced no calls; their input consumption and foreground ownership were not
+verified. These attempts are not
+validated gameplay or timing evidence.
+
 ## Bounded signal/clip correlation
 
 This independent, read-only study inventories the private corpus and follows
@@ -1207,6 +1700,26 @@ Two Windows runs produced 8,531 identical stdout bytes, SHA-256
 `bc6d91dab16063a1a826ad001a318c2019377077750f4d5d1935bc97782590a7`,
 for the specified corpus, strict confirmation and trace. The report includes
 no private-derived output file.
+
+### Companion evidence and acceptance boundary
+
+The companion `0.14.1` source checkout records the detailed
+`docs/RUNTIME-ANIMATION.md`, `docs/ROOT-MOTION.md`, and
+`docs/ATTACHMENT-EVIDENCE.md` and a completed/partial/blocked matrix in
+`docs/ROADMAP.md`. The strict source inventory classifies 49 accepted BA
+payloads, 11 unsupported tails, and seven unsupported inverse-bind profiles.
+Its six parser-eligible deformation pairs and 44 name-based attachment
+candidates are not runtime-bound characters or equipped relationships.
+
+In the 30-target resource capture above, the 64 queue and 64 evaluator
+samples are independently bounded, with 2,117 and 2,113 respective
+capacity drops; 163,275 pose-output spans were counted without capturing
+their matrix values. Actor/AS/INFO identities remain unbound. Correlate
+resolver-selected members, actor, controller time, root/child transforms,
+selected row, record dispatch and an independently observed effect across
+at least two identified characters before assigning evaluator rules,
+root-motion behavior, attachment bindings, semantic clips, or notify markers.
+No native writer or Blender receipt consumer follows from the static trace.
 
 ## Adding the next module
 

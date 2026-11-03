@@ -146,14 +146,33 @@ typed native modules with explicit guest-memory adapters, units and ownership;
 compare outputs against the retained translated implementation before switching.
 
 Offline loose-file staging now provides the first asset-override boundary; see
-[Modding](MODDING.md). The separate
-[Blender asset-authoring roadmap](BLENDER-MODDING.md) keeps bounded format
-codecs and Blender adapters outside the runtime, with read-only import before
-any writer and a versioned handoff into the existing stager. Future runtime or
-gameplay hooks should build on typed interfaces and verified archive lookups
-rather than patching generated code. Keep save formats and original data
-compatible until a migration is deliberately implemented and tested. Profiles,
-traces and original assets stay local.
+[Modding](MODDING.md). The separate Blender 5.2 add-on's 0.14.0 baseline has
+eight read-only import operators and reads supported package members in memory.
+Its bounded codecs and Blender adapters remain outside the runtime. It has no
+exporter or native writer, and visual and in-game/runtime gates remain unmet.
+The [Blender authoring contract](BLENDER-MODDING.md) defines a future versioned
+receipt, not an implemented handoff: the current stager does not consume,
+validate, or stage a receipt beside `mod.toml`; it stages payloads beneath
+`files/data/`. Future runtime or gameplay hooks should build on typed interfaces
+and verified archive lookups rather than patching generated code. Keep save
+formats and original data compatible until a migration is deliberately
+implemented and tested. Profiles, traces and original assets stay local.
+
+The companion manifest is now `0.14.1`, an ungated candidate rather than a
+completed release. Its Blender 5.2.2 source/save-reopen, Blender-built ZIP,
+and isolated-install gates are unexecuted; ZIPs remain local-only. Its
+configured CI covers synthetic Python and packaging, not Blender, private
+fixtures, or recomp parity.
+
+The companion evidence matrix separates the completed character/root source
+inventories from partial deformation, signal, and attachment research. The
+bounded animation capture counts pose-output calls without recording matrices
+and binds no actor; it cannot establish source FPS, interpolation, world root
+motion, an equipped attachment, or gameplay event effects. The next runtime
+work must bind winning package members and actors before synchronized
+controller/pose, root/child and dispatch/effect comparisons on at least two
+characters. This does not authorize notify markers, root extraction, a writer,
+or receipt consumption.
 
 Milestones are a rendered Vulkan Windows build, matching Graphics controls,
 normal-speed high-FPS gameplay, a rendered ARM64 Mac build, then mission coverage

@@ -13,20 +13,27 @@ and is never edited by the stager.
 | Deterministic load order, conflict winners, and staging report | **Implemented and fixture-tested** |
 | Whole-file replacement of loose assets or complete `.pak` files | **Implemented as opaque path replacement** |
 | Override `default.xex`, system-update files, or paths outside `data/` | **Rejected** |
-| Import loose N3 assets into Blender | **Planned; no codec or add-on implementation yet** |
-| Emit a versioned Blender export receipt | **Version 1 contract documented; no exporter or stager validation yet** |
+| Import N3 assets into Blender | **Separate add-on's 0.14.0 baseline: eight read-only operators; visual/runtime gates unmet** |
+| Emit or consume a Blender export receipt | **Version 1 contract documented; no exporter or receipt consumer** |
 | Decode `.pak` containers and `.sox` tables | **Bounded read-only codec and full-corpus validation implemented** |
 | Inspect global character, unit, combat, troop, item, or ability tables | **Read-only visual application implemented and fixture-tested** |
 | Export and rebuild loose PAL localization text | **Format and sheet contract investigated; tooling not implemented** |
 | Rebuild localized SOX tables or their containing PAKs | **Not implemented; formats mapped for staged writer work** |
 | Edit global gameplay tables | **Not implemented; no runtime-edited package validation yet** |
-| Decode or encode `.36t`, `.bm`, or `.skin` formats | **Not implemented** |
+| Decode `.36t`, `.bm`, or `.skin` formats | **Supported read-only profiles in the separate add-on; opaque to the stager** |
+| Encode native `.36t`, `.bm`, or `.skin` formats | **Not implemented; named-profile writer gates apply** |
 | Override individual members inside `.pak` containers | **Not implemented** |
 | Hot-load mods or change load order while the game is running | **Not implemented** |
 | Distribute original game files as mods | **Not permitted by this project** |
 
 This support proves safe path replacement, not that arbitrary replacement
 payloads are valid game resources.
+
+The companion's source manifest is now `0.14.1`, an ungated candidate carrying
+the historical `0.14.0` baseline. Its eight imports remain read-only, with
+zero exports and no native writer or receipt consumer. The `0.14.1` Blender
+5.2.2 source/save-reopen, archive-build, and isolated-install gates remain
+unexecuted; extension ZIPs are local-only.
 
 ## Data flow
 
@@ -36,6 +43,7 @@ mods/
   enabled.txt             enabled IDs, lowest to highest priority
   author.example/
     mod.toml
+    n3-blender-export.json  optional authoring receipt; currently ignored
     files/
       data/
         interface/
@@ -156,10 +164,27 @@ edited safely. Multi-file assets should be replaced with all known companions.
 
 ## Blender authoring track
 
-The selected Blender 5.2 roadmap starts with read-only `.skin` dependency
-inspection and `.bm` import. Read-only `.36t` previews follow model structure;
-constrained export follows only after corpus and byte-identical unmodified
-round-trip gates; bounded read-only `.pak` research comes later.
+The separate Blender 5.2 add-on's 0.14.0 baseline has eight read-only operators
+for loose `.bm` models and `.skin` descriptors, plus character, static
+resource, terrain, level, navigation, and camera packages. Supported `.36t`
+textures can be previewed, and package members are read in memory without
+generic extraction. Tests use synthetic redistributable fixtures; visual and
+in-game/runtime acceptance gates remain open.
+
+Character imports can create no Actions, representative candidates, selected
+zero-based clip indices/ranges, or all supported source clips. Direct clips
+use neutral `Clip_###` names. Source timing, interpolation, event linkage,
+multi-character deformation, and evidence-backed attachments remain research,
+not writer guarantees.
+
+The companion's `0.14.1` source is an ungated read-only candidate, not a
+completed release. Source-only inventories and bounded runtime observations
+do not establish actor/member identity, root-motion extraction, notify
+markers, or attachment sockets; unresolved imported assets remain detached.
+See its `docs/ROADMAP.md` evidence matrix and detailed runtime/root/attachment
+records, and this repository's [signal and runtime trace](NATIVE-CODE.md).
+The `0.14.1` Blender source/save-reopen, Blender-built ZIP and isolated
+install gates remain unexecuted; local CI candidates must not be published.
 
 A local scan found that every loose `.skin` sample contains exactly one
 NUL-terminated `.bm` reference and at least one `.fx` reference; 205 of 216
@@ -170,8 +195,14 @@ map `.skin` directly to a Blender armature based on its extension.
 The complete architecture, format questions, acceptance gates, validation
 ladder, and future versioned export receipt are in
 [Blender asset authoring](BLENDER-MODDING.md). The current stager neither reads
-nor validates that optional receipt. Blender support remains planned until code
-and tests establish it.
+nor validates a `n3-blender-export.json` beside `mod.toml`, and does not copy
+it to the staged tree. The synthetic
+`tools.mods_test.ModTests.test_ignores_malformed_blender_receipt_when_validating_and_staging`
+regression exercises validation and staging with malformed receipt JSON. This
+is evidence of non-consumption, not receipt validation. No exporter or native
+writer exists; a future named writer profile must pass the complete corpus
+round-trip, modified-output reparse, mod validation, staging, and isolated
+in-game gates before it is exposed.
 
 ## Packed-resource format
 

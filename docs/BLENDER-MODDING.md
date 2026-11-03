@@ -2,13 +2,133 @@
 
 ## Status and selected scope
 
-This track is **Planned**. As of 2 November 2026, the separate N3 Blender
-project defines a Blender 5.2 development target and a headless-testable codec
-boundary, but it has no parser, importer, exporter, or redistributable format
-fixture yet. This document is therefore a contract and acceptance plan, not a
-format-support claim.
+The separate N3 Blender project's **0.14.0 read-only baseline**, recorded on
+2 November 2026, targets Blender 5.2 and implements bounded import. Its eight
+import operators are listed below. Package members are read in memory, not
+extracted. Redistributable tests use synthetic fixtures. There is no exporter
+or native N3 writer, and the recomp stager does not consume the optional
+Blender receipt. The visual and in-game/runtime acceptance gates below remain
+unmet; an import or a structurally valid reader is not proof of game-correct
+presentation. This is a named baseline, not a claim about a later working
+tree or release.
 
-The selected order is:
+The companion source manifest is now the **0.14.1 ungated candidate**,
+retaining those eight read-only imports and zero exports. Its Blender 5.2.2
+source/save-reopen, Blender-built archive, and isolated-install release gates
+have not been run for this candidate. Release ZIPs remain local-only; the
+configured CI runs synthetic Python and packaging checks, not Blender or the
+private corpus. The current stager still ignores the optional receipt.
+
+The companion's source-only
+`docs\snapshots\character-animation-0.14.0.json` is the version-1 aggregate
+character snapshot (SHA-256
+`dfebfcd60b38d090b6cca0d36ffc8286712714d3be0ceacc308946563b28240a`).
+Two checks matched with identical 103-byte comparison JSON (SHA-256
+`3b0a36d794e247105482c80952a14a90626630af5b6d6ad23b338f1d2999c02b`).
+They classify 36 character pairs, 3,121 candidates, and 67 unique animation
+payloads: 49 accepted, 11 with trailing data, and seven outside the current
+inverse-bind profile. Its `complete` field means discovery and classification,
+not full release, writer, visual, or in-game approval. To repeat the
+read-only check from the companion source checkout:
+
+```powershell
+Set-Location '<addon-source-checkout>'
+python -B tools\character_corpus_report.py '<owned-packed-resource-root>' --check docs\snapshots\character-animation-0.14.0.json
+```
+
+The original snapshot comparison used this repository at HEAD
+`62ebd5c139ff9bd169dd3b8eca7c9cd5bb5c0a16`; closeout checks use
+`74897d56dfc9ed853a752a4ffd853040d63526a4`. Both checkouts contain
+uncommitted integration changes. These identify base commits, not clean
+release provenance; the companion release procedure requires a clean,
+explicitly pinned recomp commit and the remaining applicable format-corpus
+gates.
+
+The companion's completed/partial/blocked evidence matrix and detailed
+`docs/RUNTIME-ANIMATION.md`, `docs/ROOT-MOTION.md`, and
+`docs/ATTACHMENT-EVIDENCE.md` distinguish source inventories from runtime and
+Blender acceptance. Six parser-eligible animation/model pairs cover 71
+candidate occurrences; no multi-profile Blender deformation or runtime
+comparison has passed. The root inventory covers 49 strict payloads and 565
+occurrences, but no runtime actor/root/child transforms or loop policy have
+been proven. The 44 item-to-weapon matches are name-based candidates, with no
+proven equipped actor, socket, local transform or attachment parenting.
+Unresolved imported assets remain detached.
+
+The bounded signal study in `docs/NATIVE-CODE.md` found 85 AS payloads with
+4,300 groups and 18,477 records, and 86 heuristic BA/AS/INFO triples; a
+same-row static path is not a live member/actor/effect binding. The next
+discriminating experiment must correlate resolver-selected members, actor,
+row, dispatch and an independently observed effect for at least two
+characters. Keep `Clip_###`, `source_fps_unverified`, no notify markers,
+no root extraction, and the 11 trailing/seven inverse-bind rejections until
+their separate gates pass.
+
+The `n3-blender-baseline` HTML comment is a machine-readable documentation
+snapshot checked against the add-on. Its receipt-schema fingerprint is the
+SHA-256 of UTF-8 JSON with sorted keys, compact separators, and unescaped
+non-ASCII characters. It is not an export receipt or a stager input.
+
+<!-- n3-blender-baseline
+{
+  "marker_version": 1,
+  "addon_version": "0.14.0",
+  "blender_minimum": "5.2.0",
+  "read_only": true,
+  "import_operator_count": 8,
+  "import_operators": [
+    "import_scene.n3_bm",
+    "import_scene.n3_skin",
+    "import_scene.n3_character_package",
+    "import_scene.n3_static_resource_package",
+    "import_scene.n3_bsmap_terrain_package",
+    "import_scene.n3_level_package",
+    "import_scene.n3_navigation_package",
+    "import_scene.n3_camera_package"
+  ],
+  "package_members": "in-memory",
+  "redistributable_fixtures": "synthetic",
+  "exporter": false,
+  "native_writer": false,
+  "recomp_receipt_consumer": false,
+  "receipt_schema_version": 1,
+  "receipt_schema_sha256": "90875ac34aaca8d7a81524b6215582900b7da7d707951738de808e98fdb5855b",
+  "visual_gates_passed": false,
+  "runtime_gates_passed": false
+}
+-->
+
+| Read-only import | Operator |
+| --- | --- |
+| Loose model `.bm` | `import_scene.n3_bm` |
+| Loose model descriptor `.skin` | `import_scene.n3_skin` |
+| Rigged character package | `import_scene.n3_character_package` |
+| Static resource package | `import_scene.n3_static_resource_package` |
+| Terrain package | `import_scene.n3_bsmap_terrain_package` |
+| Level package | `import_scene.n3_level_package` |
+| Navigation package | `import_scene.n3_navigation_package` |
+| Camera package | `import_scene.n3_camera_package` |
+
+The companion's local corpus reports bounded parsing of all 187 loose `.bm`
+and 216 loose `.skin` files and mip-zero previews of 1,047 loose `.36t` files.
+Its supported package profile covers 521 packages and 63,127 entries;
+`portrait_cache.pak` is a different, rejected profile. These are reported
+structural results, not newly reproduced in this update or visual/runtime
+approval. The add-on's `tests/test_package.py` exercises synthetic package
+lookup, ambiguity, and malformed inputs; `tests/blender_smoke.py` checks all
+eight registrations and synthetic imports with scene save/reopen. The
+companion runs them with `python -m unittest discover -s tests` and
+`tools/test_blender.ps1`, respectively.
+
+Character imports offer no Actions, representative candidates, selected
+zero-based clip indices/ranges, or all supported source clips. Direct
+selected/all Actions use neutral `Clip_###` names; representative labels are
+motion-based candidates, not proven game names. Timing, interpolation, signal
+payload-to-clip linkage, multi-character deformation, and evidence-backed
+attachments remain active research. Do not create event markers or bone
+parenting from schema vocabulary or names alone.
+
+The original milestone order was:
 
 1. read-only `.skin` dependency inspection and `.bm` model import;
 2. read-only `.36t` texture preview after model structure is established;
@@ -16,8 +136,10 @@ The selected order is:
 4. bounded read-only `.pak` research after the loose-asset path works;
 5. no package writer until the complete container format is verified.
 
-The first milestone deliberately excludes export. A Blender scene that looks
-plausible is not evidence that an N3 writer is safe.
+Bounded package reading already exists despite that original ordering; the
+remaining acceptance work is not a request to implement it from scratch.
+The read-only milestones deliberately exclude export. A Blender scene that
+looks plausible is not evidence that an N3 writer is safe.
 
 ## Repository boundary
 
@@ -84,6 +206,10 @@ mods/<id>/
 tools/mods.py validate -> tools/mods.py stage -> out/game/ -> launch
 ```
 
+The diagram shows a future authoring layout, not a receipt-consumption path:
+the stager reads `mod.toml` and payloads beneath `files/data/`, but does not
+read, validate, or stage the receipt beside `mod.toml`.
+
 The typed asset graph should retain:
 
 - normalized game-relative source paths and source SHA-256 values;
@@ -101,7 +227,9 @@ asset identities.
 
 ### 0. Corpus inspector and codec foundation
 
-Build bounded readers independently of Blender UI code.
+Bounded readers and synthetic fixtures exist independently of Blender UI code.
+The companion reports loose `.bm` and `.skin` corpus parsing; the following
+checks remain the acceptance criteria, not a claim that every gate is closed.
 
 - Use checked reads for every integer, count, offset, range, and multiplication.
 - Make byte order explicit at each field; do not infer it from the host.
@@ -117,7 +245,9 @@ success, or catch-all fallback fails the milestone.
 
 ### 1. Read-only `.skin` dependency inspection
 
-Treat `.skin` first as a dependency descriptor, not as skeletal data.
+Read-only descriptor inspection and import exist. Treat `.skin` as a
+dependency descriptor, not as skeletal data; unresolved dependencies and
+unverified secondary material structures remain explicit.
 
 - Locate and validate the observed `.bm`, `.fx`, `.dds`, and occasional `.bmp`
   references.
@@ -134,7 +264,8 @@ remain visible to the user.
 
 ### 2. Read-only `.bm` mesh import
 
-Prove each interpretation before creating Blender geometry:
+Read-only geometry import exists, but these interpretations still require
+evidence before they can become writer invariants:
 
 - stream count, stride, offsets, and vertex count;
 - index width, primitive topology, winding, and restart behavior;
@@ -154,8 +285,8 @@ still pass.
 
 ### 3. Read-only `.36t` texture preview
 
-Add texture work only after model/material dependencies can name what needs a
-preview.
+Read-only mip-zero previews exist for the supported profiles. Complete
+texture, color-space, and in-game presentation semantics remain unverified.
 
 - Verify dimensions, format, mip count and offsets, array/cube semantics,
   endianness, Xbox 360 tiling, and block-compression handling.
@@ -171,9 +302,9 @@ implied.
 
 ### 4. Constrained loose-asset export
 
-Enable a writer only for a named profile whose fields are understood. Start
-with the smallest static-mesh subset; do not begin with arbitrary skinned
-characters.
+No native writer or export operator exists. Enable one only for a named
+profile whose fields are understood. Start with the smallest static-mesh
+subset; do not begin with arbitrary skinned characters.
 
 - An unedited parse/serialize cycle must be byte-identical for every sample in
   the profile's local corpus.
@@ -192,11 +323,12 @@ effects, or gameplay correctness.
 
 ### 5. Staging and runtime validation
 
-For each exported asset set:
+For each future exported asset set:
 
 1. run `python tools/mods.py validate`;
 2. stage with `python tools/mods.py stage --replace`;
-3. retain `.n3-mods.json` and the Blender receipt;
+3. retain the staged `.n3-mods.json` and the Blender receipt separately beside
+   the mod's `mod.toml`; the current stager does not consume the receipt;
 4. launch with an isolated user/cache root;
 5. compare an unmodified export against the original route first;
 6. test the edited asset from all relevant camera distances and effects states;
@@ -207,8 +339,9 @@ semantic records inside the same file still conflict at the whole-file level.
 
 ### 6. Read-only packed-resource research
 
-After loose assets work, add a bounded `.pak` reader for inspection and local
-extraction. Reuse the corruption, duplicate-name, normalized-path,
+The add-on already has a bounded `.pak` reader and reads package members in
+memory; generic package extraction is not implemented. Any future extraction
+research must retain the corruption, duplicate-name, normalized-path,
 decompression-limit, and range checks listed in [Modding](MODDING.md).
 
 Do not add a package writer merely because entries can be listed. Deterministic
@@ -235,7 +368,8 @@ The receipt binds:
 - unknown-data preservation policy and validation results;
 - explicit limitations.
 
-Example shape, using placeholder hashes:
+Hypothetical example shape, using placeholder hashes and a fictional producer
+version; it is not an output from the 0.14.0 baseline:
 
 ```json
 {
@@ -301,6 +435,10 @@ case-insensitive duplicates, compare `modId` with `mod.toml`, verify every
 output beneath `files/`, hash those files, and reject unsupported schema or
 profile versions. The current stager deliberately ignores the optional receipt;
 the contract does not claim integration that has not been implemented.
+`tools.mods_test.ModTests.test_ignores_malformed_blender_receipt_when_validating_and_staging`
+uses an invalid JSON receipt beside `mod.toml` to verify that validation and
+staging still succeed, the receipt is not copied, and only the synthetic
+payload appears as an override in `.n3-mods.json`.
 
 ## Questions that block any writer
 

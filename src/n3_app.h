@@ -16,6 +16,7 @@
 #include "graphics_notification.h"
 #include "graphics_audit.h"
 #include "voice_override.h"
+#include "animation_trace.h"
 #include <rex/ui/flags.h>
 class N3App : public rex::ReXApp {
  public:
@@ -46,10 +47,16 @@ class N3App : public rex::ReXApp {
     graphics_notification_ = CreateGraphicsNotification(drawer);
   }
   void OnShutdown() override {
+    ShutdownAnimationTrace();
     ShutdownVoiceOverride();
     ShutdownGraphicsAudit();
     graphics_notification_.reset();
     ShutdownDisplaySettings();
+  }
+  bool OnWindowCloseRequested() override {
+    const bool accepted = rex::ReXApp::OnWindowCloseRequested();
+    if (accepted) ShutdownAnimationTrace();
+    return accepted;
   }
   void OnWindowPixelSizeChanged(uint32_t width, uint32_t height) override {
     RecordDisplayOutputSize(width, height);
@@ -62,6 +69,7 @@ class N3App : public rex::ReXApp {
     InitializeFrameRate();
     InstallVoiceOverride(*runtime(), game_data_root());
     InstallGraphicsMenu(*runtime(), game_data_root(), user_data_root());
+    InitializeAnimationTrace(game_data_root(), user_data_root());
   }
 
 

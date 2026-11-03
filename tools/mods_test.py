@@ -200,6 +200,82 @@ class ModTests(unittest.TestCase):
         )
         self.assertEqual([len(mod.files) for mod in discovered], [1, 1])
 
+    def test_ignores_malformed_blender_receipt_when_validating_and_staging(
+        self,
+    ) -> None:
+        mod_id = "author.blender"
+        make_mod(self.mods, mod_id, {"data/Prop/sample.bm": b"synthetic-model"})
+        order = self.mods / "enabled.txt"
+        order.write_text(f"{mod_id}\n", encoding="utf-8")
+        without_receipt = mods.load_enabled_mods(self.mods, order)
+
+        receipt = self.mods / mod_id / "n3-blender-export.json"
+        malformed = b'{"schemaVersion": 1, "modId": '
+        receipt.write_bytes(malformed)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(malformed)
+        self.assertEqual(mods.load_enabled_mods(self.mods, order), without_receipt)
+
+        with mock.patch("builtins.print"):
+            self.assertEqual(
+                mods.main(
+                    ["validate", "--mods", str(self.mods), "--order", str(order)]
+                ),
+                0,
+            )
+            self.assertEqual(
+                mods.main(
+                    [
+                        "stage",
+                        "--game",
+                        str(self.game),
+                        "--mods",
+                        str(self.mods),
+                        "--order",
+                        str(order),
+                        "--output",
+                        str(self.output),
+                        "--copy-base",
+                    ]
+                ),
+                0,
+            )
+
+        self.assertEqual(receipt.read_bytes(), malformed)
+        self.assertEqual(
+            (self.output / "data" / "Prop" / "sample.bm").read_bytes(),
+            b"synthetic-model",
+        )
+        self.assertEqual(
+            {
+                path.relative_to(self.output).as_posix()
+                for path in self.output.rglob("*")
+                if path.is_file()
+            },
+            {
+                mods.REPORT_NAME,
+                "default.xex",
+                "data/interface/sample.36t",
+                "data/Prop/sample.bm",
+            },
+        )
+        report = json.loads(
+            (self.output / mods.REPORT_NAME).read_text(encoding="utf-8")
+        )
+        self.assertEqual(report["loadOrder"], [mod_id])
+        self.assertEqual(
+            report["overrides"],
+            [
+                {
+                    "path": "data/Prop/sample.bm",
+                    "winner": mod_id,
+                    "providers": [mod_id],
+                    "replacesBase": True,
+                }
+            ],
+        )
+        self.assertNotIn(receipt.name, json.dumps(report))
+
     def test_copied_base_can_be_modified_without_changing_original(self) -> None:
         order = self.mods / "enabled.txt"
         order.write_text("", encoding="utf-8")

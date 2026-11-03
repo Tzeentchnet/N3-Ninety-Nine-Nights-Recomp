@@ -47,9 +47,14 @@ add_library(n3_menu_assets STATIC src/graphics_menu_assets.cpp)
 target_include_directories(n3_menu_assets PUBLIC src)
 add_library(n3_voice_data STATIC src/voice_pack.cpp)
 target_include_directories(n3_voice_data PUBLIC src)
+add_library(n3_animation_trace_model STATIC src/animation_trace_model.cpp)
+target_include_directories(n3_animation_trace_model PUBLIC src)
 add_executable(n3_import tools/import_main.cpp)
 target_link_libraries(n3_import PRIVATE n3_game_data)
 if(BUILD_TESTING)
+    add_executable(n3_animation_trace_model_test tests/animation_trace_model_test.cpp)
+    target_link_libraries(n3_animation_trace_model_test PRIVATE n3_animation_trace_model)
+    add_test(NAME animation_trace_model COMMAND n3_animation_trace_model_test)
     add_executable(n3_native_clock_test tests/native_clock_test.cpp)
     target_link_libraries(n3_native_clock_test PRIVATE n3_native)
     add_test(NAME native_frame_clock COMMAND n3_native_clock_test)
@@ -163,6 +168,7 @@ set(N3_SOURCES
     src/direction_basis_hooks.cpp
     src/chance_roll_hooks.cpp
     src/state_queries_hooks.cpp
+    src/animation_trace_hooks.cpp
     src/game_setup.cpp
     src/frame_rate.cpp
     src/display_settings.cpp
@@ -194,9 +200,24 @@ else()
     target_sources(n3 PRIVATE src/text_language.cpp)
 endif()
 
-target_link_libraries(n3 PRIVATE n3_native n3_game_data n3_menu_assets n3_voice_data
+target_link_libraries(n3 PRIVATE n3_native n3_game_data n3_menu_assets n3_voice_data n3_animation_trace_model
     comdlg32 ole32 uuid shell32)
 if(BUILD_TESTING)
+    add_executable(n3_animation_trace_hooks_test tests/animation_trace_hooks_test.cpp
+        src/animation_trace_hooks.cpp)
+    target_include_directories(n3_animation_trace_hooks_test PRIVATE src tests)
+    target_compile_definitions(n3_animation_trace_hooks_test PRIVATE N3_ANIMATION_TRACE_TEST)
+    target_link_libraries(n3_animation_trace_hooks_test PRIVATE
+        n3_animation_trace_model n3_game_data rex::runtime)
+    rexglue_apply_target_settings(n3_animation_trace_hooks_test)
+    add_test(NAME animation_trace_hooks COMMAND n3_animation_trace_hooks_test)
+    add_executable(n3_animation_trace_registration_test tests/animation_trace_registration_test.cpp
+        src/animation_trace_hooks.cpp)
+    target_include_directories(n3_animation_trace_registration_test PRIVATE src)
+    target_link_libraries(n3_animation_trace_registration_test PRIVATE
+        n3_animation_trace_model n3_game_data n3_recomp rex::runtime)
+    rexglue_apply_target_settings(n3_animation_trace_registration_test)
+    add_test(NAME animation_trace_registration COMMAND n3_animation_trace_registration_test)
     add_executable(n3_fp_policy_test tests/fp_policy_test.cpp)
     target_include_directories(n3_fp_policy_test PRIVATE src)
     target_link_libraries(n3_fp_policy_test PRIVATE rex::runtime)

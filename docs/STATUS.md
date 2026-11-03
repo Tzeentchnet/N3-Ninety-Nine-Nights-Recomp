@@ -1286,6 +1286,10 @@ adoption.
 
 ## Blender mod-authoring plan
 
+**Historical:** This entry records the initial planning milestone on
+2 November 2026, not the current add-on. See the
+[current Blender baseline](BLENDER-MODDING.md#status-and-selected-scope).
+
 On 2 November 2026, the loose-asset mod plan was expanded for the user's
 separate Blender 5.2 add-on project. The selected first milestone is read-only
 `.skin` dependency inspection and `.bm` import. Read-only `.36t` preview follows
@@ -1591,6 +1595,159 @@ troop stalling at a closing gate has not yet been reproduced. No runtime
 AI/pathfinding behavior, generated translation, manifest entry, game asset, or
 private-derived report changed in this milestone.
 
+## Blender 0.14.0 read-only authoring baseline
+
+The separate Blender 5.2 add-on's 0.14.0 baseline, recorded on 2 November
+2026, has eight import operators: loose `.bm` models and `.skin` descriptors,
+and character, static resource, terrain, level, navigation, and camera
+packages. Supported `.36t` previews and package members are read in memory;
+generic package extraction, an exporter, and a native writer are not
+implemented. Its companion corpus report records 187 loose `.bm` files, 216
+loose `.skin` files, and 1,047 mip-zero `.36t` previews.
+Selected or all supported character clips can use neutral `Clip_###` Actions;
+representative and no-Action modes are also available. Timing, interpolation,
+signal-to-clip linkage, multi-character deformation, and attachment evidence
+remain open. The roadmap's visual and isolated in-game/runtime acceptance
+gates have not passed.
+
+The add-on's synthetic `tests/test_package.py` covers package lookup,
+ambiguity, and malformed input; `tests/blender_smoke.py` checks all eight
+operator registrations, synthetic imports, and scene save/reopen. This
+contract update did not rerun those companion tests or a private-corpus,
+visual, or in-game route. The versioned receipt schema remains owned by this
+repository, while `tools/mods.py` does not read or validate a receipt beside
+`mod.toml`.
+
+The new synthetic
+`tools.mods_test.ModTests.test_ignores_malformed_blender_receipt_when_validating_and_staging`
+places invalid JSON beside a valid manifest, verifies that validation and
+staging succeed, and checks that the receipt is absent from both the staged
+tree and override report while the synthetic model replacement is present.
+The focused test passed, and `python -m unittest -v tools.mods_test` passed all
+16 tests on Windows with temporary test data rooted in this repository. No
+stager or schema behavior was changed.
+
+### 0.14.1 foundation integration
+
+The companion's source manifest now identifies `0.14.1` as an ungated
+candidate; the `0.14.0` marker above remains a historical baseline, not a
+second current version. Its version-1 aggregate snapshot
+`docs\snapshots\character-animation-0.14.0.json` has SHA-256
+`dfebfcd60b38d090b6cca0d36ffc8286712714d3be0ceacc308946563b28240a`.
+Two `--check` scans of the owned corpus matched it with identical 103-byte
+JSON (SHA-256
+`3b0a36d794e247105482c80952a14a90626630af5b6d6ad23b338f1d2999c02b`).
+They classify 36 character pairs, 3,121 candidates, and 67 unique animation
+payloads (49 accepted, 11 trailing-data, seven inverse-bind rejections).
+This is not a full release-corpus or in-game gate.
+
+The integration check used recomp HEAD
+`62ebd5c139ff9bd169dd3b8eca7c9cd5bb5c0a16` with uncommitted changes in
+both checkouts; a clean, explicitly pinned recomp commit is still required for
+release. The companion's 218 synthetic tests passed under ordinary Python
+3.12 and Blender's bundled Python 3.13 without launching Blender; the recomp
+mod and contract suites passed 29 tests. The configured CI checks synthetic
+Python and packaging only, and ZIPs remain local-only. The `0.14.1` Blender
+5.2.2 source/save-reopen, Blender-built archive, and isolated-install gates
+were not run and remain required. No exporter, native writer, or receipt
+consumer was added.
+
+## Character animation static trace
+
+**Observed:** the pinned generated code now has a documented path from
+character-package setup and BA/AS/INFO resource loading, through copied
+92-byte setup records and actor virtual `+0x8C`, to instance binding, row
+selection, frame-like advancement, track evaluation, matrix output,
+record-dispatch candidates, and root-derived actor displacement. Three
+read-only mission fixture pairs have matching BA/AS/INFO counts; same-index
+INFO type and AS-record aggregates are documented without payload values.
+See `docs\NATIVE-CODE.md` for addresses, generated source anchors, evidence
+labels, ABI/lifetime questions, and a bounded future probe plan.
+
+**Observed:** `tools\animation_static_trace.py` and its synthetic in-memory
+test suite make the static searches and aggregate correlations reproducible.
+All 11 helper tests and all 13 recomp Blender contract tests passed; the
+recomp contract consistency check and in-memory Python syntax checks passed.
+No Blender, runtime instrumentation, game, or real filesystem staging was
+performed for that earlier static-only study; the contract suite exercises
+staging only through mocked paths and operations. Runtime-probe evidence is
+reported separately below.
+
+**Unknown:** the exact member chosen for a live actor, controller cadence
+relative to the simulation clock, source animation FPS, full interpolation,
+signal payload meanings, and axes/scale remain open. No animation timing fix,
+native writer, or Blender receipt consumer is claimed. The next bounded
+experiment must first verify member/row identity, then separately compare
+controller and dispatch-window behavior at known clock rates while preserving
+the original calls.
+
+## Bounded animation runtime instrumentation
+
+**Observed, implementation:** five opt-in retained-call wrappers now cover
+setup `0x82093BE8`, actor controller `0x82080158`, queue `0x82252BD8`,
+evaluator `0x82298FF0`, and pose output `0x82249628` (call at `0x8229AD60`,
+guest return `0x8229AD64`). Capture is disabled by default, uses bounded
+arrays and serialization, validates guest mappings and object identities,
+supports actor/clip filters, counts drops and invalids, preserves the original
+call and guest/host state, and explicitly flushes on accepted window close.
+The optional resource scope binds no actor or AS/INFO relationship. Exact ABI
+assumptions, lifetime limits, source identities and commands are documented in
+`docs\NATIVE-CODE.md`.
+
+**Observed, build and synthetic tests:** the locked standard
+`pwsh -NoProfile -File tools\build.ps1 -Configuration RelWithDebInfo -Jobs 4`
+completed with 50/50 native tests passing; the focused trace model/hooks/
+registration tests passed 3/3, and
+`python -B -m unittest -q tools.animation_trace_manifest_test` passed 9/9.
+The standard host SHA-256 was
+`50b53466d39826a2cb39d003e55fad1b969d72e5d90f0192d3536065a827d0ae`.
+The diagnostic executable and rebuilt private runtime were produced with the
+locked ReXGlue `0.10.0.24-dev.gbd833a2`, LLVM 20.1.8, MSVC 14.44,
+Windows SDK 10.0.26100.0, CMake 3.31.8 and Ninja.
+
+**Observed, bounded runtime:** resource-scoped PID `15172` exited normally
+after 113.475 seconds of a 120-second limit, with a responsive foreground
+window and 21 posted input pairs. It selected one manager/instance/BA identity
+and stored 64 queue plus 64 evaluation samples, all clip `0`; those
+evaluations contain 4,800 valid pose calls. Overall it observed 2,181 queue
+calls, 4,354 evaluator calls and 163,275 selected pose calls. Queue/evaluation
+capacity drops were 2,117/2,113; lock drops, invalids, invalid outputs,
+reentrancy, concurrent activity and calls in flight at flush were zero. There
+were no setup or controller calls. The validated, path-free private v2 aggregate
+is `private\traces\runtime-instrumentation\trace-resource-30-d\aggregate-v2.json`
+(SHA-256 `9812d435178f029eb9179f2ff0e12314a8c20ee46a92b646e9ee95e2e5e46302`);
+its paired trace and route remain in the same ignored directory.
+
+**Candidate:** 21 matching members from 36 bounded character-archive
+candidates share member SHA-256
+`5013c53b8444eb666a9dd239acd00fd5e844f9d3eb6f38036d43e35277b308a5`.
+The basename fingerprint does not prove which package was resolved. See the
+native-code section for exact guest identities, source and return addresses,
+clip counts, and other build/asset hashes.
+
+**Observed, limitations:** the unmodified standard and DirectSound attempts
+failed before gameplay because this host has no playback endpoint, with
+`0xC0000005` after audio initialization and a guest read at `0x00000014`.
+The successful run used a locally rebuilt SDL dummy-audio diagnostic host and
+runtime, not the installed SDK DLL. Its executable and GPU-plugin imports were
+checked, but the rebuilt DLL is not generally export-identical; silent audio
+does not prove normal audio or timing equivalence. With instrumentation disabled
+on the same final diagnostic executable, PID `42520` exited normally after
+38.362 seconds, posted six foreground input pairs and wrote no trace; no
+forced stop was required. An earlier actor-scoped attempt saw queue/evaluator
+calls but selected no actor, and an initial resource attempt exposed and
+corrected the call-site-versus-return-address guard.
+
+```powershell
+pwsh -NoProfile -File tools\animation_trace_run.ps1 -RunId baseline-final-30 -Seconds 45 -FrameRate 30 -Scope resource -Clip all -Disabled -ActivateWindow -AudioBackend dummy -Executable private\traces\runtime-instrumentation\local-sdl-dummy\game-build\n3.exe
+```
+
+**Unknown:** the selected resource's actual actor and winning package, signal
+records, attachments, root motion, source FPS and interpolation remain
+unproven; posted keys do not establish that the title consumed them. This is
+not a 30-versus-60 FPS comparison, gameplay acceptance, animation fix, native
+writer gate, or Blender run.
+
 ## Bounded signal/clip research
 
 **Observed, static and private corpus:** an independent all-package inventory
@@ -1627,3 +1784,58 @@ characters, without exceeding the existing route/capture limits. The present
 hooks do not observe effects. Until that edge is proved, retain `Clip_###`,
 unsupported tails and no notify markers; source FPS and attachment semantics
 are also unproven.
+
+### Companion evidence closeout
+
+The companion `0.14.1` candidate now ships detailed runtime evaluator,
+root-motion, and attachment evidence documents alongside its roadmap matrix.
+The closeout reference for this repository is HEAD
+`74897d56dfc9ed853a752a4ffd853040d63526a4`; both checkouts have uncommitted
+integration changes, so this is not clean release provenance. The earlier
+`62ebd5c139ff9bd169dd3b8eca7c9cd5bb5c0a16` reference above describes the
+original foundation comparison.
+
+The closeout inspected commit `74897d5`, authored and committed by
+Tzeentchnet with message `Research bounded signal and clip linkage`. Its four
+changed files are the intended signal research tool and synthetic tests plus
+the corresponding `NATIVE-CODE.md` and `STATUS.md` evidence. Its message has
+no trailers and no Copilot co-author. The branch is one commit ahead of
+`private/main`; neither history nor unrelated working-tree changes were
+rewritten.
+
+Source-only deformation covers six 75/91/94-bone payload pairs and 71
+candidate occurrences; the root inventory covers 49 accepted unique BA
+payloads and 565 occurrences; 44 item rows have name-based weapon candidates.
+None proves a live character, local pose, root transfer, equipped attachment,
+or visual correctness. The available 30-target capture counted 163,275 pose
+spans but recorded no matrices, with 2,117/2,113 queue/evaluator capacity
+drops and no actor binding. The corresponding source snapshots, report
+hashes, tolerances, missing gates and discriminating experiments are documented
+in the companion roadmap and evidence records.
+
+The non-Blender closeout compiled the companion and passed all 316 synthetic
+tests under both system Python 3.12.10 and Blender's bundled Python 3.13.13.
+It checked the three source snapshots, repeated the character, attachment and
+signal reports byte-for-byte, and validated the 41-member local CI archive
+contract plus standalone and cross-repository consistency. The locked recomp
+build and complete native CTest suite passed 50/50, including the three trace
+tests; full Python discovery passed 112 tests and the focused mod/trace/signal/
+contract suites passed 67. Scoped correctness lint and the recomp contract
+checker passed. These checks do not constitute a hosted CI run or Blender,
+visual, staging, or runtime acceptance.
+
+The recomp trace and route validators, candidate scan and current local
+build/audio input hashes also reproduced the existing 30-target aggregate
+byte-for-byte in memory (SHA-256
+`9812d435178f029eb9179f2ff0e12314a8c20ee46a92b646e9ee95e2e5e46302`).
+Its recorded capture base remains
+`62ebd5c139ff9bd169dd3b8eca7c9cd5bb5c0a16`; rechecking it at the newer
+closeout HEAD does not retroactively change that provenance or establish the
+candidate package winner.
+
+The source remains read-only with eight imports, zero exports, no writer and
+no Blender receipt consumer. `Clip_###`, `source_fps_unverified`, no notify
+markers, no root extraction and detached unresolved attachments remain in
+force. The candidate's Blender 5.2.2, complete applicable corpus, visual,
+isolated install, staging and in-game acceptance gates remain open; the CI
+candidate ZIP is local-only.
