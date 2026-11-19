@@ -43,11 +43,11 @@ template<size_t HistorySize> bool Process(PPCContext& ctx, uint8_t* base) {
   for (uint32_t index = 0; index < 257; ++index) workspace.buffer[index] = Read(base, buffer + index * 4);
   // The shorter original kernel leaves its last unrolled input loads in f1/f2.
   const auto input248 = workspace.buffer[248], input249 = workspace.buffer[249];
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   if (!n3::native::TryProcessFeedbackDelay(workspace.state, workspace.history, workspace.buffer)) {
     ctx.fpscr.csr = saved_guest;
-    rex::platform::FPSCRPlatform::setcsr(saved_host);
+    rex::ppc::FPSCRPlatform::SetCSR(saved_host);
     return false;
   }
   for (uint32_t index = 0; index < HistorySize; ++index) Write(base, source + 24 + index * 4, workspace.history[index]);
@@ -61,7 +61,7 @@ template<size_t HistorySize> bool Process(PPCContext& ctx, uint8_t* base) {
     ctx.f2.f64 = double(input248);
     ctx.xer.ca = workspace.state.delay <= 2;
   }
-  ctx.cr6.compare<uint32_t>(0, 0, ctx.xer);
+  ctx.cr6.Compare<uint32_t>(0, 0, ctx.xer);
 #ifdef N3_FEEDBACK_DELAY_TEST
   n3_feedback_delay_native_used = true;
 #endif
@@ -91,11 +91,11 @@ bool ProcessSeparate(PPCContext& ctx, uint8_t* base) {
   const auto cursor = workspace.state.cursor;
   for (uint32_t i = 0; i < 512; ++i) workspace.history[i] = Read(base, source + 24 + i * 4);
   for (uint32_t i = 0; i < 256; ++i) workspace.input[i] = Read(base, input + i * 4);
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   if (!n3::native::TryProcessFeedbackDelaySeparate(workspace.state, workspace.history,
                                                 workspace.input, workspace.output, workspace.final_output)) {
-    ctx.fpscr.csr = saved_guest; rex::platform::FPSCRPlatform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; rex::ppc::FPSCRPlatform::SetCSR(saved_host); return false;
   }
   for (uint32_t i = 0; i < 256; ++i) {
     Write(base, source + 24 + (cursor + i) * 4, workspace.history[cursor + i]);
@@ -107,7 +107,7 @@ bool ProcessSeparate(PPCContext& ctx, uint8_t* base) {
   Write(base, source + 12, workspace.state.previous_output);
   WriteWord(base, source + 16, workspace.state.cursor);
   ctx.r4.u64 += 1024; ctx.r5.u64 = workspace.state.cursor;
-  ctx.cr6.compare<uint32_t>(0, 0, ctx.xer);
+  ctx.cr6.Compare<uint32_t>(0, 0, ctx.xer);
 #ifdef N3_FEEDBACK_DELAY_TEST
   n3_feedback_delay_native_used = true;
 #endif

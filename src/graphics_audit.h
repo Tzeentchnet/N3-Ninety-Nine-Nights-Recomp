@@ -1,4 +1,4 @@
 #pragma once
-namespace rex::ui { class WindowedAppContext; }
-void InstallGraphicsAudit(rex::ui::WindowedAppContext& context);
+namespace rex::ui { class IUISystem; }
+void InstallGraphicsAudit(rex::ui::IUISystem& ui);
 void ShutdownGraphicsAudit();

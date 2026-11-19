@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
-namespace rex::ui { class Window; class WindowedAppContext; }
-void InstallDisplaySettings(rex::ui::WindowedAppContext& context, rex::ui::Window& window);
+namespace rex::ui { class IUISystem; }
+void InstallDisplaySettings(rex::ui::IUISystem& ui);
 void ShutdownDisplaySettings();
 uint32_t ConfiguredDisplayHeight();
 bool SetDisplayHeight(uint32_t height);

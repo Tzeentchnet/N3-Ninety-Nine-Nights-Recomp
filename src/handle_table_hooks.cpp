@@ -34,7 +34,7 @@ void SetLookupRegisters(PPCContext& ctx, const n3::guest::HandleQuery& query, ui
   ctx.r10.u64 = query.record.auxiliary;
   ctx.r11.u64 = query.record.object;
   ctx.xer.ca = false;
-  ctx.cr6.compare<uint32_t>(query.index, query.count, ctx.xer);
+  ctx.cr6.Compare<uint32_t>(query.index, query.count, ctx.xer);
 }
 bool Lookup(PPCContext& ctx, uint8_t* base) {
   using namespace n3::guest;
@@ -66,7 +66,7 @@ bool Validate(PPCContext& ctx, uint8_t* base) {
   ctx.r11.u64 = query.key_matches ? 0 : 1;
   ctx.r12.u64 = uint32_t(ctx.lr);
   ctx.lr = uint32_t(ctx.lr);
-  ctx.cr6.compare<int32_t>(std::bit_cast<int32_t>(query.record.key), std::bit_cast<int32_t>(key), ctx.xer);
+  ctx.cr6.Compare<int32_t>(std::bit_cast<int32_t>(query.record.key), std::bit_cast<int32_t>(key), ctx.xer);
 #ifdef N3_HANDLE_TABLE_TEST
   n3_handle_table_native_used = true;
 #endif

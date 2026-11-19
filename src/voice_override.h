@@ -3,9 +3,11 @@
 #include <filesystem>
 
 namespace rex {
-class Runtime;
+namespace kernel {
+class TitleRuntime;
+}
 }
 
-bool InstallVoiceOverride(rex::Runtime& runtime,
+bool InstallVoiceOverride(rex::kernel::TitleRuntime& runtime,
                           const std::filesystem::path& game_data_root);
 void ShutdownVoiceOverride();

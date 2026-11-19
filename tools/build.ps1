@@ -22,16 +22,17 @@ if ($LASTEXITCODE -ne 0 -or $sdkVersion -ne $lock.sdk.version) {
 $pythonCommand = Get-Command $Python -CommandType Application -ErrorAction Stop |
     Select-Object -First 1
 $pythonExecutable = $pythonCommand.Source
+& $pythonExecutable (Join-Path $PSScriptRoot 'prepare-rexglue.py') --check
+if ($LASTEXITCODE) {
+    throw 'Prepared ReXGlue source is missing or stale. Run tools/bootstrap.ps1.'
+}
+$rexglueSource = Join-Path $localTools 'rexglue-source'
 $saved = @{}
 foreach ($name in @('PATH','INCLUDE','LIB','VCToolsInstallDir','WindowsSdkDir','WindowsSDKVersion')) {
     $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 Push-Location $root
 try {
-    & $pythonExecutable (Join-Path $PSScriptRoot 'bundle-sdk-source.py') --if-needed
-    if ($LASTEXITCODE) { throw 'Pinned SDK source preparation failed.' }
-    & $pythonExecutable (Join-Path $PSScriptRoot 'prepare-gpu.py')
-    if ($LASTEXITCODE) { throw 'GPU extension preparation failed.' }
     if (Test-Path "$localTools/msvc/setup_x64.bat") {
         $vc = Get-ChildItem "$localTools/msvc/VC/Tools/MSVC" -Directory | Sort-Object Name -Descending | Select-Object -First 1
         $kit = "$localTools/msvc/Windows Kits/10"
@@ -44,11 +45,11 @@ try {
         $env:PATH = "$($vc.FullName)/bin/Hostx64/x64;$kit/bin/$version/x64;$env:PATH"
     }
     $env:PATH = "$localTools/llvm/bin;$localTools/ninja;$env:PATH"
-    & (Join-Path $PSScriptRoot 'codegen.ps1') -Python $pythonExecutable
+    & (Join-Path $PSScriptRoot 'codegen.ps1')
     $preset = 'win-amd64-' + $Configuration.ToLowerInvariant()
-    $sdkSource = Join-Path $localTools 'live-gpu-source/rexglue-sdk'
-    & $cmake --preset $preset "-DREXSDK_DIR=$sdkSource" `
-        -DREXGLUE_BUILD_TESTS=OFF -DREXGLUE_ENABLE_FIDELITYFX=OFF `
+    & $cmake --preset $preset `
+        "-DREXSDK_DIR=$rexglueSource" `
+        "-DCMAKE_PREFIX_PATH=$localTools/rexglue-sdk/win-amd64" `
         "-DPython3_EXECUTABLE=$pythonExecutable"
     if ($LASTEXITCODE) { throw 'CMake configure failed.' }
     & $cmake --build --preset $preset --parallel $Jobs

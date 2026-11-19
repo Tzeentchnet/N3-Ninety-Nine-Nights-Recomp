@@ -141,6 +141,8 @@ if (!(Test-Path "$localTools/ninja/ninja.exe")) {
     $archive = Get-VerifiedDownload $lock.ninja 'ninja.zip'
     Expand-Archive -LiteralPath $archive -DestinationPath "$localTools/ninja" -Force
 }
+& $Python (Join-Path $PSScriptRoot 'prepare-rexglue.py')
+if ($LASTEXITCODE) { throw 'Patched ReXGlue source preparation failed' }
 if (!$ToolsOnly -and !(Test-Path "$localTools/msvc/setup_x64.bat")) {
     if (!$AcceptVisualStudioLicense) {
         throw 'Portable Microsoft tools require their licence. Run with -AcceptVisualStudioLicense or use -ToolsOnly with your own VS 2022 environment.'

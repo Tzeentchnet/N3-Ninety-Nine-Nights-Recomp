@@ -9,15 +9,40 @@ import subprocess
 import sys
 import zipfile
 
-from sdk_lock import load_sdk_lock
+from sdk_lock import load_sdk_lock, load_sdk_source_dependencies
 
 ROOT = Path(__file__).resolve().parent.parent
 SDK = load_sdk_lock()
+SDK_SOURCE_DEPENDENCIES = load_sdk_source_dependencies()
 PACKAGE_DOCUMENTS = {
     "LICENSE.txt": ROOT / "LICENSE",
     "README.txt": ROOT / "docs/releases/PACKAGE-README.txt",
     "THIRD_PARTY.md": ROOT / "THIRD_PARTY.md",
 }
+PACKAGE_BINARIES = (
+    "n3.exe",
+    "n3_import.exe",
+    "SDL3.dll",
+    "rexapp.dll",
+    "rexapu.dll",
+    "rexapu-sdl3.dll",
+    "rexbase.dll",
+    "rexfilesystem.dll",
+    "rexgpu.dll",
+    "rexgpu-xenos-d3d12.dll",
+    "rexgpu-xenos-null.dll",
+    "rexgpu-xenos-vulkan.dll",
+    "rexhid.dll",
+    "rexhid-sdl3.dll",
+    "rexhid-xinput.dll",
+    "rexkernel.dll",
+    "rexppc.dll",
+    "rexui.dll",
+    "rexui-sdl3.dll",
+    "rexxam.dll",
+    "rexxbdm.dll",
+    "TracyClient.dll",
+)
 
 
 def zip_entry(archive, name, data):
@@ -93,8 +118,7 @@ def main():
     sources = release / SDK.source_archive_name
     if not sources.is_file():
         raise ValueError("Run bundle-sdk-source.py first")
-    files = {name: (build / name).read_bytes() for name in
-             ["n3.exe", "n3_import.exe", "rexruntime.dll", "rexgpu-xenos.dll"]}
+    files = {name: (build / name).read_bytes() for name in PACKAGE_BINARIES}
     # Only the release x64 CRT directory from the official tool download is used.
     crt_packages = sorted((ROOT / ".tools/downloads").glob("Microsoft.VC.*.CRT.Redist.X64.base.vsix"))
     if len(crt_packages) != 1:
@@ -145,6 +169,18 @@ No Microsoft development tools or debug runtimes are included.
             "commit": SDK.commit,
             "releaseTag": SDK.release_tag,
             "binaryArchiveSha256": SDK.sha256,
+            "sourceDependencies": {
+                dependency.name: {
+                    "path": dependency.path,
+                    "url": dependency.url,
+                    "commit": dependency.commit,
+                }
+                for dependency in SDK_SOURCE_DEPENDENCIES
+            },
+            "patches": {
+                path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in sorted((ROOT / "tools/rexglue/patches").glob("*.patch"))
+            },
         },
         "files": hashes,
         "sdkSourceArchive": sources.name,

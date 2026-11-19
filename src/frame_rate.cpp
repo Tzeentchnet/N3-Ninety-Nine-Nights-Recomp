@@ -2,26 +2,18 @@
 #include "frame_rate_policy.h"
 #include "frame_pacing_stats.h"
 #include "guest_frame_clock.h"
+#include "n3_settings.h"
 #include <rex/ppc.h>
-#include <rex/runtime.h>
 #include <rex/logging.h>
 #include <rex/memory/utils.h>
 #include <chrono>
 #include <atomic>
 #include <thread>
-#include <charconv>
 #include <rex/chrono/clock.h>
 
 #ifdef N3_FRAME_RATE_TEST
 extern thread_local bool n3_frame_rate_native_used;
 #endif
-
-REXCVAR_DEFINE_BOOL(n3_60fps, false, "N3/Graphics",
-    "Compatibility alias for the previous 60 FPS setting").debug_only();
-REXCVAR_DEFINE_UINT32(n3_frame_rate, 30, "N3/Graphics", "Frame rate")
-    .allowed({"0", "30", "40", "60"});
-REXCVAR_DEFINE_BOOL(frame_pacing_trace, false, "N3/Graphics",
-    "Log guest presentation counts and intervals for development").debug_only();
 
 namespace {
 std::atomic<uint32_t> requested_fps{30};
@@ -37,7 +29,7 @@ void Write32(uint8_t* base, uint32_t address, uint32_t value) {
 }
 void TracePresent() {
   thread_local bool tracing = false;
-  if (!REXCVAR_GET(frame_pacing_trace)) {
+  if (!N3_SETTINGS().frame_pacing_trace.Get()) {
     tracing = false;
     return;
   }
@@ -115,8 +107,9 @@ extern "C" void sub_82248D38(PPCContext& ctx, uint8_t* base) {
     state.step_seconds_bits = target ? n3::frames::StepSecondsBits(target) : native_step;
     // The pinned Xbox import returns a 32-bit frequency. Keep that behavior,
     // and keep audio/movie/global clock scaling untouched.
-    const auto frequency = static_cast<uint32_t>(rex::chrono::Clock::guest_tick_frequency());
-    if (n3::native::InitializeFrameClock(state, frequency, rex::chrono::Clock::QueryGuestTickCount())) {
+    const auto frequency = static_cast<uint32_t>(rex::Clock::GetGuestTickFrequency());
+    if (n3::native::InitializeFrameClock(state, frequency,
+                                         rex::Clock::QueryGuestTickCount())) {
       view.Write(state);
       view.Enable();
       active_fps.store(target);
@@ -156,10 +149,11 @@ extern "C" void sub_823AA520(PPCContext& ctx, uint8_t* base) {
 }
 
 void InitializeFrameRate() {
-  auto target = REXCVAR_GET(n3_frame_rate);
-  if (REXCVAR_GET(n3_60fps) && rex::cvar::GetFlagSource("n3_frame_rate") == rex::cvar::Source::kDefault) {
+  auto target = N3_SETTINGS().frame_rate.Get();
+  if (N3_SETTINGS().legacy_60fps.Get() &&
+      N3_SETTINGS().frame_rate.GetLayer() == rex::SettingLayer::kDefault) {
     target = 60;
-    rex::cvar::SetFlagByName("n3_frame_rate", "60");
+    (void)N3_SETTINGS().frame_rate.Set(60);
   }
   requested_fps.store(target);
   active_fps.store(target);
@@ -168,26 +162,21 @@ void InitializeFrameRate() {
 }
 
 uint32_t ConfiguredFrameRate() {
-  const auto configured = rex::cvar::Query<uint32_t>("n3_frame_rate");
+  const auto configured = N3_SETTINGS().frame_rate.Get();
   return !configured || n3::frames::SupportsClock(configured) ? configured : requested_fps.load();
 }
 
 bool SetFrameRate(uint32_t fps) {
   if (!n3::frames::SupportsClock(fps)) return false;
-  if (!rex::cvar::SetFlagByName("n3_frame_rate", std::to_string(fps))) return false;
-  rex::cvar::SetFlagByName("n3_60fps", "false");
+  if (!N3_SETTINGS().frame_rate.Set(fps)) return false;
+  (void)N3_SETTINGS().legacy_60fps.Set(false);
   requested_fps.store(fps);
   return true;
 }
 
 void ApplyFrameRateAtBoundary(uint8_t* base) {
-  // Read through the registry so changes from either the native menu or the
-  // SDK settings overlay use the same frame-boundary update.
-  const auto value = rex::cvar::GetFlagByName("n3_frame_rate");
-  uint32_t configured = 0;
-  const auto parsed = std::from_chars(value.data(), value.data() + value.size(), configured);
-  if (parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size() &&
-      (!configured || n3::frames::SupportsClock(configured))) requested_fps.store(configured);
+  const auto configured = N3_SETTINGS().frame_rate.Get();
+  if (!configured || n3::frames::SupportsClock(configured)) requested_fps.store(configured);
   const auto target = requested_fps.load();
   if (!frame_clock || target == active_fps.load() ||
       !n3::guest::FitsLinearGuestRange(frame_clock, 48)) return;
@@ -196,7 +185,7 @@ void ApplyFrameRateAtBoundary(uint8_t* base) {
   auto state = view.Read();
   if (!n3::native::ChangeFrameClockRate(state, fps,
       target ? n3::frames::StepSecondsBits(fps) : native_step,
-      rex::chrono::Clock::QueryGuestTickCount())) return;
+      rex::Clock::QueryGuestTickCount())) return;
   // Start a fresh deadline without enabling a clock the game has suspended.
   view.Write(state);
   active_fps.store(target);

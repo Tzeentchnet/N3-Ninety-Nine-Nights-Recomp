@@ -18,20 +18,21 @@ extern thread_local bool n3_direction_normalization_native_used;
 namespace {
 constexpr uint32_t threshold_address = 0x820018ac;
 bool Masked(uint32_t controls) {
-  using Platform = rex::platform::FPSCRPlatform;
+  using Platform = rex::ppc::FPSCRPlatform;
 #if defined(__x86_64__) || defined(_M_X64)
-  return (controls & Platform::ExceptionMask) == Platform::ExceptionMask;
+  return (controls & Platform::kExceptionMask) == Platform::kExceptionMask;
 #else
-  return (controls & Platform::ExceptionMask) == 0;
+  return (controls & Platform::kExceptionMask) == 0;
 #endif
 }
 bool Normalize(PPCContext& ctx, uint8_t* base) {
   using namespace n3::guest;
   using namespace n3::native;
-  using Platform = rex::platform::FPSCRPlatform;
+  using Platform = rex::ppc::FPSCRPlatform;
   const auto source = ctx.r4.u32, destination = ctx.r3.u32, stack = ctx.r1.u32;
-  const auto saved_host = Platform::getcsr(), saved_guest = ctx.fpscr.csr;
-  if (stack < 16 || stack % 16 || !FitsLinearGuestRange(stack - 16, 40) || !FitsLinearGuestRange(source, 12) ||
+  const auto saved_host = Platform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  if (!ctx.vscr.nj || stack < 16 || stack % 16 ||
+      !FitsLinearGuestRange(stack - 16, 40) || !FitsLinearGuestRange(source, 12) ||
       !Masked(saved_host) || !Masked(saved_guest)) return false;
   const auto first = source & ~15u, second = (source + 11) & ~15u;
   const auto output = destination & ~3u;
@@ -52,25 +53,25 @@ bool Normalize(PPCContext& ctx, uint8_t* base) {
   // performed by the typed model, including the raw fourth lane's wraparound.
   const auto first_raw = simde_mm_shuffle_epi8(
       simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(GuestHostAddress(base, first))),
-      simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(VectorMaskL)));
+      simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(kVectorMaskL)));
   const auto second_raw = simde_mm_shuffle_epi8(
       simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(GuestHostAddress(base, second))),
-      simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(VectorMaskL)));
-  const auto mask = simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(VectorShiftTableL + (source & 15) * 16));
+      simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(kVectorMaskL)));
+  const auto mask = simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(kVectorShiftTableL + (source & 15) * 16));
   simde_mm_store_si128(reinterpret_cast<simde__m128i*>(raw_input.data()),
-                      rex::ppc::simde_mm_perm_epi8_(first_raw, second_raw, mask));
+                      rex::ppc::simd::PermuteBytes(first_raw, second_raw, mask));
   simde_mm_store_si128(reinterpret_cast<simde__m128i*>(shift.data()), mask);
   const Vec4 input{std::bit_cast<float>(raw_input[3]), std::bit_cast<float>(raw_input[2]),
                   std::bit_cast<float>(raw_input[1]), std::bit_cast<float>(raw_input[0])};
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   const double loaded_threshold = double(threshold);
   volatile float stored_threshold = float(loaded_threshold);
   const auto scratch_threshold = stored_threshold;
   const auto scratch_threshold_bits = std::bit_cast<uint32_t>(scratch_threshold);
-  ctx.fpscr.enableFlushModeUnconditional();
+  ctx.fpscr.SetFlushMode(ctx.vscr.nj);
   DirectionNormalization result;
   if (!TryNormalizeDirection(input, scratch_threshold, result)) {
-    ctx.fpscr.csr = saved_guest; Platform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; Platform::SetCSR(saved_host); return false;
   }
   auto write = [&](uint32_t at, float value) {
     rex::memory::store_and_swap<uint32_t>(GuestHostAddress(base, at), std::bit_cast<uint32_t>(value));
@@ -87,8 +88,8 @@ bool Normalize(PPCContext& ctx, uint8_t* base) {
   for (auto& lane : ctx.v10.u32) lane = result.zeroed ? scratch_threshold_bits : std::bit_cast<uint32_t>(result.estimate_squared);
   ctx.r3.u64 = destination; ctx.r9.u64 = destination; ctx.r10.u64 = 8; ctx.r11.u64 = destination;
   ctx.f0.f64 = loaded_threshold;
-  ctx.cr6.set_raw(result.zeroed ? 8 : 2);
-  ctx.cr0.compare<int32_t>(result.zeroed ? 0x80 : 0, 0, ctx.xer);
+  ctx.cr6.SetRaw(result.zeroed ? 8 : 2);
+  ctx.cr0.Compare<int32_t>(result.zeroed ? 0x80 : 0, 0, ctx.xer);
 #ifdef N3_DIRECTION_NORMALIZATION_TEST
   n3_direction_normalization_native_used = true;
 #endif

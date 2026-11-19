@@ -1,8 +1,8 @@
 #include "frame_rate.h"
 #include "frame_rate_policy.h"
 #include "guest_frame_clock.h"
+#include "n3_settings.h"
 #include <rex/ppc.h>
-#include <rex/cvar.h>
 #include <rex/chrono/clock.h>
 #include <rex/memory/utils.h>
 #include <array>
@@ -19,15 +19,15 @@ extern "C" void __imp__sub_82248D38(PPCContext&, uint8_t*);
 extern "C" void sub_823AA3B0(PPCContext&, uint8_t*);
 extern "C" void sub_823AA520(PPCContext&, uint8_t*);
 extern "C" void sub_8223FE70(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 
 void Require(bool value, const char* text) { if (!value) throw std::runtime_error(text); }
 
 void CheckPhysicalClocks() {
   using namespace n3::test;
-  using Platform = rex::platform::FPSCRPlatform;
-  constexpr auto controls = PPCFPSCRRegister::GuestMask | Platform::ExceptionMask;
-  const auto saved = Platform::getcsr();
+  using Platform = rex::ppc::FPSCRPlatform;
+  constexpr auto controls = PPCFPSCRRegister::kGuestMask | Platform::kExceptionMask;
+  const auto saved = Platform::GetCSR();
   SparseGameFixture seed, expected, actual;
   seed.Fill();
   uint32_t comparisons = 0, native_count = 0, live_changes = 0;
@@ -39,48 +39,54 @@ void CheckPhysicalClocks() {
             expected.Copy(seed);
             uint32_t object = 0xe1004000u + sample % 4, stack = 0xf000;
             bool eligible = fps != 24;
-            if (sample >= 4 && sample < 8) { object = 0x4000 + sample % 4; stack = 0xe1020000; }
-            if (sample >= 8) stack = 0xe1020000;
+            if (sample >= 4 && sample < 8) object = 0x4000 + sample % 4;
+            if (sample >= 8) stack = 0x18000;
             if (sample == 12) object = 0xffffffd0;
             if (sample == 13) object = 0xffffffd1;
             if (sample == 14) object = 0xfffffff0;
             if (sample == 15) object = 0xdfffffe0;
             if (sample == 16) object = 0xdfffffd0;
-            if (sample == 17) { object = 0xe0000000; stack = 0xe0010000; }
-            if (sample == 18) stack = 0xe0000080;
+            if (sample == 17) object = 0xe0000000;
+            if (sample == 18) stack = 0x18000;
             if (sample == 19) stack = 128;
             // These clocks occupy unused frame bytes: time samples never replace
             // restored LR/GPR slots or either saved frame pointer.
             if (sample == 20) object = stack - 96;
             if (sample == 21) object = stack - 192;
-            if (sample == 22) { object = 0xfffff801; stack = 0xfffffff0; }
-            if (sample == 23) { object = 0xe1004001; stack = 0xe1020001; }
-            if (sample == 13 || sample == 14 || sample == 15 ||
-                (sample >= 18 && sample <= 21)) eligible = false;
+            if (sample == 22) object = 0xfffff801;
+            if (sample == 23) { object = 0xe1004001; stack = 0x18001; }
+            if (sample == 13 || sample == 14 ||
+                (sample == 15 && n3::test::kPhysicalOffsetInCode) ||
+                (sample >= 19 && sample <= 21)) eligible = false;
             expected.Store<uint32_t>(object + 4, fps);
             expected.Store<uint32_t>(object + 8, 0x3c123456);
             actual.Copy(expected);
             std::array<uint8_t, 208> scratch{};
             if (eligible) std::copy_n(actual.base + PhysicalOffset(stack - 208), 208, scratch.begin());
             std::array<uint8_t, 48> unbiased{};
-            if (object >= 0xe0000000u) std::copy_n(actual.base + uint64_t(object), 48, unbiased.begin());
-            Require(rex::cvar::SetFlagByName("n3_frame_rate", "0"), "Cannot select physical clock policy");
+            const bool check_unbiased =
+                n3::test::kPhysicalOffsetInCode && object >= 0xe0000000u;
+            if (check_unbiased)
+              std::copy_n(actual.base + uint64_t(object), 48,
+                          unbiased.begin());
+            Require(N3_SETTINGS().frame_rate.Set(0).has_value(),
+                    "Cannot select physical clock policy");
             InitializeFrameRate();
-            rex::chrono::Clock::set_guest_tick_frequency(frequency);
+            rex::Clock::SetGuestTickFrequency(frequency);
             PPCContext translated{};
             SeedPreserved(translated, sample);
             translated.lr |= 0x1234567800000000ull;
             translated.r1.u32 = stack; translated.r3.u32 = object;
-            translated.fpscr.InitHost(); translated.fpscr.storeFromGuest(rounding);
-            if (flush) translated.fpscr.enableFlushModeUnconditional(); else translated.fpscr.disableFlushModeUnconditional();
+            translated.fpscr.InitHost(); translated.fpscr.StoreToHost(rounding);
+            if (flush) translated.fpscr.EnableFlushModeUnconditional(); else translated.fpscr.DisableFlushModeUnconditional();
             const auto initial = translated.fpscr.csr;
             auto replacement = translated;
-            Platform::setcsr(initial); __imp__sub_82248D38(translated, expected.base);
-            const auto host_expected = Platform::getcsr() & controls;
-            const auto before = rex::chrono::Clock::QueryGuestTickCount();
-            Platform::setcsr(initial); n3_frame_rate_native_used = false;
+            Platform::SetCSR(initial); __imp__sub_82248D38(translated, expected.base);
+            const auto host_expected = Platform::GetCSR() & controls;
+            const auto before = rex::Clock::QueryGuestTickCount();
+            Platform::SetCSR(initial); n3_frame_rate_native_used = false;
             sub_82248D38(replacement, actual.base);
-            const auto after = rex::chrono::Clock::QueryGuestTickCount();
+            const auto after = rex::Clock::QueryGuestTickCount();
             Require(n3_frame_rate_native_used == eligible, "Physical clock native/fallback route differs");
             const auto timestamp = actual.Load<uint64_t>(object + 24);
             Require(timestamp >= before && timestamp <= after, "Physical clock uses a different time source");
@@ -95,8 +101,8 @@ void CheckPhysicalClocks() {
             Require(SamePreserved(translated, replacement) && translated.r3.u64 == replacement.r3.u64,
                     "Physical clock calling convention differs");
             Require((translated.fpscr.csr & controls) == (replacement.fpscr.csr & controls) &&
-                    (Platform::getcsr() & controls) == host_expected, "Physical clock FP controls differ");
-            if (eligible && object >= 0xe0000000u)
+                    (Platform::GetCSR() & controls) == host_expected, "Physical clock FP controls differ");
+            if (eligible && check_unbiased)
               Require(std::equal(unbiased.begin(), unbiased.end(), actual.base + uint64_t(object)),
                       "Physical clock changed unbiased memory");
             ++comparisons;
@@ -111,21 +117,23 @@ void CheckPhysicalClocks() {
                         actual.Load<uint64_t>(object + 40) == frequency / target &&
                         *(actual.base + PhysicalOffset(object + 1)) == 0,
                         "Cached physical clock update or suspended enable differs");
-                if (object >= 0xe0000000u)
+                if (check_unbiased)
                   Require(std::equal(unbiased.begin(), unbiased.end(), actual.base + uint64_t(object)),
                           "Live physical clock changed unbiased memory");
                 ++live_changes;
               }
             }
           }
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     std::cout << comparisons << " physical clock cases (" << native_count << " native), "
               << live_changes << " cached live changes passed\n";
-  } catch (...) { Platform::setcsr(saved); throw; }
+  } catch (...) { Platform::SetCSR(saved); throw; }
 }
 
 int main() {
   try {
+    Require(REX_SETTINGS().Register(N3_SETTINGS()).has_value(),
+            "Cannot register N3 settings");
     // Retain the translated initializer as an oracle for the native replacement.
     std::array<uint8_t, 65536> bytes{};
     constexpr uint32_t object = 256;
@@ -140,21 +148,22 @@ int main() {
         rex::memory::store_and_swap<uint32_t>(original.data() + object + 4, fps);
         rex::memory::store_and_swap<uint32_t>(original.data() + object + 8, 0x3c123456u);
         replacement = original;
-        rex::chrono::Clock::set_guest_tick_frequency(hz);
+        rex::Clock::SetGuestTickFrequency(hz);
         PPCContext translated{};
         translated.r1.u32 = 61440; translated.r3.u32 = object;
         translated.r30.u64 = 0x123456789abcdef0; translated.r31.u64 = 0xfedcba9876543210;
         translated.lr = 0x82248d00;
         __imp__sub_82248D38(translated, original.data());
-        Require(rex::cvar::SetFlagByName("n3_frame_rate", "0"), "Cannot select original clock policy");
+        Require(N3_SETTINGS().frame_rate.Set(0).has_value(),
+                "Cannot select original clock policy");
         InitializeFrameRate();
         PPCContext native{};
         native.r1.u32 = 61440; native.r3.u32 = object;
         native.r30.u64 = translated.r30.u64; native.r31.u64 = translated.r31.u64;
         native.lr = translated.lr;
-        const auto before = rex::chrono::Clock::QueryGuestTickCount();
+        const auto before = rex::Clock::QueryGuestTickCount();
         sub_82248D38(native, replacement.data());
-        const auto after = rex::chrono::Clock::QueryGuestTickCount();
+        const auto after = rex::Clock::QueryGuestTickCount();
         const n3::guest::FrameClockView original_view(original.data(), object);
         const n3::guest::FrameClockView native_view(replacement.data(), object);
         const auto actual = native_view.Read();
@@ -170,15 +179,18 @@ int main() {
                 native.lr == translated.lr, "Native initializer broke its guest calling convention");
       }
     }
-    Require(rex::cvar::SetFlagByName("n3_frame_rate", "40") && ConfiguredFrameRate() == 40,
+    CheckPhysicalClocks();
+    Require(N3_SETTINGS().frame_rate.Set(40).has_value() &&
+               ConfiguredFrameRate() == 40,
             "A menu rate change must be visible before a gameplay clock exists");
-    rex::chrono::Clock::set_guest_tick_frequency(frequency);
-    const auto scalar = rex::chrono::Clock::guest_time_scalar();
+    rex::Clock::SetGuestTickFrequency(frequency);
+    const auto scalar = rex::Clock::GetGuestTimeScalar();
     auto read = [&](uint32_t at) { return rex::memory::load_and_swap<uint32_t>(bytes.data() + at); };
     auto write = [&](uint32_t at, uint32_t value) { rex::memory::store_and_swap<uint32_t>(bytes.data() + at, value); };
     auto run = [&](uint32_t target_fps, uint32_t fps, bool configure = true) {
       if (configure) {
-        Require(rex::cvar::SetFlagByName("n3_frame_rate", std::to_string(target_fps)), "Cannot set FPS mode");
+        Require(N3_SETTINGS().frame_rate.Set(target_fps).has_value(),
+                "Cannot set FPS mode");
         InitializeFrameRate();
       }
       write(object + 4, fps);
@@ -217,27 +229,30 @@ int main() {
     ApplyFrameRateAtBoundary(bytes.data());
     Require(bytes[object + 1] == 0, "Suspended clock was enabled by live switching");
     Require(!SetFrameRate(24) && !SetFrameRate(0) && ConfiguredFrameRate() == 60, "Invalid menu FPS accepted");
-    Require(rex::cvar::SetFlagByName("n3_frame_rate", "40"), "Cannot set FPS through the shared registry");
+    Require(REX_SETTINGS().SetText("n3.frame_rate", "40").has_value(),
+            "Cannot set FPS through the shared registry");
     ApplyFrameRateAtBoundary(bytes.data());
     Require(read(object + 4) == 40 && ConfiguredFrameRate() == 40, "SDK overlay and native menu settings diverged");
-    Require(rex::chrono::Clock::guest_tick_frequency() == frequency &&
-            rex::chrono::Clock::guest_time_scalar() == scalar, "Global guest/audio clock was changed");
+    Require(rex::Clock::GetGuestTickFrequency() == frequency &&
+            rex::Clock::GetGuestTimeScalar() == scalar,
+            "Global guest/audio clock was changed");
     for (const auto interval : {0u, 1u, 2u, 3u, 4u, 0x80000000u}) {
       Require(n3::frames::PresentInterval(interval, 30) == interval, "Original presentation interval changed");
       Require(n3::frames::PresentInterval(interval, 60) == (interval == 2 ? 1u : interval), "Unexpected presentation mode changed");
     }
     bool registered = false, presentation_registered = false, trace_registered = false, boundary_registered = false;
-    for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping) {
-      if (mapping->guest == 0x82248D38) registered = mapping->host == sub_82248D38 && mapping->host != __imp__sub_82248D38;
-      if (mapping->guest == 0x823AA3B0) presentation_registered = mapping->host == sub_823AA3B0;
-      if (mapping->guest == 0x823AA520) trace_registered = mapping->host == sub_823AA520;
-      if (mapping->guest == 0x8223FE70) boundary_registered = mapping->host == sub_8223FE70;
+    for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping) {
+      if (mapping->address == 0x82248D38) registered = mapping->host == sub_82248D38 && mapping->host != __imp__sub_82248D38;
+      if (mapping->address == 0x823AA3B0) presentation_registered = mapping->host == sub_823AA3B0;
+      if (mapping->address == 0x823AA520) trace_registered = mapping->host == sub_823AA520;
+      if (mapping->address == 0x8223FE70) boundary_registered = mapping->host == sub_8223FE70;
     }
     Require(registered && presentation_registered && trace_registered && boundary_registered, "Indirect calls do not resolve to the frame-rate hooks");
-    const auto* setting = rex::cvar::GetFlagInfo("n3_frame_rate");
-    Require(setting && setting->lifecycle == rex::cvar::Lifecycle::kHotReload && !setting->is_debug_only && setting->default_value == "30",
+    const auto& setting = N3_SETTINGS().frame_rate;
+    Require(setting.GetConstraints().life == rex::SettingLife::kLive &&
+               !setting.GetConstraints().debug_only &&
+               setting.GetDefaultText() == "30",
             "FPS mode is not available as a live player setting");
-    CheckPhysicalClocks();
     std::cout << "Native/translated clock equivalence, live 30/40/60 switching, global clocks, interval policy, and hook registration passed\n";
   } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

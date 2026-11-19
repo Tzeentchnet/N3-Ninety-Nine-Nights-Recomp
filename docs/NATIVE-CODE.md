@@ -601,12 +601,13 @@ normalization threshold also retains the original post-write threshold read.
 Unknown math domains restore both saved FP words before fallback. The native
 interface does not identify the selected record's gameplay ownership or timing.
 
-All three direction adapters use `src/guest_memory_address.h`. This matches the
-pinned translation's physical-memory host bias of `+0x1000` at guest addresses
-`0xE0000000` and above on Windows and Apple ARM64. Address arithmetic and alias
-checks use translated host offsets. Ranges crossing that bias boundary retain
-the original separate-access sequence. The helper validates arithmetic rather
-than establishing that arbitrary guest memory is mapped.
+All three direction adapters use `src/guest_memory_address.h`. The helper
+follows the SDK's `REX_PHYSICAL_OFFSET_IN_CODE` policy: the supported Windows
+ReXGlue 0.11 build uses an unbiased mapping, while builds that enable the policy
+add `+0x1000` at guest addresses `0xE0000000` and above. Address arithmetic and
+alias checks use the configured host offsets. Only biased builds reject ranges
+crossing that boundary. The helper validates arithmetic rather than
+establishing that arbitrary guest memory is mapped.
 
 ## Capped accumulation and optional accounting
 
@@ -1513,26 +1514,21 @@ python -B -m unittest -q tools.animation_trace_manifest_test
 pwsh -NoProfile -File tools\animation_trace_run.ps1 -RunId example-30 -Seconds 120 -FrameRate 30 -Actor first -Clip all
 ```
 
-If the host has no usable playback device, the locally archived SDL source
-can be built with its standard **silent dummy sink** in a separate ignored
-diagnostic build without modifying the installed SDK or the standard build:
+If the host has no usable playback device, stable ReXGlue 0.11's SDL build
+already includes the standard **silent dummy sink**. The helper verifies that
+source setting, runs the supported source build, creates the matching
+corresponding-source bundle, and prints the exact provenance paths:
 
 ```powershell
 pwsh -NoProfile -File tools\build_trace_audio.ps1 -Jobs 4
-pwsh -NoProfile -File tools\animation_trace_run.ps1 -RunId example-dummy-30 -Seconds 120 -FrameRate 30 -Scope resource -Clip all -ActivateWindow -QuaternionProbe -AudioBackend dummy -Executable private\traces\runtime-instrumentation\local-sdl-dummy\game-build\n3.exe
+pwsh -NoProfile -File tools\animation_trace_run.ps1 -RunId example-dummy-30 -Seconds 120 -FrameRate 30 -Scope resource -Clip all -ActivateWindow -QuaternionProbe -AudioBackend dummy -Executable out\build\win-amd64-relwithdebinfo\n3.exe
 ```
 
-The alternate build verifies the locally cached pinned SDL archive and SDK
-source bundle, uses the locked compiler and SDK, does not download anything,
-and refuses to overwrite an existing diagnostic build. The host executable
-alone is insufficient: the SDK's `rexruntimerd.dll` contains its own static
-SDL, so the helper also rebuilds that runtime from the pinned SDK sources with
-the private SDL library and stages it only beside the private executable. It
-checks the actual executable and GPU-plugin imports against the rebuilt DLL.
-The rebuilt DLL's complete export set is not byte- or export-identical to
-the installed SDK DLL; it is a diagnostic configuration, not a supported SDK
-replacement. Dummy audio is not evidence of audible playback, normal audio
-timing, or gameplay equivalence.
+The helper reports the standard executable, pinned SDL source archive, matched
+`SDL3rd.dll`, and ReXGlue source bundle. The runtime/GPU provenance checker uses
+the modular `rexbaserd.dll` and D3D12 Xenos driver selected by this trace path.
+Dummy audio is not evidence of audible playback, normal audio timing, or
+gameplay equivalence.
 
 The manifest tool requires the matching private route JSON and capture, and
 rejects routes without a window/input-idle observation, or with a forced stop,
@@ -1551,16 +1547,20 @@ character archives without writing member names or bytes:
 python -B tools\animation_trace_manifest.py `
   --trace private\traces\runtime-instrumentation\example-dummy-30\user\animation-trace-v3.json `
   --route private\traces\runtime-instrumentation\example-dummy-30\route.json `
-  --executable private\traces\runtime-instrumentation\local-sdl-dummy\game-build\n3.exe `
+  --executable out\build\win-amd64-relwithdebinfo\n3.exe `
   --game-root private\game --character-archive-dir private\game\data\PackedResources `
   --output private\traces\runtime-instrumentation\example-dummy-30\aggregate-v3.json `
   --frame-rate 30 --seconds 120 --audio-backend dummy `
   --audio-source-archive .tools\source-archives\libsdl-org-SDL-147a8ee32dbf9ac02f3794964490687b6bbda1bc.tar.gz `
-  --audio-linked-library private\traces\runtime-instrumentation\local-sdl-dummy\sdl-install\lib\SDL3-static.lib `
-  --audio-sdk-source-bundle out\release\ReXGlue-bd833a2-corresponding-source.zip
+  --audio-linked-library out\build\win-amd64-relwithdebinfo\SDL3rd.dll `
+  --audio-sdk-source-bundle out\release\ReXGlue-a3e1d82-corresponding-source.zip
 ```
 
 #### Bounded local capture, 30 FPS target
+
+The evidence below predates the v0.11 migration and retains its historical
+private diagnostic paths and hashes. It is not validation of the current
+modular runtime.
 
 **Observed, local runtime:** the following exact diagnostic route was run with
 isolated user/cache roots and a 120-second deadline:

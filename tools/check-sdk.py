@@ -9,6 +9,7 @@ from sdk_lock import load_sdk_lock, verify_latest_release
 
 
 API = "https://api.github.com/repos/rexglue/rexglue-sdk/releases?per_page=100"
+TAG_API = "https://api.github.com/repos/rexglue/rexglue-sdk/git/ref/tags/"
 
 
 def main():
@@ -29,6 +30,22 @@ def main():
         raise RuntimeError(f"ReXGlue release lookup failed: {error}") from error
     if not isinstance(releases, list):
         raise RuntimeError("ReXGlue release lookup returned an unexpected document")
+    for release in releases:
+        if release.get("tag_name") != lock.release_tag:
+            continue
+        tag_request = urllib.request.Request(
+            TAG_API + lock.release_tag, headers=headers
+        )
+        try:
+            with urllib.request.urlopen(tag_request, timeout=60) as response:
+                tag = json.load(response)
+        except (OSError, urllib.error.HTTPError, json.JSONDecodeError) as error:
+            raise RuntimeError(f"ReXGlue tag lookup failed: {error}") from error
+        target = tag.get("object", {})
+        if target.get("type") != "commit" or not target.get("sha"):
+            raise RuntimeError("ReXGlue release tag is not a lightweight commit tag")
+        release["resolved_commit"] = target["sha"]
+        break
     published = verify_latest_release(lock, releases)
     print(
         f"Latest ReXGlue Windows SDK verified: {lock.version} "

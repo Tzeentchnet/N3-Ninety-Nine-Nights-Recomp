@@ -1,22 +1,21 @@
 #include "graphics_audit.h"
 #include "graphics_settings.h"
-#include <rex/cvar.h>
+#include "n3_settings.h"
 #include <rex/logging.h>
-#include <rex/ui/windowed_app_context.h>
+#include <rex/ui/ui_system.h>
 #include <thread>
 #include <atomic>
 #include <memory>
 #include <array>
 
-REXCVAR_DEFINE_BOOL(graphics_audit, false, "N3/Graphics", "Developer probe: cycle graphics controls without saving").debug_only();
 namespace {
 std::jthread worker;
 std::shared_ptr<std::atomic<bool>> alive;
 }
-void InstallGraphicsAudit(rex::ui::WindowedAppContext& context) {
-  if (!REXCVAR_GET(graphics_audit)) return;
+void InstallGraphicsAudit(rex::ui::IUISystem& ui) {
+  if (!N3_SETTINGS().graphics_audit.Get()) return;
   alive = std::make_shared<std::atomic<bool>>(true);
-  worker = std::jthread([&context, running = alive](std::stop_token stop) {
+  worker = std::jthread([&ui, running = alive](std::stop_token stop) {
     // Let the initial movies finish before exercising the same setters as the
     // native menu. Probe profiles are isolated by the invoking test harness.
     constexpr std::array<std::array<uint32_t, 5>, 6> cases{{
@@ -30,7 +29,7 @@ void InstallGraphicsAudit(rex::ui::WindowedAppContext& context) {
     if (!wait(180)) return;
     for (uint32_t step = 0; step < cases.size(); ++step) {
       const auto choices = cases[step];
-      context.CallInUIThread([running, choices, step] {
+      ui.PostTask([running, choices, step] {
         if (!running->load()) return;
         bool ok = true;
         for (uint32_t row = 1; row <= choices.size(); ++row)
@@ -39,7 +38,7 @@ void InstallGraphicsAudit(rex::ui::WindowedAppContext& context) {
       });
       if (!wait(50)) return;
     }
-    context.CallInUIThread([running] {
+    ui.PostTask([running] {
       if (running->load()) REXLOG_INFO("Graphics audit requests complete");
     });
   });

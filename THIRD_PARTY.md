@@ -4,34 +4,33 @@ Project-authored source and documentation are licensed under the BSD 3-Clause
 License in [`LICENSE`](LICENSE). The components and adapted work identified
 below retain their respective copyright notices and license terms.
 
-ReXGlue supplies generated project/build boilerplate, the downloaded code
-generator, and the source-built runtime and Xenos plugin. It is derived in part
-from Xenia. Its source and licence are available at:
+ReXGlue supplies the downloaded code generator and the source-built modular
+runtime, platform services, and Xenos drivers. It is derived in part from
+Xenia. N3 pins stable ReXGlue v0.11.0 at:
 
-- https://github.com/rexglue/rexglue-sdk/tree/bd833a2ab69d305f99ddf57418fc38ffec8af93d
-- https://github.com/rexglue/rexglue-sdk/blob/bd833a2ab69d305f99ddf57418fc38ffec8af93d/LICENSE
+- https://github.com/rexglue/rexglue-sdk/tree/a3e1d82678ca20d68d4837a8e9ee4652ff073745
+- https://github.com/rexglue/rexglue-sdk/blob/a3e1d82678ca20d68d4837a8e9ee4652ff073745/LICENSE
 - https://github.com/xenia-project/xenia
 
 The project's disc extractor implements the XDVDFS structure documented by
 Xenia's disc image reader. ReXGlue's own dependency notices remain applicable to
 downloaded libraries and any future packaged binary distribution.
 
-The project-built Xenos plugin applies three title-independent changes from
-[ReIGlue](https://github.com/FH1-ReImagined/ReIGlue/tree/330770d17b64bdf17fcff975b82789418c230db5),
-the BSD 3-Clause ReXGlue fork used by Forza Horizon 1: ReImagined. They correct
-texture-watch validity, add a shared-memory valid-range fast path first carried
-by Recompiled Halo Reach, and fix D3D12 fence HRESULT checks. Exact source
-commits are listed under `tools/gpu/patches/`; the applicable notice and licence
-are in `LICENSES/ReIGlue.txt` and the corresponding-source archive.
+N3 applies two narrowly scoped renderer corrections under
+`tools/rexglue/patches/`: the raw physical GPU view remains writable instead of
+inheriting title-alias allocation or page-protection state, and Vulkan
+presentation uses swapchain-image semaphores with an idle barrier during
+swapchain retirement.
+The same patch set also backports ReXGlue's later source-pinning approach for
+Vulkan-Headers and Vulkan Memory Allocator. No separate temporal FidelityFX
+runtime or DLL is included, and stable ReXGlue 0.11 does not contain the earlier
+FSR1 presentation-effect path.
 
-The source-built runtime and plugin enable ReXGlue's existing spatial AMD
-FidelityFX Super Resolution 1 EASU/RCAS presenter path. No separate temporal
-FidelityFX SDK runtime or DLL is included. The renderer also adapts five
-title-independent fixes from later BSD-licensed ReXGlue commits: sample-rate
-memexport semantics, extreme-FXAA initialization checking, bindless sampler
-layout lookup and IDs, 3D tiled-depth alignment, and depth render-target
-encoding comparison. Exact upstream commits are recorded under
-`tools/gpu/patches/`.
+Vulkan-Headers is pinned at
+`9fbc2a782ee3f8a4db64e7d991e23da75e893f44`; Vulkan Memory Allocator is
+pinned at `0f1a757da579831283413295cc7f3b47eb521c77`. Their upstream notices
+and licences are preserved in the corresponding-source archive and packaged
+license tree.
 
 Bootstrap downloads official LLVM, CMake, Ninja, and Microsoft development tools.
 Their respective licences apply. The pinned portable Microsoft-tool downloader
@@ -53,30 +52,25 @@ runtime, renderer, or original game data is included.
 
 ## Binary releases
 
-The first Windows alpha includes the unmodified ReXGlue runtime and Xenos GPU
-DLLs from the pinned SDK. Alpha 2 and later builds rebuild the Xenos plugin with
-the live-resolution extension in `tools/gpu/`. Current development source-builds
-both the matched runtime and plugin to enable spatial FSR1 and applies the three
-ReIGlue corrections plus the five later ReXGlue corrections described above.
-`tools/prepare-gpu.py` applies the extension and patches to a separate ignored
-source tree without modifying the installed SDK.
-Alpha 3 also builds a project presenter from the SDK's D3D12 presenter sources to
-provide host VSync, retaining the shared SDK callback types and provider/runtime.
-Its third-party components include SDL3, FFmpeg, libmspack,
-fmt, spdlog, simde, xxHash, toml++, utfcpp, Dear ImGui, CLI11, o1heap, and small
+Current development builds the complete matched modular ReXGlue 0.11 runtime
+from the exact stable source plus the tracked patches. D3D12 is the Windows
+default; Vulkan and null drivers are also supplied. Third-party components
+include SDL3, FFmpeg, libmspack, spdlog, simde, xxHash, toml++, Dear ImGui,
+CLI11, Tracy, glslang, Vulkan-Headers, Vulkan Memory Allocator, and small
 vendored utility libraries. Their notices, including notices embedded in source
 headers, are preserved under `licenses/` in the package. This software is based
 in part on the work of the Independent JPEG Group.
 
 FFmpeg and libmspack contain LGPL components. Each release supplies a separate
-corresponding-source archive containing the SDK, its non-Vulkan dependencies at
-their pinned commits, original build scripts, and license texts. The SDK's CMake
-files specify the codec sources and configuration. `SOURCE-MANIFEST.json` in that
-archive records upstream URLs, commit IDs, and source archive checksums.
-Compatible rebuilt `rexruntime.dll` and `rexgpu-xenos.dll` may replace the supplied
-DLLs. Reverse engineering for debugging modifications to LGPL components is
-permitted. The N3 project source is available at the corresponding release tag;
-building translated game code requires a matching executable from a disc.
+corresponding-source archive containing the SDK, every submodule, the extra
+pinned Vulkan dependencies, N3's patches and integration scripts, original
+build scripts, and license texts. The SDK's CMake files specify the codec
+sources and configuration. `SOURCE-MANIFEST.json` records upstream URLs, commit
+IDs, and source archive checksums. Compatible rebuilt modular `rex*.dll`
+libraries may replace the supplied DLLs. Reverse engineering for debugging
+modifications to LGPL components is permitted. The N3 project source is
+available at the corresponding release tag; building translated game code
+requires a matching executable from a disc.
 
 Application-local Microsoft Visual C++ release x64 runtime DLLs are included from
 the official Microsoft redistributable archive. Microsoft retains their rights;

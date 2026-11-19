@@ -64,9 +64,9 @@ SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 TRACE_MAX_BYTES = 512 * 1024
 TIMEOUT_DIAGNOSTIC_MAX_BYTES = 256
 RUNTIME_PLUGINS = {
-    "rexruntime.dll": "rexgpu-xenos.dll",
-    "rexruntimed.dll": "rexgpu-xenosd.dll",
-    "rexruntimerd.dll": "rexgpu-xenosrd.dll",
+    "rexbase.dll": "rexgpu-xenos-d3d12.dll",
+    "rexbased.dll": "rexgpu-xenos-d3d12d.dll",
+    "rexbaserd.dll": "rexgpu-xenos-d3d12rd.dll",
 }
 SIGNAL_CAPACITIES = {
     "ba_load": 32, "as_load": 64, "info_load": 64, "setup": 64, "request": 32,

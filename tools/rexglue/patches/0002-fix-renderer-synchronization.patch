@@ -1,0 +1,292 @@
+diff --git a/src/gpu/xenos/host/vulkan/functions/device_1_0.inc b/src/gpu/xenos/host/vulkan/functions/device_1_0.inc
+index 1478daf5..969e7e04 100644
+--- a/src/gpu/xenos/host/vulkan/functions/device_1_0.inc
++++ b/src/gpu/xenos/host/vulkan/functions/device_1_0.inc
+@@ -88,6 +88,7 @@ REX_VK_FUNCTION(vkResetDescriptorPool)
+ REX_VK_FUNCTION(vkResetFences)
+ REX_VK_FUNCTION(vkQueueBindSparse)
+ REX_VK_FUNCTION(vkQueueSubmit)
++REX_VK_FUNCTION(vkQueueWaitIdle)
+ REX_VK_FUNCTION(vkUnmapMemory)
+ REX_VK_FUNCTION(vkUpdateDescriptorSets)
+ REX_VK_FUNCTION(vkWaitForFences)
+diff --git a/src/gpu/xenos/host/vulkan/vulkan_presenter.cpp b/src/gpu/xenos/host/vulkan/vulkan_presenter.cpp
+index 5645de16..e5b00b00 100644
+--- a/src/gpu/xenos/host/vulkan/vulkan_presenter.cpp
++++ b/src/gpu/xenos/host/vulkan/vulkan_presenter.cpp
+@@ -54,9 +54,6 @@ VulkanPresenter::PaintContext::Submission::~Submission() {
+     dfn.vkDestroyCommandPool(device, draw_command_pool_, nullptr);
+   }
+ 
+-  if (present_semaphore_ != VK_NULL_HANDLE) {
+-    dfn.vkDestroySemaphore(device, present_semaphore_, nullptr);
+-  }
+   if (acquire_semaphore_ != VK_NULL_HANDLE) {
+     dfn.vkDestroySemaphore(device, acquire_semaphore_, nullptr);
+   }
+@@ -76,13 +73,6 @@ bool VulkanPresenter::PaintContext::Submission::Initialize() {
+                "VulkanPresenter: Failed to create a swapchain image acquisition "
+                "semaphore");
+   }
+-  if (dfn.vkCreateSemaphore(device, &semaphore_create_info, nullptr, &present_semaphore_) !=
+-      VK_SUCCESS) {
+-    REXUI_FAIL(false,
+-               "VulkanPresenter: Failed to create a swapchain image presentation "
+-               "semaphore");
+-  }
+-
+   VkCommandPoolCreateInfo command_pool_create_info;
+   command_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+   command_pool_create_info.pNext = nullptr;
+@@ -119,6 +109,11 @@ VulkanPresenter::~VulkanPresenter() {
+   const VulkanDevice::Functions& dfn = vulkan_device_->GetFunctions();
+   const VkDevice device = vulkan_device_->GetDevice();
+ 
++  for (VkSemaphore semaphore : paint_context_.swapchain_image_present_semaphores) {
++    dfn.vkDestroySemaphore(device, semaphore, nullptr);
++  }
++  paint_context_.swapchain_image_present_semaphores.clear();
++
+   if (paint_context_.swapchain_render_pass != VK_NULL_HANDLE) {
+     dfn.vkDestroyRenderPass(device, paint_context_.swapchain_render_pass, nullptr);
+   }
+@@ -465,6 +460,21 @@ VulkanPresenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(
+     return SurfacePaintConnectResult::kFailure;
+   }
+ 
++  VkSemaphoreCreateInfo semaphore_create_info;
++  semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
++  semaphore_create_info.pNext = nullptr;
++  semaphore_create_info.flags = 0;
++  while (paint_context_.swapchain_image_present_semaphores.size() <
++         paint_context_.swapchain_images.size()) {
++    VkSemaphore semaphore;
++    if (dfn.vkCreateSemaphore(device, &semaphore_create_info, nullptr, &semaphore) != VK_SUCCESS) {
++      REXUI_ERROR("VulkanPresenter: Failed to create a swapchain image presentation semaphore");
++      paint_context_.DestroySwapchainAndVulkanSurface();
++      return SurfacePaintConnectResult::kFailure;
++    }
++    paint_context_.swapchain_image_present_semaphores.push_back(semaphore);
++  }
++
+   REX_ASSERT(paint_context_.swapchain_framebuffers.empty());
+   paint_context_.swapchain_framebuffers.reserve(paint_context_.swapchain_images.size());
+   VkImageViewCreateInfo image_view_create_info;
+@@ -840,10 +850,15 @@ VkSwapchainKHR VulkanPresenter::PaintContext::CreateSwapchainForVulkanSurface(
+ }
+ 
+ VkSwapchainKHR VulkanPresenter::PaintContext::PrepareForSwapchainRetirement() {
++  const VulkanDevice::Functions& dfn = vulkan_device->GetFunctions();
+   if (swapchain != VK_NULL_HANDLE) {
+     submission_tracker.AwaitAllSubmissionsCompletion();
++    const VulkanDevice::Queue::Acquisition queue_acquisition =
++        vulkan_device->AcquireQueue(present_queue_family, 0);
++    if (dfn.vkQueueWaitIdle(queue_acquisition.GetQueue()) != VK_SUCCESS) {
++      REXUI_ERROR("VulkanPresenter: Failed to wait for the presentation queue");
++    }
+   }
+-  const VulkanDevice::Functions& dfn = vulkan_device->GetFunctions();
+   const VkDevice device = vulkan_device->GetDevice();
+   for (const SwapchainFramebuffer& framebuffer : swapchain_framebuffers) {
+     dfn.vkDestroyFramebuffer(device, framebuffer.framebuffer, nullptr);
+@@ -1312,7 +1327,8 @@ Presenter::PaintResult VulkanPresenter::DriverPaintAndPresent(bool execute_ui_dr
+     paint_context_.ui_setup_command_buffer_current_index = SIZE_MAX;
+   }
+   command_buffers[command_buffer_count++] = draw_command_buffer;
+-  VkSemaphore present_semaphore = paint_submission.GetPresentSemaphore();
++  VkSemaphore present_semaphore =
++      paint_context_.swapchain_image_present_semaphores[swapchain_image_index];
+   VkSubmitInfo submit_info;
+   submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+   submit_info.pNext = nullptr;
+diff --git a/src/gpu/xenos/host/vulkan/vulkan_presenter.h b/src/gpu/xenos/host/vulkan/vulkan_presenter.h
+index 1b438d57..02774dec 100644
+--- a/src/gpu/xenos/host/vulkan/vulkan_presenter.h
++++ b/src/gpu/xenos/host/vulkan/vulkan_presenter.h
+@@ -280,7 +280,6 @@ class VulkanPresenter final : public Presenter {
+       ~Submission();
+ 
+       VkSemaphore GetAcquireSemaphore() const { return acquire_semaphore_; }
+-      VkSemaphore GetPresentSemaphore() const { return present_semaphore_; }
+       VkCommandPool GetDrawCommandPool() const { return draw_command_pool_; }
+       VkCommandBuffer GetDrawCommandBuffer() const { return draw_command_buffer_; }
+ 
+@@ -289,7 +288,6 @@ class VulkanPresenter final : public Presenter {
+ 
+       const VulkanDevice* vulkan_device_;
+       VkSemaphore acquire_semaphore_ = VK_NULL_HANDLE;
+-      VkSemaphore present_semaphore_ = VK_NULL_HANDLE;
+       VkCommandPool draw_command_pool_ = VK_NULL_HANDLE;
+       VkCommandBuffer draw_command_buffer_ = VK_NULL_HANDLE;
+     };
+@@ -405,6 +403,7 @@ class VulkanPresenter final : public Presenter {
+     VkExtent2D swapchain_extent = {};
+     bool swapchain_is_fifo = false;
+     std::vector<VkImage> swapchain_images;
++    std::vector<VkSemaphore> swapchain_image_present_semaphores;
+     std::vector<SwapchainFramebuffer> swapchain_framebuffers;
+   };
+ 
+diff --git a/include/rex/kernel/heap.h b/include/rex/kernel/heap.h
+index f4897ddd..d7652c4f 100644
+--- a/include/rex/kernel/heap.h
++++ b/include/rex/kernel/heap.h
+@@ -362,6 +362,10 @@ class REX_KERNEL_API BaseHeap {
+    */
+   u32 GetSystemRangeBase() const;
+ 
++  bool IsRawPhysicalView() const {
++    return heap_type_ == kernel::HeapType::kGuestPhysical && heap_base_ == 0;
++  }
++
+   bool AllocFixedLocked(u32 base_address, u32 size, u32 alignment, u32 allocation_type,
+                         u32 protect);
+ 
+diff --git a/src/kernel/memory.cpp b/src/kernel/memory.cpp
+index 4ca50499..ead2b195 100644
+--- a/src/kernel/memory.cpp
++++ b/src/kernel/memory.cpp
+@@ -949,6 +949,11 @@ rex::memory::PageAccess BaseHeap::GetHostPageGuestAccess(u32 host_page_number) c
+ }
+ 
+ rex::memory::PageAccess BaseHeap::GetHostPageAccess(u32 host_page_number) const {
++  // The raw physical view is precommitted for GPU access and must not inherit
++  // the title-facing aliases' page protections.
++  if (IsRawPhysicalView()) {
++    return rex::memory::PageAccess::kReadWrite;
++  }
+   rex::memory::PageAccess access = GetHostPageGuestAccess(host_page_number);
+   // A write watched page stays read only so the watch can fire.
+   if (access == rex::memory::PageAccess::kReadWrite && IsHostPageWriteWatched(host_page_number)) {
+@@ -1189,9 +1194,12 @@ bool BaseHeap::AllocFixedLocked(u32 base_address, u32 size, u32 alignment, u32 a
+     auto alloc_type = (allocation_type & kernel::kMemoryAllocationCommit)
+                           ? rex::memory::AllocationType::kCommit
+                           : rex::memory::AllocationType::kReserve;
++    const memory::PageAccess host_access = IsRawPhysicalView()
++                                               ? memory::PageAccess::kReadWrite
++                                               : ToPageAccess(protect);
+     void* result =
+         rex::memory::AllocFixed(TranslateRelative(start_page_number << page_size_shift_),
+-                                page_count << page_size_shift_, alloc_type, ToPageAccess(protect));
++                                page_count << page_size_shift_, alloc_type, host_access);
+     if (!result) {
+       memory_->ReleaseBudgetPages(title_pages);
+       REXSYS_FAIL(false, "BaseHeap::AllocFixed failed to alloc range from host");
+@@ -1344,9 +1352,12 @@ bool BaseHeap::AllocRangeLocked(u32 low_address, u32 high_address, u32 size, u32
+     auto alloc_type = (allocation_type & kernel::kMemoryAllocationCommit)
+                           ? rex::memory::AllocationType::kCommit
+                           : rex::memory::AllocationType::kReserve;
++    const memory::PageAccess host_access = IsRawPhysicalView()
++                                               ? memory::PageAccess::kReadWrite
++                                               : ToPageAccess(protect);
+     void* result =
+         rex::memory::AllocFixed(TranslateRelative(start_page_number << page_size_shift_),
+-                                page_count << page_size_shift_, alloc_type, ToPageAccess(protect));
++                                page_count << page_size_shift_, alloc_type, host_access);
+     if (!result) {
+       memory_->ReleaseBudgetPages(title_pages);
+       REXSYS_FAIL(false, "BaseHeap::Alloc failed to alloc range from host");
+@@ -1441,7 +1452,7 @@ bool BaseHeap::ReleaseLocked(u32 base_address, u32* out_region_size) {
+   if (page_size_ == rex::memory::GetPageSize() ||
+       ((base_page_entry.region_page_count << page_size_shift_) % rex::memory::GetPageSize() == 0 &&
+        ((base_page_number << page_size_shift_) % rex::memory::GetPageSize() == 0))) {
+-    if (GetRuntimeSettings().protect_on_release.Get()) {
++    if (!IsRawPhysicalView() && GetRuntimeSettings().protect_on_release.Get()) {
+       if (!rex::memory::Protect(TranslateRelative(base_page_number << page_size_shift_),
+                                 base_page_entry.region_page_count << page_size_shift_,
+                                 rex::memory::PageAccess::kNoAccess, nullptr)) {
+@@ -1510,7 +1521,7 @@ bool BaseHeap::ReleaseRangeLocked(u32 address, u32 size, u32* out_address, u32*
+   if (page_size_ == rex::memory::GetPageSize() ||
+       (range_bytes % rex::memory::GetPageSize() == 0 &&
+        ((first_page << page_size_shift_) % rex::memory::GetPageSize() == 0))) {
+-    if (GetRuntimeSettings().protect_on_release.Get()) {
++    if (!IsRawPhysicalView() && GetRuntimeSettings().protect_on_release.Get()) {
+       if (!rex::memory::Protect(TranslateRelative(first_page << page_size_shift_), range_bytes,
+                                 rex::memory::PageAccess::kNoAccess, nullptr)) {
+         REXSYS_WARN("BaseHeap::ReleaseRange failed due to host VirtualProtect failure");
+@@ -1612,7 +1623,9 @@ bool BaseHeap::ProtectLocked(u32 address, u32 size, u32 protect, u32* old_protec
+   }
+ 
+   // Guest pages smaller than host pages are reconciled after the page table update.
+-  if (page_size_ >= memory_->system_page_size_) {
++  // The precommitted raw physical GPU view keeps its host access regardless of
++  // title-facing physical alias protections.
++  if (page_size_ >= memory_->system_page_size_ && !IsRawPhysicalView()) {
+     const u32 page_count = end_page_number - start_page_number + 1;
+     memory::PageAccess old_protect_access;
+     if (!rex::memory::Protect(TranslateRelative(start_page_number << page_size_shift_),
+@@ -1624,10 +1637,8 @@ bool BaseHeap::ProtectLocked(u32 address, u32 size, u32 protect, u32* old_protec
+     if (old_protect) {
+       *old_protect = FromPageAccess(old_protect_access);
+     }
+-  } else {
+-    if (old_protect) {
+-      *old_protect = page_table_[start_page_number].current_protect;
+-    }
++  } else if (old_protect) {
++    *old_protect = page_table_[start_page_number].current_protect;
+   }
+ 
+   for (u32 page_number = start_page_number; page_number <= end_page_number; ++page_number) {
+diff --git a/tests/unit/kernel/access_violation_test.cpp b/tests/unit/kernel/access_violation_test.cpp
+index 828bbe97..9ca28bee 100644
+--- a/tests/unit/kernel/access_violation_test.cpp
++++ b/tests/unit/kernel/access_violation_test.cpp
+@@ -49,6 +49,57 @@ REX_TEST_CASE("A fault outside guest memory is unhandled", "[kernel][mmio]") {
+   CHECK(memory.HandleAccessViolation(&local, true) == AccessViolationResult::kUnhandled);
+ }
+ 
++REX_TEST_CASE("Protecting a physical alias leaves the raw GPU view writable", "[kernel][mmio]") {
++  auto& memory = rex::test::GetTestMemory();
++  constexpr rex::u32 kPageSize = 0x1000;
++  const rex::u32 address =
++      memory.SystemHeapAlloc(kPageSize, kPageSize, rex::kernel::kSystemHeapPhysical);
++  REQUIRE(address != 0);
++  rex::kernel::BaseHeap* heap = memory.LookupHeap(address);
++  REQUIRE(heap != nullptr);
++  const rex::ScopeGuard cleanup([&] {
++    heap->Protect(address, kPageSize,
++                  rex::kernel::kMemoryProtectRead | rex::kernel::kMemoryProtectWrite);
++    memory.SystemHeapFree(address);
++  });
++
++  rex::u8* const alias = memory.TranslateVirtual(address);
++  rex::u8* const raw = memory.TranslatePhysical(memory.GetPhysicalAddress(address));
++  REQUIRE(heap->Protect(address, kPageSize, rex::kernel::kMemoryProtectRead));
++
++  size_t length = kPageSize;
++  rex::memory::PageAccess access = rex::memory::PageAccess::kNoAccess;
++  REQUIRE(rex::memory::QueryProtect(alias, length, access));
++  CHECK(access == rex::memory::PageAccess::kReadOnly);
++  length = kPageSize;
++  REQUIRE(rex::memory::QueryProtect(raw, length, access));
++  CHECK(access == rex::memory::PageAccess::kReadWrite);
++}
++
++REX_TEST_CASE("Allocating a protected physical alias leaves the raw GPU view writable",
++              "[kernel][mmio]") {
++  auto& memory = rex::test::GetTestMemory();
++  constexpr rex::u32 kPageSize = 0x1000;
++  rex::kernel::BaseHeap* heap = memory.LookupHeapByType(true, kPageSize);
++  REQUIRE(heap != nullptr);
++  rex::u32 address = 0;
++  REQUIRE(heap->Alloc(
++      kPageSize, kPageSize,
++      rex::kernel::kMemoryAllocationReserve | rex::kernel::kMemoryAllocationCommit,
++      rex::kernel::kMemoryProtectRead, false, &address));
++  const rex::ScopeGuard cleanup([&] { heap->Release(address); });
++
++  rex::u8* const alias = memory.TranslateVirtual(address);
++  rex::u8* const raw = memory.TranslatePhysical(memory.GetPhysicalAddress(address));
++  size_t length = kPageSize;
++  rex::memory::PageAccess access = rex::memory::PageAccess::kNoAccess;
++  REQUIRE(rex::memory::QueryProtect(alias, length, access));
++  CHECK(access == rex::memory::PageAccess::kReadOnly);
++  length = kPageSize;
++  REQUIRE(rex::memory::QueryProtect(raw, length, access));
++  CHECK(access == rex::memory::PageAccess::kReadWrite);
++}
++
+ namespace {
+ 
+ std::atomic<int> g_watch_hits{0};

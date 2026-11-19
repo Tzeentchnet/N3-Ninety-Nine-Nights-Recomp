@@ -16,10 +16,14 @@ $info.WorkingDirectory = $root
 $info.UseShellExecute = $false
 $info.CreateNoWindow = $true
 $info.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
-foreach ($argument in @('--headless', '--no-fullscreen', '--window_width', '1280', '--window_height', '720',
-    '--game_data_root', (Join-Path $root 'private/game'),
-    '--user_data_root', (Join-Path $root 'private/user'), '--cache_root', (Join-Path $root 'private/cache'),
-    '--log_file', $log, '--log_level', 'debug', '--log_flush_interval', '1')) {
+$info.Environment['SDL_AUDIODRIVER'] = 'dummy'
+foreach ($argument in @('--ui.driver', 'sdl3', '--gpu.driver', 'null', '--kernel.headless',
+    '--no-ui.fullscreen', '--ui.window_width', '1280', '--ui.window_height', '720',
+    '--title.game_root', (Join-Path $root 'private/game'),
+    '--app.user_root', (Join-Path $root 'private/user'),
+    '--app.cache_root', (Join-Path $root 'private/cache'),
+    '--app.log_root', (Split-Path $log -Parent), '--log.file_name', (Split-Path $log -Leaf),
+    '--log.level', 'debug', '--log.flush_interval', '1')) {
     $info.ArgumentList.Add($argument)
 }
 $process = [Diagnostics.Process]::Start($info)
@@ -36,4 +40,13 @@ $result = [ordered]@{
 $process.Dispose()
 $result | ConvertTo-Json | Set-Content (Join-Path $root 'logs/smoke-result.json')
 $result | ConvertTo-Json
-if (Test-Path $log) { Get-Content $log -Tail 45 }
+if (Test-Path $log) {
+    $logText = Get-Content $log -Raw
+    Get-Content $log -Tail 45
+    if ($logText -match '(?im)crash report|ACCESS_VIOLATION|modules failed|device lost') {
+        throw 'The runtime log contains a fatal startup or device error.'
+    }
+}
+if (!$timedOut) {
+    throw "The runtime exited before the $Seconds-second smoke bound (exit code $($result.exitCode))."
+}

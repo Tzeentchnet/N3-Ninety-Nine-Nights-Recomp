@@ -6,12 +6,13 @@
 #include "graphics_notification.h"
 #include "graphics_settings.h"
 #include "graphics_filtering.h"
-#include <rex/runtime.h>
+#include "n3_settings.h"
+#include <rex/kernel/heap.h>
+#include <rex/kernel/title_runtime.h>
 #include <rex/ppc.h>
-#include <rex/cvar.h>
 #include <rex/logging.h>
 #include <rex/memory/utils.h>
-#include <rex/filesystem/devices/host_path_device.h>
+#include <rex/filesystem/file_system.h>
 #include <fstream>
 #include <array>
 #include <iterator>
@@ -24,7 +25,6 @@ extern "C" void sub_821DC2C0(PPCContext&, uint8_t*);
 extern "C" void sub_821DCCB0(PPCContext&, uint8_t*);
 extern "C" void sub_821DC710(PPCContext&, uint8_t*);
 extern "C" void sub_821CB2C8(PPCContext&, uint8_t*);
-REXCVAR_DECLARE(bool, frame_pacing_trace);
 
 namespace {
 bool installed = false, pending = false;
@@ -58,15 +58,19 @@ void ConfigureSlider(PPCContext& ctx, uint8_t* base, uint32_t slider, uint32_t f
 }
 void Persist() {
   try { SaveProfileConfig(config_path); NotifyGraphicsSaved(true); }
-  catch (...) { NotifyGraphicsSaved(false); REXLOG_WARN("Graphics settings could not be saved"); }
+  catch (const std::exception& error) {
+    NotifyGraphicsSaved(false);
+    REXLOG_WARN("Graphics settings could not be saved: {}", error.what());
+  }
 }
 }
 
-bool InstallGraphicsMenu(rex::Runtime& runtime, const std::filesystem::path& root,
+bool InstallGraphicsMenu(rex::kernel::TitleRuntime& runtime,
+                         const std::filesystem::path& root,
                          const std::filesystem::path& profile) {
   installed = false; pending = false; focus_pending = false; graphics_owner = graphics_root = 0;
   ConfiguredAnisotropicChoice();
-  auto* vfs = runtime.file_system();
+  auto& vfs = runtime.GetFileSystem();
   std::vector<std::string> links;
   bool mounted = false;
   constexpr auto mount = "\\Device\\N3GraphicsMenu";
@@ -88,7 +92,7 @@ bool InstallGraphicsMenu(rex::Runtime& runtime, const std::filesystem::path& roo
       "\r\n1965\t\"720p (1x)\"\r\n1966\t\"1440p (2x)\"\r\n1967\t\"4K (3x)\""
       "\r\n1975\t\"Display\"\r\n1976\t\"Rendering\""
       "\r\n1977\t\"@(DPad_Small) Select  @(B) Back\""
-      "\r\n1978\t\"Render resolution\"\r\n1979\t\"Display resolution\""
+      "\r\n1978\t\"Render resolution (restart required)\"\r\n1979\t\"Display resolution\""
       "\r\n1980\t\"1x\"\r\n1981\t\"2x\"\r\n1982\t\"4x\"\r\n1983\t\"8x\"\r\n1984\t\"16x\""
       "\r\n1989\t\"Filtering\"\r\n1990\t\"30 FPS\"\r\n1991\t\"40 FPS\"\r\n1992\t\"60 FPS\""
       "\r\n1997\t\"Frame rate\"\r\n1998\t\"Anisotropic filtering\"\r\n1999\t\"Graphics\"\r\n";
@@ -97,26 +101,33 @@ bool InstallGraphicsMenu(rex::Runtime& runtime, const std::filesystem::path& roo
       const auto file = cache / "Text" / lang / ("defaulttexttable0000_" + lower + ".txt");
       auto data = ReadFile(file); data.insert(data.end(), extra, extra + std::strlen(extra)); WriteFile(file, data);
     }
-    std::string source;
-    if (!vfs->FindSymbolicLink("game:", source)) throw std::runtime_error("Game mount unavailable");
-    auto device = std::make_unique<rex::filesystem::HostPathDevice>(mount, cache, true);
-    if (!device->Initialize() || !vfs->RegisterDevice(std::move(device))) throw std::runtime_error("Menu mount failed");
+    const auto source = vfs.FindLink("game:");
+    if (!source) throw std::runtime_error("Game mount unavailable");
+    if (auto result = vfs.Mount({mount,
+                                 rex::filesystem::ProviderType::kHostDirectory,
+                                 cache,
+                                 rex::filesystem::MountFlags::kNone,
+                                 {}});
+        !result) {
+      throw std::runtime_error("Menu mount failed");
+    }
     mounted = true;
     for (const auto* folder : {"Menu", "Text"}) {
-      const auto link = source + "\\data\\" + folder;
-      std::string existing;
-      if (vfs->FindSymbolicLink(link, existing) || !vfs->RegisterSymbolicLink(link, std::string(mount) + "\\" + folder))
+      const auto link = *source + "\\data\\" + folder;
+      if (vfs.FindLink(link) ||
+          !vfs.Link(link, std::string(mount) + "\\" + folder))
         throw std::runtime_error("Menu link failed");
       links.push_back(link);
     }
-    layout_name = runtime.memory()->SystemHeapAlloc(32);
+    layout_name = runtime.GetGuestHeap().SystemHeapAlloc(32);
     if (!layout_name) throw std::runtime_error("Menu name allocation failed");
-    std::memcpy(runtime.virtual_membase() + layout_name, "UiGraphics.uit", sizeof("UiGraphics.uit"));
+    std::memcpy(runtime.GetMembase().TranslateVirtual(layout_name), "UiGraphics.uit",
+                sizeof("UiGraphics.uit"));
     config_path = profile / "n3.toml";
     installed = true; REXLOG_INFO("Main-menu Graphics page installed"); return true;
   } catch (...) {
-    for (const auto& link : links) vfs->UnregisterSymbolicLink(link);
-    if (mounted) vfs->UnregisterDevice(mount);
+    for (const auto& link : links) (void)vfs.Unlink(link);
+    if (mounted) (void)vfs.Unmount(mount);
     REXLOG_WARN("Graphics page could not be installed; original menus retained"); return false;
   }
 }
@@ -166,16 +177,10 @@ extern "C" void sub_821A8030(PPCContext& ctx, uint8_t* base) {
   uint32_t display_index = 0;
   for (uint32_t i = 0; i < display_heights.size(); ++i)
     if (display_heights[i] == ConfiguredDisplayHeight()) display_index = i;
-  int shared_scale = 1, x = 1, y = 1;
-  try {
-    shared_scale = std::stoi(rex::cvar::GetFlagByName("resolution_scale"));
-    x = rex::cvar::HasNonDefaultValue("draw_resolution_scale_x") ? std::stoi(rex::cvar::GetFlagByName("draw_resolution_scale_x")) : shared_scale;
-    y = rex::cvar::HasNonDefaultValue("draw_resolution_scale_y") ? std::stoi(rex::cvar::GetFlagByName("draw_resolution_scale_y")) : shared_scale;
-  } catch (...) {}
   ConfigureSlider(ctx, base, display, 1960, 4, display_index);
-  ConfigureSlider(ctx, base, render, 1965, 3, uint32_t(std::clamp(std::max(x, y), 1, 3) - 1));
+  ConfigureSlider(ctx, base, render, 1965, 3, ConfiguredRenderScaleChoice());
   const auto sync = Call(ctx, base, sub_821CD7C0, graphics_root, 0x03906005);
-  ConfigureSlider(ctx, base, sync, 1951, 2, rex::cvar::Query<bool>("n3_vsync") ? 1 : 0);
+  ConfigureSlider(ctx, base, sync, 1951, 2, ConfiguredVSync() ? 1 : 0);
   REXLOG_INFO("Graphics page opened");
 }
 
@@ -183,13 +188,6 @@ extern "C" void __imp__sub_821A8370(PPCContext& ctx, uint8_t* base);
 extern "C" void sub_821A8370(PPCContext& ctx, uint8_t* base) {
   const auto owner = ctx.r3.u32;
   __imp__sub_821A8370(ctx, base);
-  if (owner == graphics_owner && rex::cvar::GetFlagByName("n3_live_resolution_failed") == "true") {
-    rex::cvar::SetFlagByName("n3_live_resolution_failed", "false");
-    const auto render = Call(ctx, base, sub_821CD7C0, graphics_root, 0x03906004);
-    const auto active = std::clamp(rex::cvar::Query<uint32_t>("n3_render_scale_active"), 1u, 3u);
-    ConfigureSlider(ctx, base, render, 1965, 3, active - 1);
-    Persist(); NotifyGraphicsSaved(false);
-  }
   if (owner == graphics_owner && focus_pending && Read32(base, owner + 16) == 2) {
     const auto button = Call(ctx, base, sub_821CD7C0, graphics_root, 0x03901001);
     Call(ctx, base, sub_821CB2C8, button);
@@ -205,7 +203,7 @@ extern "C" void sub_821A8B30(PPCContext& ctx, uint8_t* base) {
   if (root == graphics_root && graphics_root) {
     const auto sender = Read32(base, message);
     const auto id = sender ? Read32(base, sender) : 0;
-    if (REXCVAR_GET(frame_pacing_trace) && (kind == 1100 || kind == 400))
+    if (N3_SETTINGS().frame_pacing_trace.Get() && (kind == 1100 || kind == 400))
       REXLOG_INFO("Graphics input: type {} code {} control {:08X}", kind, code, id);
     if (kind == 1100 && code == 1) {
       Persist(); graphics_owner = graphics_root = 0;

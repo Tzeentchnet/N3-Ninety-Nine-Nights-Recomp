@@ -45,12 +45,12 @@ bool Process(PPCContext& ctx, uint8_t* base, uint32_t history_size) {
   for (uint32_t index = 0; index < history_size; ++index) workspace.history[index] = Read(base, object + 44 + index * 4);
   for (uint32_t index = 0; index < kDelayBlockSamples; ++index) workspace.input[index] = Read(base, ctx.r4.u32 + index * 4);
   const auto cursor = workspace.state.cursor;
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   if (!TryProcessDelayBlock(workspace.state, std::span(workspace.history.data(), history_size),
                            workspace.input, workspace.mixed, workspace.auxiliary)) {
     ctx.fpscr.csr = saved_guest;
-    rex::platform::FPSCRPlatform::setcsr(saved_host);
+    rex::ppc::FPSCRPlatform::SetCSR(saved_host);
     return false;
   }
   for (uint32_t index = 0; index < kDelayBlockSamples; ++index)
@@ -66,7 +66,7 @@ bool Process(PPCContext& ctx, uint8_t* base, uint32_t history_size) {
   ctx.f2.f64 = double(workspace.state.previous_mixed);
   ctx.r4.u64 += kDelayBlockSamples * 4; ctx.r5.u64 += kDelayBlockSamples * 4; ctx.r6.u64 += kDelayBlockSamples * 4;
   ctx.r7.u64 = workspace.state.cursor;
-  ctx.cr6.compare<uint32_t>(0, 0, ctx.xer);
+  ctx.cr6.Compare<uint32_t>(0, 0, ctx.xer);
 #ifdef N3_DELAY_BLOCK_TEST
   n3_delay_block_native_used = true;
 #endif
@@ -95,10 +95,10 @@ bool ProcessDual(PPCContext& ctx, uint8_t* base) {
   for (uint32_t i = 0; i < 1024; ++i) workspace.history[i] = Read(base, object + 32 + i * 4);
   for (uint32_t i = 0; i < 256; ++i) workspace.input[i] = Read(base, ctx.r4.u32 + i * 4);
   const auto cursor = workspace.state.cursor;
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   if (!TryProcessDualTapDelay(workspace.state, workspace.history, workspace.input, workspace.first, workspace.second)) {
-    ctx.fpscr.csr = saved_guest; rex::platform::FPSCRPlatform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; rex::ppc::FPSCRPlatform::SetCSR(saved_host); return false;
   }
   for (uint32_t i = 0; i < 256; ++i) Write(base, object + 32 + (cursor + i) * 4, workspace.history[cursor + i]);
   for (uint32_t i = 0; i < 257; ++i) {
@@ -109,7 +109,7 @@ bool ProcessDual(PPCContext& ctx, uint8_t* base) {
   ctx.f0.f64 = double(workspace.state.previous[0]); ctx.f13.f64 = double(workspace.state.previous[1]);
   ctx.r4.u64 += 1024; ctx.r5.u64 += 1024; ctx.r6.u64 += 1024;
   ctx.r7.u64 = cursor + 256; ctx.r9.u64 = workspace.state.cursor;
-  ctx.cr6.compare<uint32_t>(0, 0, ctx.xer);
+  ctx.cr6.Compare<uint32_t>(0, 0, ctx.xer);
 #ifdef N3_DELAY_BLOCK_TEST
   n3_delay_block_native_used = true;
 #endif

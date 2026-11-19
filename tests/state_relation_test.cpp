@@ -3,6 +3,7 @@
 #include "guest_state_payload.h"
 #include <rex/ppc.h>
 #include <rex/memory/utils.h>
+#include "test_guest_address.h"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -16,15 +17,14 @@ extern "C" void sub_8209D280(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_8209D280(PPCContext&, uint8_t*);
 extern "C" void sub_8209DEE0(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_8209DEE0(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 thread_local bool n3_state_relation_native_used = false;
 void Require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
 struct Region { uint32_t start, size; };
 constexpr std::array<Region, 8> regions{{{0, 0x40000}, {0x82041000, 8192},
     {0x8205a000, 8192}, {0x82b47000, 12288}, {0x82b5f000, 8192},
     {0xdfff0000, 0x20000}, {0xe1000000, 0x50000}, {0xffffa000, 0x6000}}};
-// Independent fixture implementation of the generated Windows address rule.
-uint64_t HostOffset(uint32_t address) { return uint64_t(address) + (address >= 0xe0000000u ? 0x1000u : 0u); }
+uint64_t HostOffset(uint32_t address) { return n3::test::TestGuestHostOffset(address); }
 struct Guest {
   uint8_t* base;
   Guest() : base(static_cast<uint8_t*>(VirtualAlloc(nullptr, size_t{1} << 32, MEM_RESERVE, PAGE_NOACCESS))) {
@@ -48,15 +48,15 @@ struct Guest {
   void Byte(uint32_t at, uint8_t value) { base[HostOffset(at)] = value; }
 };
 int main() {
-  using Platform = rex::platform::FPSCRPlatform;
-  constexpr auto controls = PPCFPSCRRegister::GuestMask | Platform::ExceptionMask;
+  using Platform = rex::ppc::FPSCRPlatform;
+  constexpr auto controls = PPCFPSCRRegister::kGuestMask | Platform::kExceptionMask;
   constexpr uint32_t handle_descriptor = 0x82b4807c, resource_pointer = 0x82b60088;
   constexpr std::array<uint32_t, 8> float_offsets{32, 36, 40, 48, 52, 84, 88, 92};
   constexpr std::array<uint32_t, 6> exceptions{1, 0x80000001u, 0x7f800000u,
       0xff800000u, 0x7fc12345u, 0x7f812345u};
   constexpr std::array<uint32_t, 8> integers{0, 1, 0xffffffffu, 0xfffffffeu,
       0x80000000u, 0x7fffffffu, 0x01000001u, 0xfedcba98u};
-  const auto saved = Platform::getcsr();
+  const auto saved = Platform::GetCSR();
   uint32_t sample = 0, rounding = 0, address = 0; bool flush = false;
   try {
     using Function = void (*)(PPCContext&, uint8_t*);
@@ -80,8 +80,8 @@ int main() {
     for (auto entry : entries) {
       address = entry.address;
       bool registered = false;
-      for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-        if (mapping->guest == entry.address) registered = mapping->host == entry.replacement;
+      for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+        if (mapping->address == entry.address) registered = mapping->host == entry.replacement;
       Require(registered, "State relation entry missing from indirect-call mapping");
       for (rounding = 0; rounding < 4; ++rounding) for (bool next_flush : {false, true}) {
         flush = next_flush;
@@ -132,7 +132,7 @@ int main() {
             const auto physical = sample - 306;
             object = 0xe1001000u; source = 0xe1006000u; vector = 0xe100c000u;
             related = 0xe1010000u; handles = 0xe1018000u; root = 0xe1020000u;
-            table = 0xe1028000u; stack = 0xe1038000u;
+            table = 0xe1028000u; stack = 0x30000u;
             key = 0xe1230000u; category = 0; kind = 6; related_kind = 1000; variant = 0;
             channel = extra = 0; stale = false;
             switch (physical) {
@@ -153,16 +153,19 @@ int main() {
               case 14: stale = true; break;
               case 15: variant = 0xffffffffu; break;
               case 16: object = 0xffffb000u; source = 0xffffb800u; vector = 0xffffc000u;
-                related = 0xffffc100u; handles = 0xffffd100u; root = 0xffffd300u; table = 0xffffd800u; stack = 0xffffd000u; break;
-              case 17: stack = 0xe0000000u; break;
-              case 18: stack = 0xe0000010u; must_native = false; break;
-              case 19: stack = 0xe00000f0u; break;
-              case 20: if (entry.apply) source = 0xdfffffd0u; else related = 0xdfffff00u; must_native = false; break;
-              case 21: if (entry.apply) vector = 0xdffffffcu; else object = 0xdffffe00u; must_native = false; break;
-              case 22: handles = 0xdffffffcu; must_native = false; break;
-              case 23: root = 0xdfffff24u; related_kind = 17; must_native = entry.apply; break;
+                related = 0xffffc100u; handles = 0xffffd100u; root = 0xffffd300u; table = 0xffffd800u; break;
+              case 18: break;
+              case 20: if (entry.apply) source = 0xdfffffd0u; else related = 0xdfffff00u;
+                must_native = !n3::test::kPhysicalOffsetInCode; break;
+              case 21: if (entry.apply) vector = 0xdffffffcu; else object = 0xdffffe00u;
+                must_native = !n3::test::kPhysicalOffsetInCode; break;
+              case 22: handles = 0xdffffffcu;
+                must_native = !n3::test::kPhysicalOffsetInCode; break;
+              case 23: root = 0xdfffff24u; related_kind = 17;
+                must_native = !n3::test::kPhysicalOffsetInCode || entry.apply; break;
               case 24: if (entry.apply) related = 0xdfffff00u;
-                else { table = 0xdffffe80u; related_kind = 17; } must_native = false; break;
+                else { table = 0xdffffe80u; related_kind = 17; }
+                must_native = !n3::test::kPhysicalOffsetInCode; break;
               case 25: if (entry.apply) { source = stack - 220; kind = 0; vector = 0; }
                 else { related = stack - 308; link = 1000; } must_native = false; break;
               case 26: if (entry.apply) source = object + 336;
@@ -272,7 +275,9 @@ int main() {
             }
           }
           std::array<uint8_t, 100> unbiased_payload;
-          const bool check_payload_canary = physical_case && sample - 306 < 20 && object >= 0xe0000000u;
+          const bool check_payload_canary =
+              n3::test::kPhysicalOffsetInCode && physical_case &&
+              sample - 306 < 20 && object >= 0xe0000000u;
           if (check_payload_canary) std::copy_n(expected.base + object + 336, 100, unbiased_payload.begin());
           actual.Copy(expected);
           std::array<uint8_t, 240> before_stack;
@@ -297,24 +302,24 @@ int main() {
           original.f3.u64 = 0x40023456789abcde; original.f4.u64 = 0xc01123456789abcd;
           auto* vector_bytes = reinterpret_cast<uint8_t*>(&original) + offsetof(PPCContext, v0);
           for (uint32_t i = 0; i < 128 * 16; ++i) vector_bytes[i] = uint8_t(physical_random());
-#define CR(n) original.cr##n.set_raw((sample + n) % 16);
+#define CR(n) original.cr##n.SetRaw((sample + n) % 16);
           CR(1) CR(2) CR(3) CR(4) CR(5) CR(7)
 #undef CR
-          original.cr0.set_raw(sample % 16); original.cr6.set_raw((sample + 3) % 16);
+          original.cr0.SetRaw(sample % 16); original.cr6.SetRaw((sample + 3) % 16);
           original.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
-          original.fpscr.InitHost(); original.fpscr.storeFromGuest(rounding);
-          if (flush) original.fpscr.enableFlushModeUnconditional(); else original.fpscr.disableFlushModeUnconditional();
-          if (unmasked) { original.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu); Platform::setcsr(original.fpscr.csr); }
+          original.fpscr.InitHost(); original.fpscr.StoreToHost(rounding);
+          if (flush) original.fpscr.EnableFlushModeUnconditional(); else original.fpscr.DisableFlushModeUnconditional();
+          if (unmasked) { original.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu); Platform::SetCSR(original.fpscr.csr); }
           const auto initial = original.fpscr.csr; auto replacement = original;
-          Platform::setcsr(initial);
+          Platform::SetCSR(initial);
           {
             n3::guest::RetainPayloadChain payload_chain; n3::guest::RetainHandleChain handle_chain;
             entry.original(original, expected.base);
           }
           Require(!n3::guest::PayloadChainRetained() && n3::guest::retained_handle_depth == 0,
                   "Retained oracle leaked a nested fallback scope");
-          const auto host_controls = Platform::getcsr() & controls;
-          Platform::setcsr(initial); n3_state_relation_native_used = false;
+          const auto host_controls = Platform::GetCSR() & controls;
+          Platform::SetCSR(initial); n3_state_relation_native_used = false;
           entry.replacement(replacement, actual.base);
           Require(!n3::guest::PayloadChainRetained() && n3::guest::retained_handle_depth == 0,
                   "State relation fallback leaked a nested retained scope");
@@ -370,31 +375,33 @@ int main() {
           const auto* replacement_vectors = reinterpret_cast<const uint8_t*>(&replacement) + offsetof(PPCContext, v0);
           Require(std::memcmp(original_vectors, replacement_vectors, 128 * sizeof(PPCVRegister)) == 0,
                   "State relation changed preserved VMX registers");
-#define CR(n) Require(original.cr##n.raw() == replacement.cr##n.raw(), "State relation preserved condition field differs");
+#define CR(n) Require(original.cr##n.GetRaw() == replacement.cr##n.GetRaw(), "State relation preserved condition field differs");
           CR(1) CR(2) CR(3) CR(4) CR(5) CR(7)
 #undef CR
           Require(original.lr == replacement.lr && original.ctr.u64 == replacement.ctr.u64 &&
-                  original.cr0.raw() == replacement.cr0.raw() && original.cr6.raw() == replacement.cr6.raw() &&
+                  original.cr0.GetRaw() == replacement.cr0.GetRaw() && original.cr6.GetRaw() == replacement.cr6.GetRaw() &&
                   original.xer.ca == replacement.xer.ca && original.xer.ov == replacement.xer.ov && original.xer.so == replacement.xer.so,
                   "State relation flags or return state differ");
           Require((original.fpscr.csr & controls) == (replacement.fpscr.csr & controls) &&
-                  (Platform::getcsr() & controls) == host_controls, "State relation FP controls differ");
+                  (Platform::GetCSR() & controls) == host_controls, "State relation FP controls differ");
           ++comparisons;
           if (physical_case) random = saved_random;
         }
       }
     }
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     Require(multiplied_count > 0 && positive_wide_products > 0 && negative_wide_products > 0 && skipped_variants > 0,
             "Related multiplication, wide signed products or sentinel skip branch was not exercised natively");
     Require(native_after_fallback > 0, "Fallback scope never returned to an ordinary native call");
-    Require(physical_native > 0 && physical_retained > 0 && physical_canaries > 0 && physical_products == 8,
+    Require(physical_native > 0 && physical_retained > 0 &&
+            (!n3::test::kPhysicalOffsetInCode || physical_canaries > 0) &&
+            physical_products == 8,
             "Physical mapped fields, alias fallback, canaries or signed products lack coverage");
     std::cout << comparisons << " state relation equivalence cases (" << native_count
               << " native), including " << physical_native << " native/" << physical_retained
               << " retained physical cases, payload/vector/table aliases and complete fallback passed\n";
   } catch (const std::exception& error) {
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     std::cerr << "State relation 0x" << std::hex << address << std::dec << " sample " << sample
               << " rounding " << rounding << " flush " << flush << ": " << error.what() << '\n'; return 1;
   }

@@ -1,0 +1,105 @@
+diff --git a/cmake/rexglue_link_audit.cmake b/cmake/rexglue_link_audit.cmake
+index add29c69..5715b960 100644
+--- a/cmake/rexglue_link_audit.cmake
++++ b/cmake/rexglue_link_audit.cmake
+@@ -151,7 +151,7 @@ function (rexglue_audit_ui_links)
+       d3d12
+       dxgi
+       dxguid
+-      Vulkan::Headers
++      rex-vulkan-headers
+       dxc-headers
+   )
+   _rexglue_audit_forbidden(rexbase ${sdl_libs})
+@@ -172,7 +172,7 @@ function (rexglue_audit_host_service_links)
+       d3d12
+       dxgi
+       dxguid
+-      Vulkan::Headers
++      rex-vulkan-headers
+   )
+   foreach (target_name IN ITEMS rexgpu)
+     if (NOT TARGET ${target_name})
+diff --git a/src/gpu/xenos/CMakeLists.txt b/src/gpu/xenos/CMakeLists.txt
+index 9d7c19b9..958fff92 100644
+--- a/src/gpu/xenos/CMakeLists.txt
++++ b/src/gpu/xenos/CMakeLists.txt
+@@ -194,7 +194,7 @@ target_link_libraries(
+           OSDependent
+           OGLCompiler
+           rex-vma
+-          Vulkan::Headers
++          rex-vulkan-headers
+ )
+ 
+ if (REXGLUE_GPU_D3D12)
+diff --git a/tests/unit/CMakeLists.txt b/tests/unit/CMakeLists.txt
+index 61ecc203..2ff62134 100644
+--- a/tests/unit/CMakeLists.txt
++++ b/tests/unit/CMakeLists.txt
+@@ -307,7 +307,7 @@ target_link_libraries(
+           xxHash::xxhash
+           Catch2::Catch2WithMain
+           SDL3::Headers
+-          Vulkan::Headers
++          rex-vulkan-headers
+ )
+ target_compile_definitions(
+   unit_tests PRIVATE REX_BUILDING_KERNEL REX_BUILDING_XAM REX_BUILDING_APP REX_BUILDING_HID
+diff --git a/thirdparty/CMakeLists.txt b/thirdparty/CMakeLists.txt
+index 803048f6..4e22513b 100644
+--- a/thirdparty/CMakeLists.txt
++++ b/thirdparty/CMakeLists.txt
+@@ -35,4 +35,6 @@ set(REQUIRED_SUBMODULES
+     sdl3
++    Vulkan-Headers
++    VulkanMemoryAllocator
+ )
+ 
+ list(APPEND REQUIRED_SUBMODULES glslang)
+@@ -182,29 +184,25 @@ target_compile_options(disasm PRIVATE -w)
+ # Vulkan dependencies (only when Vulkan backend is enabled)
+ #=============================================================================
+ 
+-# Vulkan headers, VMA, the loader and MoltenVK all come from the Vulkan SDK. The loader and
+-# MoltenVK stay runtime loaded; no Vulkan implementation is linked into rexglue itself.
+-set(REXGLUE_VULKAN_MIN_VERSION 1.4.313)
+-if (UNIX
+-    AND NOT APPLE
+-    AND IS_ARM64
++# The Vulkan headers and VMA are pinned source dependencies, so every machine builds with the same
++# versions. The loader and MoltenVK stay runtime loaded; no Vulkan implementation is linked.
++add_library(rex-vulkan-headers INTERFACE)
++target_include_directories(
++  rex-vulkan-headers SYSTEM
++  INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Vulkan-Headers/include>
+ )
+-  set(REXGLUE_VULKAN_MIN_VERSION 1.3.275)
+-endif ()
+-set(REXGLUE_VULKAN_COMPONENTS "")
+-if (APPLE)
+-  set(REXGLUE_VULKAN_COMPONENTS COMPONENTS MoltenVK)
+-endif ()
+-find_package(Vulkan ${REXGLUE_VULKAN_MIN_VERSION} REQUIRED ${REXGLUE_VULKAN_COMPONENTS} GLOBAL)
+ 
+-# VMA - header-only, from the Vulkan SDK and private to the Vulkan backend
+-find_path(
+-  REXGLUE_VMA_INCLUDE_DIR vk_mem_alloc.h
+-  HINTS "${Vulkan_INCLUDE_DIR}"
+-  PATH_SUFFIXES vma REQUIRED
+-)
++# VMA - header-only and private to the Vulkan backend
+ add_library(rex-vma INTERFACE)
+-target_include_directories(rex-vma SYSTEM INTERFACE $<BUILD_INTERFACE:${REXGLUE_VMA_INCLUDE_DIR}>)
++target_include_directories(
++  rex-vma SYSTEM
++  INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/VulkanMemoryAllocator/include>
++)
++
++# macOS draws through the loader and MoltenVK of the Vulkan SDK, which the install includes.
++if (APPLE)
++  find_package(Vulkan 1.4.328 REQUIRED COMPONENTS MoltenVK GLOBAL)
++endif ()
+ 
+ #=============================================================================
+ # SDL3 - Cross-platform media layer

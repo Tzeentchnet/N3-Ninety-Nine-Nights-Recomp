@@ -157,11 +157,13 @@ if (!$Disabled) {
 }
 if ($AudioBackend -ne 'default') { $info.Environment['SDL_AUDIO_DRIVER'] = $AudioBackend }
 foreach ($argument in @(
-    '--no-fullscreen', '--window_width', '1280', '--window_height', '720',
-    '--game_data_root', $game, '--user_data_root', (Join-Path $runRoot 'user'),
-    '--cache_root', (Join-Path $runRoot 'cache'), '--n3_frame_rate', "$rate",
-    '--mnk_mode', '--log_file', (Join-Path $runRoot 'host.log'),
-    '--log_level', 'info', '--log_flush_interval', '1'
+    '--no-ui.fullscreen', '--ui.window_width', '1280', '--ui.window_height', '720',
+    '--gpu.driver', 'd3d12', '--title.game_root', $game,
+    '--app.user_root', (Join-Path $runRoot 'user'),
+    '--app.cache_root', (Join-Path $runRoot 'cache'),
+    '--app.log_root', $runRoot, '--log.file_name', 'host.log',
+    '--n3.frame_rate', "$rate", '--hid.mnk_mode',
+    '--log.level', 'info', '--log.flush_interval', '1'
 )) { $info.ArgumentList.Add($argument) }
 
 $process = $null

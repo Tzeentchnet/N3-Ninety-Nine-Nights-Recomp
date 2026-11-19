@@ -38,7 +38,7 @@ void HandleRegisters(PPCContext& ctx, const HandleQuery& query, uint32_t key) {
   ctx.r8.u64 = 0x2aaaaaab; ctx.r9.u64 = key;
   ctx.r10.u64 = query.record.key; ctx.r11.u64 = query.key_matches ? 0 : 1;
   ctx.xer.ca = false;
-  ctx.cr6.compare<uint32_t>(uint32_t(ctx.r5.u64), 0, ctx.xer);
+  ctx.cr6.Compare<uint32_t>(uint32_t(ctx.r5.u64), 0, ctx.xer);
 }
 bool Install(PPCContext& ctx, uint8_t* base) {
   const auto object = ctx.r3.u32, source = ctx.r4.u32, vector = ctx.r5.u32, stack = ctx.r1.u32;
@@ -79,7 +79,7 @@ bool Install(PPCContext& ctx, uint8_t* base) {
   StatePayload state{};
   PayloadInstallUpdate update;
   if (!TryInstallStatePayload(state, payload, vector ? &optional : nullptr, kind, relation, update)) return false;
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   WriteStatePayload(base, object + 336, state);
   const auto object_register = ctx.r3.u64;
   ctx.r3.u64 = object_register + 336;
@@ -88,15 +88,15 @@ bool Install(PPCContext& ctx, uint8_t* base) {
     ctx.r11.u64 = 1;
     ctx.f0.f64 = double(optional.x); ctx.f13.f64 = double(optional.y); ctx.f12.f64 = double(optional.z);
   }
-  ctx.r10.u64 = kind; ctx.cr6.compare<int32_t>(std::bit_cast<int32_t>(kind), 6, ctx.xer);
+  ctx.r10.u64 = kind; ctx.cr6.Compare<int32_t>(std::bit_cast<int32_t>(kind), 6, ctx.xer);
   if (std::bit_cast<int32_t>(kind) >= 6) {
     HandleRegisters(ctx, query, payload.words4[0]);
     if (relation.key_matches) {
       ctx.r11.u64 = payload.words4[1]; ctx.r4.u64 = relation.kind;
-      ctx.cr6.compare<int32_t>(std::bit_cast<int32_t>(relation.kind), 1000, ctx.xer);
+      ctx.cr6.Compare<int32_t>(std::bit_cast<int32_t>(relation.kind), 1000, ctx.xer);
       if (relation.kind == 1000) {
         ctx.r3.u64 = relation.variant;
-        ctx.cr6.compare<int32_t>(std::bit_cast<int32_t>(relation.variant), -1, ctx.xer);
+        ctx.cr6.Compare<int32_t>(std::bit_cast<int32_t>(relation.variant), -1, ctx.xer);
         if (update.multiplied) {
           ctx.r9.s64 = update.signed_product;
           ctx.r10.u64 = payload.words4[4]; ctx.r11.u64 = payload.words4[5];
@@ -144,18 +144,18 @@ bool RelatedValue(PPCContext& ctx, uint8_t* base) {
   const auto source = Read(base, uint32_t(cell));
   const ValueLimitParameters parameters{std::bit_cast<int32_t>(source),
       std::bit_cast<int32_t>(Read(base, object + 784)), 0, Scalar(base, percentage_unit), Scalar(base, baseline)};
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   ValueLimitResult result;
   if (!TryComputeValueLimit(parameters, result)) {
-    ctx.fpscr.csr = saved_guest; rex::platform::FPSCRPlatform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; rex::ppc::FPSCRPlatform::SetCSR(saved_host); return false;
   }
   ctx.r3.u64 = result.truncated_bits; ctx.r4.u64 = channel * 4;
   ctx.r5.s64 = parameters.base_value; ctx.r6.u64 = source; ctx.r7.u64 = uint64_t(row) * 3;
   ctx.r8.u64 = ctx.r1.u64 - 48; ctx.r9.u64 = uint64_t(row) * 2;
   ctx.r10.s64 = int32_t(0x82060000u); ctx.r11.u64 = record;
   ctx.f0.f64 = double(parameters.percentage_unit); ctx.f13.f64 = double(parameters.baseline);
-  ctx.xer.ca = false; ctx.cr6.compare<uint32_t>(row, count, ctx.xer);
+  ctx.xer.ca = false; ctx.cr6.Compare<uint32_t>(row, count, ctx.xer);
   ctx.lr = uint32_t(ctx.lr); ctx.r12.u64 = ctx.lr;
 #ifdef N3_STATE_RELATION_TEST
   n3_state_relation_native_used = true;

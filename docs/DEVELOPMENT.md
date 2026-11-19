@@ -10,7 +10,7 @@ This guide covers a local Windows build of the maintained fork. Read
 - Node.js 18 or newer for disc extraction
 - Python 3.10 or newer for tooling
 - 7-Zip for the pinned LLVM installer
-- Approximately 1 GB for downloaded tools
+- Several GB for downloaded tools, pinned SDK sources, and native build outputs
 - Approximately 5.8 GB for an extracted owned game image
 
 Bootstrap keeps downloaded tools in `.tools/`; it does not install Visual
@@ -37,11 +37,17 @@ The extractor refuses an existing destination and records a SHA-256 for every
 file. Code generation verifies the supported `default.xex` before using
 build-specific function hints.
 
-`tools\build.ps1` uses the pinned binary SDK for code generation, then builds a
-matched `rexruntime.dll` and Xenos plugin from the corresponding SDK source
-under `.tools\live-gpu-source`. Source preparation applies the tracked renderer
-patches and enables the SDK's bundled spatial FSR1 EASU/RCAS shaders. The
-separate temporal FidelityFX runtime remains disabled.
+`tools\build.ps1` uses the pinned binary SDK for code generation, then builds
+the modular runtime and D3D12, Vulkan, and null Xenos drivers from the exact
+stable source under `.tools\rexglue-source`. Bootstrap verifies ReXGlue
+`v0.11.0` commit `a3e1d82678ca20d68d4837a8e9ee4652ff073745`, prepares every
+submodule, pins Vulkan-Headers and Vulkan Memory Allocator, and applies the
+small patches under `tools\rexglue\patches`.
+
+ReXGlue 0.11 removed the earlier presentation-effect API, including its FSR1
+path. The current build uses v0.11's bilinear presentation. Restoring a
+selectable FSR1 implementation is a later milestone rather than a hidden
+version downgrade.
 
 To use an existing Visual Studio 2022 x64 development environment, run
 `tools\bootstrap.ps1 -ToolsOnly`. Exact SDK, compiler, CMake, Ninja, URL, and
@@ -80,10 +86,9 @@ python -m unittest tools.n3_gameplay_data_test
 # Offline NAV parser, topology, route search, and funnel model
 python -m unittest tools.n3_nav_test
 
-# SDK lock, generated CMake repair, and release packaging
+# SDK lock and release packaging
 python -m unittest `
   tools.sdk_lock_test `
-  tools.fix_generated_cmake_test `
   tools.package_release_test
 python tools\check-sdk.py
 
@@ -103,10 +108,9 @@ correct rendering, input, performance, save compatibility, or gameplay.
 
 - Put function-discovery hints in `n3_manifest.toml`.
 - Put host/runtime fixes in `src/`.
-- Put title-independent pinned-renderer adaptations in `tools/gpu/` and
-  regenerate the ignored source tree with `tools/prepare-gpu.py`.
+- Put narrowly scoped stable-SDK adaptations in `tools\rexglue\patches\` and
+  regenerate the ignored source tree with `tools\prepare-rexglue.py`.
 - Regenerate translated sources; do not edit `generated/default/` manually.
-- `generated/rexglue.cmake` is the only tracked generated integration file.
 - Keep original game data in `private/` and downloaded tools in `.tools/`.
 - Never commit profiles, caches, logs, saves, generated game translations, or
   release material copied from the game.

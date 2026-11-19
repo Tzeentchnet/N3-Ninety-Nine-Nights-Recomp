@@ -2,10 +2,9 @@
 #include <cstdint>
 
 namespace n3::guest {
-// Match generated/default/n3_pch.h's physical-memory shadow bias. A guest
-// address remains 32 bits; its translated host offset may require 33 bits.
+// Match generated/default/n3_pch.h's configured physical-memory mapping.
 inline constexpr uint64_t GuestHostOffset(uint32_t address) {
-#if defined(_WIN32) || (defined(__APPLE__) && (defined(__aarch64__) || defined(_M_ARM64)))
+#if defined(REX_PHYSICAL_OFFSET_IN_CODE) && REX_PHYSICAL_OFFSET_IN_CODE
   return uint64_t(address) + (address >= 0xe0000000u ? 0x1000u : 0u);
 #else
   return address;
@@ -23,7 +22,7 @@ inline const uint8_t* GuestHostAddress(const uint8_t* base, uint32_t address) {
 inline constexpr bool FitsLinearGuestRange(uint32_t address, uint32_t size) {
   const uint64_t end = uint64_t(address) + size;
   if (end > 0x100000000ull) return false;
-#if defined(_WIN32) || (defined(__APPLE__) && (defined(__aarch64__) || defined(_M_ARM64)))
+#if defined(REX_PHYSICAL_OFFSET_IN_CODE) && REX_PHYSICAL_OFFSET_IN_CODE
   if (address < 0xe0000000u && end > 0xe0000000ull) return false;
 #endif
   return true;

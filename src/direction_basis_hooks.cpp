@@ -15,7 +15,7 @@ extern thread_local bool n3_direction_basis_native_used;
 namespace {
 using namespace n3::guest;
 using namespace n3::native;
-using Platform = rex::platform::FPSCRPlatform;
+using Platform = rex::ppc::FPSCRPlatform;
 constexpr uint32_t lower_address = 0x8205b610, unit_address = lower_address + 4;
 constexpr uint32_t threshold_address = 0x820018ac, slots_address = 0x82b4808c;
 uint32_t ReadWord(uint8_t* base, uint32_t address) {
@@ -44,19 +44,19 @@ void SetRaw(PPCVRegister& target, Vec4 value) {
 void PublishNormalization(PPCContext& ctx, const DirectionNormalization& result,
     Vec4 raw, uint32_t source, float threshold, double loaded_threshold) {
   SetRaw(ctx.v11, raw);
-  std::memcpy(ctx.v7.u8, VectorShiftTableL + (source & 15) * 16, 16);
+  std::memcpy(ctx.v7.u8, kVectorShiftTableL + (source & 15) * 16, 16);
   Broadcast(ctx.v0, result.value.z); Broadcast(ctx.v12, result.value.y); Broadcast(ctx.v13, result.value.x);
   Broadcast(ctx.v10, result.zeroed ? threshold : result.estimate_squared);
   ctx.r3.u64 = source; ctx.r9.u64 = source; ctx.r10.u64 = 8; ctx.r11.u64 = source;
   ctx.f0.f64 = loaded_threshold;
-  ctx.cr6.set_raw(result.zeroed ? 8 : 2);
-  ctx.cr0.compare<int32_t>(result.zeroed ? 0x80 : 0, 0, ctx.xer);
+  ctx.cr6.SetRaw(result.zeroed ? 8 : 2);
+  ctx.cr0.Compare<int32_t>(result.zeroed ? 0x80 : 0, 0, ctx.xer);
 }
 bool Masked(uint32_t controls) {
 #if defined(__x86_64__) || defined(_M_X64)
-  return (controls & Platform::ExceptionMask) == Platform::ExceptionMask;
+  return (controls & Platform::kExceptionMask) == Platform::kExceptionMask;
 #else
-  return (controls & Platform::ExceptionMask) == 0;
+  return (controls & Platform::kExceptionMask) == 0;
 #endif
 }
 // Reconstruct the final vector load before publishing its unaligned scalar
@@ -75,20 +75,22 @@ Vec4 ReadStagedOutput(uint8_t* base, uint32_t source, Vec3 combined) {
             uint8_t(std::bit_cast<uint32_t>(values[word]) >> ((3 - byte) * 8));
     }
   }
-  const auto reversal = simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(VectorMaskL));
+  const auto reversal = simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(kVectorMaskL));
   const auto first = simde_mm_shuffle_epi8(simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(blocks.data())), reversal);
   const auto second = simde_mm_shuffle_epi8(simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(blocks.data() + 16)), reversal);
-  const auto shift = simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(VectorShiftTableL + (source & 15) * 16));
+  const auto shift = simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(kVectorShiftTableL + (source & 15) * 16));
   alignas(16) std::array<uint32_t, 4> words;
-  simde_mm_store_si128(reinterpret_cast<simde__m128i*>(words.data()), rex::ppc::simde_mm_perm_epi8_(first, second, shift));
+  simde_mm_store_si128(reinterpret_cast<simde__m128i*>(words.data()),
+                      rex::ppc::simd::PermuteBytes(first, second, shift));
   return {std::bit_cast<float>(words[3]), std::bit_cast<float>(words[2]),
           std::bit_cast<float>(words[1]), std::bit_cast<float>(words[0])};
 }
 bool Update(PPCContext& ctx, uint8_t* base) {
   const auto stack = ctx.r1.u32, source = ctx.r4.u32, object = ctx.r3.u32;
-  const auto host = Platform::getcsr(), guest = ctx.fpscr.csr;
-  const auto scalar_controls = guest & Platform::FlushMask ? guest & ~Platform::FlushMask : host;
-  if (!Masked(scalar_controls) || !Masked(guest) || (scalar_controls & Platform::FlushMask) ||
+  const auto host = Platform::GetCSR(), guest = ctx.fpscr.csr;
+  const auto scalar_controls = guest & Platform::kFlushMask ? guest & ~Platform::kFlushMask : host;
+  if (!ctx.vscr.nj || !Masked(scalar_controls) || !Masked(guest) ||
+      (scalar_controls & Platform::kFlushMask) ||
       stack < 192 || stack % 16 || !FitsLinearGuestRange(stack - 192, 232)) return false;
   const uint32_t frame = stack - 176, output = object + 576;
   auto outside_frame = [&](uint32_t at, uint32_t size) {
@@ -105,15 +107,15 @@ bool Update(PPCContext& ctx, uint8_t* base) {
   const auto vertical = std::bit_cast<int32_t>(ReadWord(base, source + 4));
   const auto lower = ReadFloat(base, lower_address), threshold = ReadFloat(base, threshold_address);
   const auto first_w = ReadFloat(base, frame + 140);
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   const double loaded_lower = double(lower), loaded_threshold = double(threshold);
   volatile float rounded_horizontal = float(double(horizontal));
   volatile float rounded_vertical = float(double(vertical));
   const Vec4 rounded_input{rounded_horizontal, lower, rounded_vertical, first_w};
   // Initial scalar conversions use the effective incoming host rounding. The
   // first vector phase installs guest rounding; every later scalar phase uses it.
-  ctx.fpscr.disableFlushModeUnconditional();
-  auto reject = [&] { ctx.fpscr.csr = guest; Platform::setcsr(host); return false; };
+  ctx.fpscr.DisableFlushModeUnconditional();
+  auto reject = [&] { ctx.fpscr.csr = guest; Platform::SetCSR(host); return false; };
   DirectionBasisState state{};
   DirectionBasisUpdate update;
   DirectionBasisParameters parameters{};
@@ -167,12 +169,12 @@ bool Update(PPCContext& ctx, uint8_t* base) {
   Broadcast(ctx.v0, update.post_normalization_length.value);
   SetRaw(ctx.v13, {update.input_normalization.value.x, update.input_normalization.value.y,
                   update.input_normalization.value.z, first_w});
-  ctx.cr6.compare(ctx.f8.f64, loaded_lower);
+  ctx.cr6.Compare(ctx.f8.f64, loaded_lower);
   if (update.branch != DirectionBasisBranch::Unchanged) {
     ctx.r8.u64 = offset;
     ctx.r9.u64 = original_slot + uint32_t(uint32_t(original_slot) * 2u);
     ctx.r10.u64 = uint64_t(int64_t(std::bit_cast<int32_t>(slots_address)));
-    ctx.cr6.compare<uint32_t>(related, 0, ctx.xer);
+    ctx.cr6.Compare<uint32_t>(related, 0, ctx.xer);
     if (!related) {
       ctx.r11.u64 = uint64_t(int64_t(std::bit_cast<int32_t>(uint32_t{0x82060000})));
       ctx.f0.f64 = double(parameters.unit);
@@ -194,7 +196,7 @@ bool Update(PPCContext& ctx, uint8_t* base) {
       ctx.f9.f64 = double(update.combined.x); ctx.f10.f64 = double(update.lateral_products.x);
       ctx.f11.f64 = double(forward.z); ctx.f12.f64 = double(update.forward_products.y);
       ctx.f13.f64 = double(update.forward_products.x);
-      std::memcpy(ctx.v6.u8, VectorShiftTableL, 16);
+      std::memcpy(ctx.v6.u8, kVectorShiftTableL, 16);
     }
   }
   ctx.r12.u64 = original_lr; ctx.lr = original_lr;

@@ -46,12 +46,12 @@ $default = Invoke-Plan @('-DryRun', '-Setup')
 Assert-True ($default.schemaVersion -eq 1) 'Unexpected launcher plan schema'
 Assert-True ($default.windowMode -eq 'Windowed') 'Default launcher mode is not Windowed'
 Assert-True ([bool]$default.setup) 'Setup plan did not retain setup mode'
-Assert-Argument $default '--no-fullscreen'
-Assert-NoArgument $default '--game_data_root'
-Assert-ArgumentValue $default '--user_data_root' (Join-Path $root 'private/user')
-Assert-ArgumentValue $default '--cache_root' (Join-Path $root 'private/cache')
-Assert-ArgumentValue $default '--log_file' (Join-Path $root 'logs/runtime-windowed.log')
-Assert-ArgumentValue $default '--present_effect' 'fsr'
+Assert-Argument $default '--no-ui.fullscreen'
+Assert-NoArgument $default '--title.game_root'
+Assert-ArgumentValue $default '--app.user_root' (Join-Path $root 'private/user')
+Assert-ArgumentValue $default '--app.cache_root' (Join-Path $root 'private/cache')
+Assert-ArgumentValue $default '--app.log_root' (Join-Path $root 'logs')
+Assert-ArgumentValue $default '--gpu.driver' 'd3d12'
 
 $graphics = Invoke-Plan @(
     '-DryRun',
@@ -64,26 +64,24 @@ $graphics = Invoke-Plan @(
     '-Anisotropic', '16',
     '-DisplayResolution', '1080',
     '-RenderResolution', '2160',
-    '-Upscaler', 'Bilinear',
+    '-Renderer', 'Vulkan',
     '-VSync', 'Off'
 )
-Assert-Argument $graphics '--fullscreen'
-Assert-Argument $graphics '--fullscreen_exclusive'
-Assert-NoArgument $graphics '--no-fullscreen'
-Assert-ArgumentValue $graphics '--monitor' '2'
-Assert-ArgumentValue $graphics '--n3_frame_rate' '0'
-Assert-ArgumentValue $graphics '--n3_text_language' 'spanish'
-Assert-ArgumentValue $graphics '--anisotropic_override' '5'
-Assert-ArgumentValue $graphics '--n3_display_resolution' '1080'
-Assert-ArgumentValue $graphics '--draw_resolution_scale_x' '3'
-Assert-ArgumentValue $graphics '--draw_resolution_scale_y' '3'
-Assert-ArgumentValue $graphics '--resolution_scale' '3'
-Assert-ArgumentValue $graphics '--n3_live_resolution_request' '3'
-Assert-ArgumentValue $graphics '--present_effect' 'bilinear'
-Assert-Argument $graphics '--no-n3_vsync'
+Assert-Argument $graphics '--ui.fullscreen'
+Assert-Argument $graphics '--ui.fullscreen_exclusive'
+Assert-NoArgument $graphics '--no-ui.fullscreen'
+Assert-ArgumentValue $graphics '--ui.monitor' '2'
+Assert-ArgumentValue $graphics '--n3.frame_rate' '0'
+Assert-ArgumentValue $graphics '--n3.text_language' 'spanish'
+Assert-ArgumentValue $graphics '--gpu.anisotropic_override' '5'
+Assert-ArgumentValue $graphics '--n3.display_resolution' '1080'
+Assert-ArgumentValue $graphics '--gpu.resolution_scale_x' '3'
+Assert-ArgumentValue $graphics '--gpu.resolution_scale_y' '3'
+Assert-ArgumentValue $graphics '--gpu.driver' 'vulkan'
+Assert-Argument $graphics '--no-gpu.vsync'
 Assert-True ($graphics.userDirectory -eq (Join-Path $root 'private/profiles/test-profile')) 'Named profile user path is incorrect'
 Assert-True ($graphics.cacheDirectory -eq (Join-Path $root 'private/profiles/test-profile/cache')) 'Named profile cache path is incorrect'
-Assert-True ($graphics.logFile -eq (Join-Path $root 'private/profiles/test-profile/logs/runtime.log')) 'Named profile log path is incorrect'
+Assert-True ($graphics.logFile -eq (Join-Path $root 'private/profiles/test-profile/logs/n3.log')) 'Named profile log path is incorrect'
 
 $window = Invoke-Plan @(
     '-DryRun',
@@ -91,15 +89,15 @@ $window = Invoke-Plan @(
     '-WindowMode', 'Borderless',
     '-Width', '1920',
     '-Height', '1080',
-    '-Upscaler', 'Configured',
+    '-Renderer', 'Configured',
     '-VSync', 'On'
 )
-Assert-Argument $window '--fullscreen'
-Assert-Argument $window '--no-fullscreen_exclusive'
-Assert-ArgumentValue $window '--window_width' '1920'
-Assert-ArgumentValue $window '--window_height' '1080'
-Assert-NoArgument $window '--present_effect'
-Assert-Argument $window '--n3_vsync'
+Assert-Argument $window '--ui.fullscreen'
+Assert-Argument $window '--no-ui.fullscreen_exclusive'
+Assert-ArgumentValue $window '--ui.window_width' '1920'
+Assert-ArgumentValue $window '--ui.window_height' '1080'
+Assert-NoArgument $window '--gpu.driver'
+Assert-Argument $window '--gpu.vsync'
 
 $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ('n3-launch-test-' + [guid]::NewGuid().ToString('N'))
 $game = Join-Path $temporary 'game'
@@ -118,7 +116,7 @@ try {
     Assert-True (($modded.modIds -join ',') -eq 'author.first,author.second') 'Explicit mod order changed'
     Assert-True ($modded.baseGameDirectory -eq $game) 'Base game directory changed'
     Assert-True ($modded.gameDirectory -eq (Join-Path $root 'out/game')) 'Staged game directory is incorrect'
-    Assert-ArgumentValue $modded '--game_data_root' (Join-Path $root 'out/game')
+    Assert-ArgumentValue $modded '--title.game_root' (Join-Path $root 'out/game')
 
     Assert-Fails @('-DryRun', '-Setup', '-GameDirectory', $game) '-Setup and -GameDirectory are mutually exclusive'
     Assert-Fails @('-DryRun', '-Setup', '-DisplayResolution', '1080', '-Width', '1920') '-DisplayResolution cannot be combined'

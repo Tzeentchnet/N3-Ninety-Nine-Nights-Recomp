@@ -1,6 +1,6 @@
 # Reference projects and design notes
 
-Reviewed 2 November 2026. These are reference projects rather than game-data
+Reviewed 19 November 2026. These are reference projects rather than game-data
 dependencies. No original game assets are included.
 
 ## Lost Odyssey Recomp
@@ -34,58 +34,46 @@ is a possible future direction; N3 presently uses ReXGlue's Xenos GPU plugin.
 ## Current SDK
 
 [ReXGlue](https://github.com/rexglue/rexglue-sdk), pinned to commit
-`bd833a2ab69d305f99ddf57418fc38ffec8af93d`, provides the analyser, C++ generator,
-runtime kernel, and GPU/audio/input integration. Its bundled CLI differs from
-older wiki examples: this revision uses `n3_manifest.toml` with `[project]` and
-`[entrypoint]` sections. The local scripts follow the installed CLI/parser.
+`a3e1d82678ca20d68d4837a8e9ee4652ff073745`, is the stable
+[v0.11.0 release](https://github.com/rexglue/rexglue-sdk/releases/tag/v0.11.0).
+It provides the analyser, C++ generator, modular runtime kernel, and
+GPU/audio/input integration. N3 uses the official release CLI for code
+generation and builds the matched runtime modules from that exact source.
 
-As reviewed on 19 November 2026, stable `main` is
-[v0.11.0](https://github.com/rexglue/rexglue-sdk/releases/tag/v0.11.0) at
-`ebac1cf0d04bab0042a5dd6148b34ab3953e9c0d`, 338 commits after the pin. The
-newest published Windows asset is development-branch nightly
-[`115171b4`](https://github.com/rexglue/rexglue-sdk/commit/115171b419407cd783febd38ad25ddaa3b7463bd),
-347 commits after the pin. That nightly is 13 commits ahead of and four commits
-behind stable v0.11.0. Both lines include a broad GPU/module reorganization, so
-replacing the pin is not a surgical renderer update. It requires rebasing the
-live-resolution presenter, regenerating translated integration, and repeating
-gameplay validation.
+The v0.11 driver rewrite removes the earlier FSR1, CAS, temporal presentation,
+and `present_effect` surfaces. N3 therefore uses bilinear presentation for this
+milestone and defers FSR1 restoration instead of retaining a mixed v0.10/v0.11
+runtime.
 
-The pinned source already contains ReXGlue's spatial FSR1 EASU/RCAS presenter
-path, but the published pinned runtime binaries were built with it disabled.
-N3 now source-builds a matched runtime and Xenos plugin with that spatial path
-enabled. The external temporal FidelityFX runtime remains disabled.
+The renderer audit compared stable v0.11 with current `main` and `development`.
+No upstream commit fixed the two hardware failures found in N3. N3 carries
+small patches for:
 
-The review did identify two later upstream correctness commits that apply
-cleanly to the pinned renderer:
+- keeping ReXGlue's precommitted raw physical GPU view read/write across guest
+  allocation and protection changes while retaining title-facing alias
+  protections and write watches; and
+- owning Vulkan presentation semaphores per swapchain image, then waiting for
+  the presentation queue only when retiring a swapchain.
 
-- [`0d5178cc`](https://github.com/rexglue/rexglue-sdk/commit/0d5178ccb8122e37548af5417434ddde51463d6b)
-  fixes `SV_SampleIndex` emission for sample-rate memexport pixel shaders.
-- [`30eaa073`](https://github.com/rexglue/rexglue-sdk/commit/30eaa07332a5857c7c3a6489329d2b4fbcac494a)
-  provides four applicable D3D12/Xenos corrections: extreme-FXAA pipeline
-  validation, bindless sampler layout lookup and IDs, 3D tiled-depth alignment,
-  and depth render-target encoding comparison.
-
-The adapted patches retain exact commit provenance under `tools/gpu/patches/`.
-Vulkan-only exponent-bias and paint-pipeline changes were not imported. The
-new worker-wait and depth-test optimizations depend on the reorganized GPU
-architecture and remain deferred rather than being partially transplanted.
+Development did provide a useful reproducibility improvement: pinning
+Vulkan-Headers and Vulkan Memory Allocator as sources rather than depending on
+whatever headers a machine Vulkan SDK happens to install. N3 backports that
+approach with the exact dependency commits recorded in
+`tools/toolchain.lock.json`.
 
 ## Forza Horizon 1: ReImagined and ReIGlue
 
 - [Forza tree at `a27387e4`](https://github.com/FH1-ReImagined/ForzaHorizon1-ReImagined/tree/a27387e45a5187089a748f12c98af72045408bf9)
 - [ReIGlue at `6e47a08c`](https://github.com/FH1-ReImagined/ReIGlue/tree/6e47a08c972a23944504af48996330262dfc64e5)
 
-Forza uses the same ReXGlue nightly plus its BSD ReIGlue fork. N3 carries three
-title-independent changes that apply to its D3D12 Xenos plugin: rechecking
-texture backing memory before marking a load current (`0008`), avoiding an
-allocation and global lock when requested shared-memory pages are already valid
-(`0031`), and checking both D3D12 fence HRESULTs before waiting (`0408`). The
-generated-header output declaration (`0096`) is also reflected in
-`generated/rexglue.cmake` to prevent stale PCH/header scheduling under Ninja.
+Forza and its BSD ReIGlue fork were reviewed for texture-watch validity,
+shared-memory fast paths, D3D12 fence checks, input behavior, and
+floating-point accuracy. The prior v0.10 renderer patch stack was retired with
+the v0.11 migration rather than being applied blindly across the rewritten GPU
+architecture.
 
-Forza's wheel, online-service, VR, HDR, custom upscaler, Vulkan, texture-pack,
-and title-specific resolve changes are outside N3's current requirements. N3's
-FSR1 path comes from the pinned ReXGlue presenter rather than Forza code. Its
+Forza's wheel, online-service, VR, HDR, custom upscaler, texture-pack, and
+title-specific resolve changes are outside N3's current requirements. Its
 audio fallback and XMA hardening have no matching N3 failure evidence, so those
 larger changes remain candidates rather than untested imports.
 
@@ -113,7 +101,7 @@ gameplay checks.
   because an applicable repository license was not established.
 
 N3 independently adopted the general outcomes: one validated SDK lock,
-transactional tool replacement, exact CMake/codegen version checks,
+transactional tool replacement, exact CMake/codegen/source checks,
 commit-derived source bundle names, and SDK provenance in release manifests.
 
 ## Recompiled Halo Reach
@@ -122,8 +110,9 @@ commit-derived source bundle names, and SDK provenance in release manifests.
 
 Halo Reach independently carries the texture-validity and shared-memory fixes,
 and reports reduced command-processor lock waits from the latter. That
-cross-title evidence supports the two changes selected above. Most of its
-remaining patches target Vulkan, Linux/POSIX behavior, Reach shaders,
+cross-title evidence informed the earlier v0.10 review, but those patches were
+not carried blindly across the v0.11 GPU rewrite. Most of its remaining patches
+target Vulkan, Linux/POSIX behavior, Reach shaders,
 tessellation, occlusion queries, or high-refresh simulation and are not safe
 proxies for N3's Direct3D 12 behavior.
 

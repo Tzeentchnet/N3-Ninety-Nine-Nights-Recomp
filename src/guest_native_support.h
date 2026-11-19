@@ -4,14 +4,14 @@
 
 namespace n3::guest {
 inline bool ScalarExceptionsMasked(const PPCContext& ctx) {
-  using Platform = rex::platform::FPSCRPlatform;
+  using Platform = rex::ppc::FPSCRPlatform;
   // disableFlushMode writes csr only if a flush bit was set. Match the control
   // word that the original routine would use before allowing reordered work.
-  const auto controls = (ctx.fpscr.csr & Platform::FlushMask) ? ctx.fpscr.csr : Platform::getcsr();
+  const auto controls = (ctx.fpscr.csr & Platform::kFlushMask) ? ctx.fpscr.csr : Platform::GetCSR();
 #if defined(__x86_64__) || defined(_M_X64)
-  return (controls & Platform::ExceptionMask) == Platform::ExceptionMask;
+  return (controls & Platform::kExceptionMask) == Platform::kExceptionMask;
 #else
-  return (controls & Platform::ExceptionMask) == 0;
+  return (controls & Platform::kExceptionMask) == 0;
 #endif
 }
 inline bool FitsGuestRange(uint32_t address, uint32_t size) {

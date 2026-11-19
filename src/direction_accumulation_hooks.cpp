@@ -26,24 +26,24 @@ void Write3(uint8_t* base, uint32_t at, Vec3 value) {
   rex::memory::store_and_swap<uint32_t>(n3::guest::GuestHostAddress(base, at + 8), std::bit_cast<uint32_t>(value.z));
 }
 bool Masked(uint32_t controls) {
-  using Platform = rex::platform::FPSCRPlatform;
+  using Platform = rex::ppc::FPSCRPlatform;
 #if defined(__x86_64__) || defined(_M_X64)
-  return (controls & Platform::ExceptionMask) == Platform::ExceptionMask;
+  return (controls & Platform::kExceptionMask) == Platform::kExceptionMask;
 #else
-  return (controls & Platform::ExceptionMask) == 0;
+  return (controls & Platform::kExceptionMask) == 0;
 #endif
 }
 bool Process(PPCContext& ctx, uint8_t* base) {
   using namespace n3::guest;
-  using Platform = rex::platform::FPSCRPlatform;
+  using Platform = rex::ppc::FPSCRPlatform;
   const auto object = ctx.r3.u32, stack = ctx.r1.u32;
-  const auto host = Platform::getcsr(), guest = ctx.fpscr.csr;
+  const auto host = Platform::GetCSR(), guest = ctx.fpscr.csr;
   // enableFlushMode can leave the host word untouched, while the scalar phase
   // always reloads the guest word. Both effective exception policies must mask.
-  const auto vector_controls = (guest & Platform::FlushMask) == Platform::FlushMask ? host : guest;
-  if (!Masked(vector_controls) || !Masked(guest) ||
-      ((guest & Platform::FlushMask) == Platform::FlushMask &&
-       (host & Platform::FlushMask) != Platform::FlushMask) || stack < 16 || stack % 16 ||
+  const auto vector_controls = (guest & Platform::kFlushMask) == Platform::kFlushMask ? host : guest;
+  if (!ctx.vscr.nj || !Masked(vector_controls) || !Masked(guest) ||
+      ((guest & Platform::kFlushMask) == Platform::kFlushMask &&
+       (host & Platform::kFlushMask) != Platform::kFlushMask) || stack < 16 || stack % 16 ||
       !FitsLinearGuestRange(stack - 16, 16) || !FitsLinearGuestRange(object, 592)) return false;
   const uint32_t raw_first = (object + 576) & ~15u, raw_second = (object + 587) & ~15u;
   if (!FitsLinearGuestRange(raw_first, 16) || !FitsLinearGuestRange(raw_second, 16) ||
@@ -59,19 +59,19 @@ bool Process(PPCContext& ctx, uint8_t* base) {
   // aligned load and lvsl mask without guest arithmetic in the adapter.
   simde_mm_storeu_si128(reinterpret_cast<simde__m128i*>(last_raw.data()),
       simde_mm_shuffle_epi8(simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(GuestHostAddress(base, raw_second))),
-                           simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(VectorMaskL))));
-  std::memcpy(mask.data(), VectorShiftTableL + ((object + 576) & 15) * 16, 16);
+                           simde_mm_load_si128(reinterpret_cast<const simde__m128i*>(kVectorMaskL))));
+  std::memcpy(mask.data(), kVectorShiftTableL + ((object + 576) & 15) * 16, 16);
   const auto saved_host = host, saved_guest = guest;
-  ctx.fpscr.enableFlushMode();
+  ctx.fpscr.EnableFlushMode();
   DirectionSquaredLength length;
   if (!TryDirectionSquaredLength(override_direction, length)) {
-    ctx.fpscr.csr = saved_guest; Platform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; Platform::SetCSR(saved_host); return false;
   }
-  ctx.fpscr.disableFlushModeUnconditional();
+  ctx.fpscr.DisableFlushModeUnconditional();
   DirectionAccumulationState state{previous};
   DirectionAccumulationUpdate update;
   if (!TryAccumulateDirection(state, {defaults, override_direction, ctx.f1.f64, length.value, lower}, update)) {
-    ctx.fpscr.csr = saved_guest; Platform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; Platform::SetCSR(saved_host); return false;
   }
   for (uint32_t i = 0; i < 4; ++i)
     rex::memory::store_and_swap<uint32_t>(GuestHostAddress(base, stack - 16 + i * 4), std::bit_cast<uint32_t>(length.value));
@@ -88,7 +88,7 @@ bool Process(PPCContext& ctx, uint8_t* base) {
   }
   std::memcpy(ctx.v13.u8, last_raw.data(), 16); std::memcpy(ctx.v7.u8, mask.data(), 16);
   for (auto& lane : ctx.v0.u32) lane = std::bit_cast<uint32_t>(length.value);
-  ctx.cr6.compare(double(length.value), double(lower));
+  ctx.cr6.Compare(double(length.value), double(lower));
 #ifdef N3_DIRECTION_ACCUMULATION_TEST
   n3_direction_accumulation_native_used = true;
 #endif

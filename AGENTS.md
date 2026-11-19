@@ -19,8 +19,7 @@ README.md and docs/STATUS.md before changing its toolchain or runtime.
   `node --test tools/disc.test.mjs`. Mod stager changes use
   `python -m unittest tools.mods_test`. Launcher changes also use
   `pwsh -NoProfile -File tools/launch_test.ps1`. SDK lock or bootstrap changes use
-  `python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test
-  tools.package_release_test` and
+  `python -m unittest tools.sdk_lock_test tools.package_release_test` and
   `python tools/check-sdk.py`.
 - Update docs/STATUS.md with observed milestones and their validation limits.
   A successful build or a surviving process does not establish gameplay correctness.

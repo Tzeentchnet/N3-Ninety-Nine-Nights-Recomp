@@ -37,10 +37,10 @@ bool SeparateOutput(PPCContext& ctx, uint32_t output_size) {
   // Native expressions may evaluate independent components in a different
   // order. If exceptions can trap, preserve the original partial-write order.
   if (!n3::guest::ScalarExceptionsMasked(ctx)) return false;
-  using Platform = rex::platform::FPSCRPlatform;
+  using Platform = rex::ppc::FPSCRPlatform;
   // With guest flush already clear, the original disableFlushMode leaves the
   // host word untouched. Keep this divergent control state on the retained path.
-  if (!(ctx.fpscr.csr & Platform::FlushMask) && (Platform::getcsr() & Platform::FlushMask)) return false;
+  if (!(ctx.fpscr.csr & Platform::kFlushMask) && (Platform::GetCSR() & Platform::kFlushMask)) return false;
   // The verified source fields are within the first 304 bytes. Conservative
   // alias rejection preserves the original instruction-level read/write order.
   const auto source = ctx.r3.u32, output = ctx.r4.u32;
@@ -62,7 +62,7 @@ extern "C" void sub_8235FB80(PPCContext& ctx, uint8_t* base) {
   const auto center = source.Vector(68);
   if (!SupportsShapeValue(radius) || !SupportsShapeValue(center))
     return __imp__sub_8235FB80(ctx, base);
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   ShapeView(base, ctx.r4.u32).Bounds(SphereBounds(center, radius));
   NativeUsed();
 }
@@ -72,7 +72,7 @@ extern "C" void sub_8235FBE8(PPCContext& ctx, uint8_t* base) {
   if (!SeparateOutput(ctx, 24)) return __imp__sub_8235FBE8(ctx, base);
   const auto radius = ShapeView(base, ctx.r3.u32).Scalar(288);
   if (!SupportsShapeValue(radius)) return __imp__sub_8235FBE8(ctx, base);
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   ShapeView(base, ctx.r4.u32).Bounds(SphereLocalBounds(radius));
   NativeUsed();
 }
@@ -84,7 +84,7 @@ extern "C" void sub_82366970(PPCContext& ctx, uint8_t* base) {
   const auto radius = source.Scalar(288), half_height = source.Scalar(292);
   if (!SupportsShapeValue(radius) || !SupportsShapeValue(half_height))
     return __imp__sub_82366970(ctx, base);
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   ShapeView(base, ctx.r4.u32).Bounds(CapsuleLocalBounds(radius, half_height));
   NativeUsed();
 }
@@ -94,7 +94,7 @@ extern "C" void sub_82360478(PPCContext& ctx, uint8_t* base) {
   if (!SeparateOutput(ctx, 24)) return __imp__sub_82360478(ctx, base);
   const auto extents = ShapeView(base, ctx.r3.u32).Vector(292);
   if (!SupportsShapeValue(extents)) return __imp__sub_82360478(ctx, base);
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   ShapeView(base, ctx.r4.u32).Bounds(BoxLocalBounds(extents));
   NativeUsed();
 }
@@ -107,7 +107,7 @@ extern "C" void sub_82366918(PPCContext& ctx, uint8_t* base) {
   const auto radius = source.Scalar(288), half_height = source.Scalar(292);
   if (!SupportsShapeValue(center) || !SupportsShapeValue(radius) ||
       !SupportsShapeValue(half_height)) return __imp__sub_82366918(ctx, base);
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   const auto envelope = CapsuleSphereEnvelope(center, radius, half_height);
   const ShapeView output(base, ctx.r4.u32);
   output.Vector(0, envelope.center); output.Scalar(12, envelope.radius);

@@ -14,6 +14,8 @@ No Node.js, Python, or development tools are needed to run this package.
 
 REQUIREMENTS
 - Windows 10/11 x64 and a Direct3D 12 capable GPU/driver.
+- Vulkan is an optional command-line backend and requires a current
+  Vulkan-capable GPU driver.
 - An Xbox-compatible controller is recommended.
 - Supported disc: USA/Europe, title 4D5307DB, executable version 0.0.0.3.
 - default.xex SHA-256:
@@ -37,8 +39,8 @@ left/right changes its value, and B returns.
 
 Higher frame-rate modes remain experimental and animations can appear
 accelerated. Display size and internal rendering are independent.
-The source launcher enables spatial FSR1 presentation upscaling by default.
-Packaged direct startup retains the profile setting.
+Stable ReXGlue 0.11 uses bilinear presentation. FSR1 is not available in this
+milestone.
 
 LANGUAGE AND OPTIONAL VOICES
 The supported disc includes English, French, German, Italian, and Spanish text
@@ -54,14 +56,14 @@ voice files are included.
 OPTIONAL COMMAND LINE
 n3_import.exe inspect "path\to\your-disc.iso"
 n3_import.exe import "path\to\your-disc.iso" "new\game-folder"
-n3.exe --game_data_root "path\to\game-folder"
-n3.exe --n3_text_language spanish
-n3.exe --n3_voice_directory "path\to\SoundRes"
-n3.exe --present_effect fsr
+n3.exe --title.game_root "path\to\game-folder"
+n3.exe --n3.text_language spanish
+n3.exe --n3.voice_directory "path\to\SoundRes"
+n3.exe --gpu.driver vulkan
 
 A source checkout also provides an offline loose-file mod stager. It is not
 included in this runtime ZIP. A staged tree still requires the verified
-default.xex and may be selected with --game_data_root.
+default.xex and may be selected with --title.game_root.
 
 ALPHA STATUS
 The opening route, first mission, following cutscene, and save/load have been
@@ -76,12 +78,11 @@ which is not included.
 
 THIRD-PARTY SOFTWARE
 ReXGlue and its dependencies are credited in THIRD_PARTY.md and licenses/.
-The source-built ReXGlue runtime and Xenos plugin include spatial FSR1, the
-project's live-resolution extension, and selected BSD ReIGlue and upstream
-ReXGlue fixes. Matching source, notices, and build scripts are supplied in the
-optional corresponding-source archive. FFmpeg and libmspack include LGPL
-components. Microsoft C/C++ runtime DLLs are included under Microsoft's
-applicable terms.
+The source-built modular ReXGlue 0.11 runtime includes the tracked D3D12
+physical-memory and Vulkan presentation corrections. Matching source, patches,
+notices, and build scripts are supplied in the optional corresponding-source
+archive. FFmpeg and libmspack include LGPL components. Microsoft C/C++ runtime
+DLLs are included under Microsoft's applicable terms.
 
 PROJECT AND BUG REPORTS
 https://github.com/Tzeentchnet/N3-Ninety-Nine-Nights-Recomp

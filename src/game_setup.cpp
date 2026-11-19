@@ -1,12 +1,13 @@
 #include "game_setup.h"
 #include "game_data.h"
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <commdlg.h>
 #include <shlobj.h>
-#include <rex/cvar.h>
-#include <rex/system/flags.h>
+#include <rex/path_settings.h>
 
 #include <fstream>
 
@@ -86,31 +87,36 @@ fs::path NewImportFolder(const fs::path& root) {
 }
 }  // namespace
 
-void ConfigureGameDataPaths(rex::PathConfig& paths) {
-  if (rex::cvar::GetFlagByName("user_data_root").empty()) {
+void ConfigureGameDataPaths() {
+  auto& paths = REX_PATHS();
+  if (paths.user_root.GetLayer() == rex::SettingLayer::kDefault) {
     PWSTR local = nullptr;
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, nullptr, &local)))
       throw std::runtime_error("Cannot locate the local application data folder");
-    paths.user_data_root = fs::path(local) / "N3Recompiled";
+    const auto user_root = fs::path(local) / "N3Recompiled";
     CoTaskMemFree(local);
-    if (rex::cvar::GetFlagByName("cache_root").empty()) paths.cache_root = paths.user_data_root / "cache";
+    if (auto set = paths.user_root.Set(user_root); !set)
+      throw std::runtime_error(set.error().GetDescription());
+    if (paths.cache_root.GetLayer() == rex::SettingLayer::kDefault) {
+      if (auto set = paths.cache_root.Set(user_root / "cache"); !set)
+        throw std::runtime_error(set.error().GetDescription());
+    }
   }
-  fs::create_directories(paths.user_data_root);
+  fs::create_directories(paths.user_root.Get());
 }
 
-std::optional<rex::PathConfig> ResolveGameData(const rex::PathConfig& defaults) {
-  auto paths = defaults;
-  const auto link = paths.user_data_root / "game-path.txt";
-  if (!paths.game_data_root.empty()) {
-    n3::data::VerifyGameFolder(paths.game_data_root);
-    return paths;
+std::optional<fs::path> ResolveGameData(const fs::path& game_root,
+                                        const fs::path& user_root,
+                                        bool headless) {
+  const auto link = user_root / "game-path.txt";
+  if (!game_root.empty()) {
+    n3::data::VerifyGameFolder(game_root);
+    return game_root;
   }
   const auto remembered = ReadLink(link);
-  if (!remembered.empty() && Matches(remembered)) {
-    paths.game_data_root = remembered;
-    return paths;
-  }
-  if (REXCVAR_GET(headless)) throw std::runtime_error("Matching game data is required; run once without --headless to choose your disc or extracted default.xex");
+  if (!remembered.empty() && Matches(remembered)) return remembered;
+  if (headless) throw std::runtime_error(
+      "Matching game data is required; run once with a UI to choose your disc or extracted default.xex");
   for (;;) {
     try {
       const auto source = PickSource();
@@ -121,7 +127,7 @@ std::optional<rex::PathConfig> ResolveGameData(const rex::PathConfig& defaults) 
         if (MessageBoxW(GetActiveWindow(),
             L"Import game data from this disc image? About 5.8 GB of free space is required.\n\nThe original image will remain unchanged. You only need to import once.",
             L"N3 Recompiled - Import your disc", MB_OKCANCEL | MB_ICONINFORMATION) != IDOK) continue;
-        folder = NewImportFolder(paths.user_data_root);
+        folder = NewImportFolder(user_root);
         ImportProgress progress;
         n3::data::ImportDisc(source, folder, [&](uint64_t done, uint64_t total) { return progress.Update(done, total); });
       } else {
@@ -129,8 +135,7 @@ std::optional<rex::PathConfig> ResolveGameData(const rex::PathConfig& defaults) 
         n3::data::VerifyGameFolder(folder);
       }
       SaveLink(link, folder);
-      paths.game_data_root = folder;
-      return paths;
+      return folder;
     } catch (const std::exception& error) {
       MessageBoxA(GetActiveWindow(), error.what(), "N3 Recompiled - Game setup", MB_OK | MB_ICONERROR);
     }

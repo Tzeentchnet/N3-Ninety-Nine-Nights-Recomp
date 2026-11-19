@@ -1,7 +1,6 @@
 [CmdletBinding()]
 param(
-    [switch]$Regenerate,
-    [string]$Python = 'python'
+    [switch]$Regenerate
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -25,6 +24,4 @@ try {
     if ($Regenerate) { $arguments += '--ignore-stamp' }
     & $sdk @arguments
     if ($LASTEXITCODE) { throw "Strict code generation failed ($LASTEXITCODE). See logs/codegen.log." }
-    & $Python (Join-Path $PSScriptRoot 'fix_generated_cmake.py')
-    if ($LASTEXITCODE) { throw 'Generated CMake integration failed.' }
 } finally { Pop-Location }

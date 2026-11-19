@@ -1,4 +1,4 @@
-"""Bundle the pinned SDK and its non-Vulkan dependency sources for binary releases."""
+"""Bundle the pinned SDK and dependency sources for binary releases."""
 import argparse
 import concurrent.futures
 import configparser
@@ -10,17 +10,14 @@ import tarfile
 import urllib.request
 import zipfile
 
-from sdk_lock import load_sdk_lock
+from sdk_lock import load_sdk_lock, load_sdk_source_dependencies
 
 ROOT = Path(__file__).resolve().parent.parent
 SDK = load_sdk_lock()
+SDK_SOURCE_DEPENDENCIES = load_sdk_source_dependencies()
 COMMIT = SDK.commit
 OUT = ROOT / "out" / "release"
 CACHE = ROOT / ".tools" / "source-archives"
-REQUIRED = {"cli11", "libmspack", "FFmpeg", "tomlplusplus", "simde", "xxHash",
-            "spdlog", "fmt", "utfcpp", "imgui", "sdl3", "inja", "o1heap", "tracy", "catch2"}
-
-
 def fetch(url):
     req = urllib.request.Request(url, headers={"User-Agent": "N3-release-tools"})
     with urllib.request.urlopen(req, timeout=120) as response:
@@ -64,34 +61,31 @@ def add_file(archive, name, data):
 
 
 def extension_files():
-    files = [
+    return [
         "tools/bundle-sdk-source.py",
         "tools/codegen.ps1",
-        "tools/fix_generated_cmake.py",
-        "tools/prepare-gpu.py",
+        "tools/prepare-rexglue.py",
         "tools/sdk_lock.py",
         "tools/toolchain.lock.json",
-        "tools/gpu/CMakeLists.txt",
-        "tools/gpu/d3d12_live_resolution.inc",
-        "tools/gpu/d3d12_sampler_audit.inc",
         "tools/build.ps1",
-        "src/graphics_policy.h",
+        "CMakeLists.txt",
+        "THIRD_PARTY.md",
         "LICENSE",
-        "LICENSES/ReIGlue.txt",
-    ]
-    files += sorted(
+    ] + [
         path.relative_to(ROOT).as_posix()
-        for path in (ROOT / "tools/gpu/patches").glob("*")
-        if path.is_file()
-    )
-    return files
+        for path in sorted((ROOT / "tools" / "rexglue" / "patches").glob("*.patch"))
+    ]
 
 
 def bundle_fingerprint(files):
-    digest = hashlib.sha256(b"N3 ReXGlue source bundle inputs v1\0")
-    for value in (SDK.version, SDK.commit, SDK.release_tag, SDK.asset_name, SDK.sha256):
+    digest = hashlib.sha256(b"N3 ReXGlue source bundle inputs v2\0")
+    for value in vars(SDK).values():
         digest.update(value.encode())
         digest.update(b"\0")
+    for dependency in SDK_SOURCE_DEPENDENCIES:
+        for value in vars(dependency).values():
+            digest.update(value.encode())
+            digest.update(b"\0")
     for name in sorted(files):
         digest.update(name.encode())
         digest.update(b"\0")
@@ -130,12 +124,14 @@ def main():
     jobs = []
     for section in config.sections():
         path = config[section]["path"]
-        if path.rsplit("/", 1)[-1] in REQUIRED:
-            repo = config[section]["url"].removesuffix(".git").removeprefix("https://github.com/")
-            jobs.append((path, repo, modules[path]))
+        repo = config[section]["url"].removesuffix(".git").removeprefix("https://github.com/")
+        jobs.append((path, repo, modules[path]))
+    for dependency in SDK_SOURCE_DEPENDENCIES:
+        repo = dependency.url.removesuffix(".git").removeprefix("https://github.com/")
+        jobs.append((dependency.path, repo, dependency.commit))
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(lambda job: (job[0], *snapshot(job[1], job[2])), jobs))
-    extension_manifest = {
+    local_manifest = {
         name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
         for name in inputs
     }
@@ -148,36 +144,35 @@ def main():
         add_file(archive, "SOURCE-MANIFEST.json", json.dumps([sdk_manifest] + [r[2] for r in results], indent=2).encode())
         add_file(archive, "SDK-LOCK.json", json.dumps(vars(SDK), indent=2).encode())
         for name in inputs:
-            add_file(archive, "n3-gpu-extension/" + name, (ROOT / name).read_bytes())
-        add_file(archive, "n3-gpu-extension/SHA256.json", json.dumps(extension_manifest, indent=2).encode())
-        readme = f"""Corresponding source for the ReXGlue runtime and GPU DLLs.
-SDK version {SDK.version}; commit {SDK.commit}; upstream sources preserved.
-The N3 GPU extension and preparation/build scripts are in n3-gpu-extension/.
-They rebuild the Xenos plugin with live render-resolution support. To reproduce
-the application build, use the matching N3 project release tag and its
-tools/build.ps1; it applies these sources and the listed BSD ReIGlue fixes to the
-pinned SDK. The supplied runtime and supporting libraries remain the pinned SDK
-builds. Extension file hashes are recorded in n3-gpu-extension/SHA256.json.
-Non-Vulkan dependencies are included at the SDK's pinned commits. License texts
-and build scripts are preserved in each source directory. No game material is
+            add_file(archive, "n3-build-metadata/" + name, (ROOT / name).read_bytes())
+        add_file(archive, "n3-build-metadata/SHA256.json", json.dumps(local_manifest, indent=2).encode())
+        readme = f"""Corresponding source for the modular ReXGlue SDK libraries.
+SDK version {SDK.version}; base commit {SDK.commit}; upstream sources preserved.
+Every SDK submodule and the pinned Vulkan headers and VMA sources are included.
+The released D3D12, Vulkan, null, UI, input, audio and filesystem modules are
+built from that stable source plus the N3 patches under
+n3-build-metadata/tools/rexglue/patches/. N3's lock and integration build files
+are under n3-build-metadata/, with hashes in SHA256.json. License texts and
+build scripts are preserved in each source directory. No game material is
 included. FFmpeg and libmspack are LGPL components; see their COPYING files.
 
 Rebuilding: consult rexglue-sdk/README.md and CMakePresets.json. On Windows use
 Clang 20+ and VS 2022 x64 tools. Initialize a local Git repository in each of
 the included thirdparty submodule directories (git init) to satisfy the SDK's
-source checkout presence checks. Configure with REXGLUE_USE_VULKAN=OFF and build
-the Release configuration. FFmpeg is built by the SDK's supplied CMake scripts.
-Replace the released rexruntime.dll and rexgpu-xenos.dll with compatible rebuilt
-DLLs to use modified SDK/library code. This application does not restrict their
-replacement. Reverse engineering for debugging modifications to LGPL components
-is permitted. The project's own source is available at the matching GitHub tag;
-recompiling the game translation requires a matching executable from your disc.
+source checkout presence checks. From rexglue-sdk/, apply the patches in lexical
+order with `git apply --ignore-space-change <patch>`, then build the Release
+configuration. FFmpeg is built by the SDK's supplied CMake scripts. Compatible
+rebuilt modular DLLs may replace the supplied libraries. This application does
+not restrict their replacement. Reverse engineering for debugging modifications
+to LGPL components is permitted. The project's own source is available at the
+matching GitHub tag; recompiling the game translation requires a matching
+executable from your disc.
 
 Build recipe used by the prebuilt SDK is preserved in
 rexglue-sdk/.github/workflows/build-win-amd64.yaml,
 rexglue-sdk/.github/workflows/_build-platform.yaml and their referenced scripts.
 SOURCE-MANIFEST.json records source URLs, commit IDs, and archive SHA-256 values.
-SDK-LOCK.json records the exact official binary release used by this project.
+SDK-LOCK.json records the exact stable SDK base and source dependencies.
 """
         add_file(archive, "README.txt", readme.encode())
     temporary_destination.replace(destination)

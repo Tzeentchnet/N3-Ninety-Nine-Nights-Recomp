@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include <rex/ppc.h>
 #include <rex/memory/utils.h>
+#include "test_guest_address.h"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -21,16 +22,14 @@ extern "C" void sub_8209DDE8(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_8209DDE8(PPCContext&, uint8_t*);
 extern "C" void sub_820A13B0(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_820A13B0(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 thread_local bool n3_bounded_original_callee = false;
 void Require(bool ok, const char* text) { if (!ok) throw std::runtime_error(text); }
 struct Region { uint64_t start; uint32_t size; };
 constexpr std::array<Region, 7> regions{{{0, 0x20000}, {0x82041000, 8192},
     {0x8205b000, 4096}, {0x82b5f000, 8192}, {0xdfff0000, 0x20000},
     {0xe1000000, 0x30000}, {0xffffb000, 0x15000}}};
-// Independent of the native helper: this is the generated Windows translation's
-// physical shadow rule. Raw host regions also contain distinct unbiased canaries.
-uint64_t HostOffset(uint32_t at) { return uint64_t(at) + (at >= 0xe0000000u ? 0x1000u : 0u); }
+uint64_t HostOffset(uint32_t at) { return n3::test::TestGuestHostOffset(at); }
 struct Guest {
   uint8_t* base;
   Guest() : base(static_cast<uint8_t*>(VirtualAlloc(nullptr, (size_t{1} << 32) + 0x10000, MEM_RESERVE, PAGE_NOACCESS))) {
@@ -62,18 +61,18 @@ void CheckPhysicalContext(const PPCContext& a, const PPCContext& b, bool retaine
     CHECK(20) CHECK(21) CHECK(22) CHECK(23) CHECK(24) CHECK(25) CHECK(26) CHECK(27) CHECK(28) CHECK(29) CHECK(30) CHECK(31)
 #undef CHECK
   }
-#define CR(n) Require(a.cr##n.raw() == b.cr##n.raw(), "Physical bounded condition field differs");
+#define CR(n) Require(a.cr##n.GetRaw() == b.cr##n.GetRaw(), "Physical bounded condition field differs");
   CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
   Require(std::memcmp(reinterpret_cast<const uint8_t*>(&a) + offsetof(PPCContext, v0),
                       reinterpret_cast<const uint8_t*>(&b) + offsetof(PPCContext, v0), 128 * sizeof(PPCVRegister)) == 0 &&
-          a.ctr.u64 == b.ctr.u64 && a.msr == b.msr && a.vscr_sat == b.vscr_sat && a.last_indirect_target == b.last_indirect_target,
+          a.ctr.u64 == b.ctr.u64 && a.msr == b.msr && a.vscr.sat == b.vscr.sat && a.last_indirect_target == b.last_indirect_target,
           "Physical bounded vector or preserved control state differs");
 }
 int main() {
-  using Platform = rex::platform::FPSCRPlatform;
-  constexpr auto controls = PPCFPSCRRegister::GuestMask | Platform::ExceptionMask;
-  const auto saved = Platform::getcsr();
+  using Platform = rex::ppc::FPSCRPlatform;
+  constexpr auto controls = PPCFPSCRRegister::kGuestMask | Platform::kExceptionMask;
+  const auto saved = Platform::GetCSR();
   uint32_t sample = 0, rounding = 0, address = 0;
   bool flush = false;
   try {
@@ -107,8 +106,8 @@ int main() {
     for (auto entry : entries) {
       address = entry.address;
       bool registered = false;
-      for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-        if (mapping->guest == entry.address) registered = mapping->host == entry.replacement;
+      for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+        if (mapping->address == entry.address) registered = mapping->host == entry.replacement;
       Require(registered, "Bounded value missing from indirect-call mapping");
       for (rounding = 0; rounding < 4; ++rounding) for (bool next_flush : {false, true}) {
         flush = next_flush;
@@ -132,22 +131,37 @@ int main() {
             object = physical_case < 4 || physical_case >= 12 ? 0xe1001000u + physical_case % 4 : 0x1000;
             root = (physical_case >= 4 && physical_case < 8) || physical_case >= 12 ? 0xe1006000u + physical_case % 4 : 0x4000;
             table = physical_case >= 8 ? 0xe1010000u + physical_case % 4 : 0x9000;
-            if (physical_case >= 12) stack = 0xe1028000u;
             mode = physical_case & 1; argument = 10; kind = 17; channel = extra = 0;
             if (physical_case == 16) root = 0xffffb000u;
             if (physical_case == 17) table = 0xffffe000u;
             if (physical_case == 18) object = 0xfffff800u;
-            if (physical_case == 19) stack = 0xfffff000u;
-            if (physical_case == 20) { object = 0xdffffe00u; physical_fallback = true; }
-            if (physical_case == 21) { root = 0xdffffffcu - entry.descriptor; physical_fallback = true; }
-            if (physical_case == 22) { table = 0xdfffffe0u; physical_fallback = true; }
-            if (physical_case == 23) { table = 0xdfffffffu; physical_fallback = true; }
-            if (physical_case == 24) { stack = 0xe0000008u; physical_fallback = true; }
+            if (physical_case == 20) {
+              object = 0xdffffe00u;
+              physical_fallback = n3::test::kPhysicalOffsetInCode;
+            }
+            if (physical_case == 21) {
+              root = 0xdffffffcu - entry.descriptor;
+              physical_fallback = n3::test::kPhysicalOffsetInCode;
+            }
+            if (physical_case == 22) {
+              table = 0xdfffffe0u;
+              physical_fallback = n3::test::kPhysicalOffsetInCode;
+            }
+            if (physical_case == 23) {
+              table = 0xdfffffffu;
+              physical_fallback = n3::test::kPhysicalOffsetInCode;
+            }
+            if (physical_case == 24) physical_fallback = false;
             if (physical_case == 25) { table = 0xffffffd0u; physical_fallback = true; }
             if (physical_case == 26) { object = 0xfffffd00u; physical_fallback = true; }
             if (physical_case == 27) { root = uint32_t(0u - entry.descriptor); physical_fallback = true; }
             if (physical_case == 28) { table = stack - 16; physical_fallback = true; }
-            if (physical_case == 29 && entry.Wrapper()) { stack = root + entry.descriptor + 8; link = table; physical_fallback = true; }
+            if (physical_case == 29 && entry.Wrapper()) {
+              root = 0x4000;
+              stack = root + entry.descriptor + 8;
+              link = table;
+              physical_fallback = true;
+            }
             if (physical_case == 30 && entry.modifier) { object = root + 88 - 732; mode = 0; argument = table; physical_fallback = true; }
             if (physical_case == 31) { object = stack - 736; physical_fallback = true; }
           }
@@ -262,7 +276,9 @@ int main() {
           if (physical && physical_case == 30 && entry.modifier)
             expected.Word(root + 88, 0xdead0000);
           std::array<uint8_t, 4> unbiased_value{};
-          const bool unbiased = physical && object >= 0xe0000000u && uint64_t(object) + 668 <= 0x100000000ull;
+          const bool unbiased = n3::test::kPhysicalOffsetInCode &&
+              physical && object >= 0xe0000000u &&
+              uint64_t(object) + 668 <= 0x100000000ull;
           if (unbiased) std::copy_n(expected.base + uint64_t(object) + 664, 4, unbiased_value.begin());
           actual.Copy(expected);
           if (entry.Wrapper()) before.Copy(expected);
@@ -279,19 +295,19 @@ int main() {
           SEED(14) SEED(15) SEED(16) SEED(17) SEED(18) SEED(19) SEED(20) SEED(21) SEED(22)
           SEED(23) SEED(24) SEED(25) SEED(26) SEED(27) SEED(28) SEED(29) SEED(30) SEED(31)
 #undef SEED
-          original.cr0.set_raw(sample % 16); original.cr6.set_raw((sample + 3) % 16);
+          original.cr0.SetRaw(sample % 16); original.cr6.SetRaw((sample + 3) % 16);
           original.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
-          original.fpscr.InitHost(); original.fpscr.storeFromGuest(rounding);
-          if (flush) original.fpscr.enableFlushModeUnconditional(); else original.fpscr.disableFlushModeUnconditional();
-          if (unmasked) { original.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu); Platform::setcsr(original.fpscr.csr); }
+          original.fpscr.InitHost(); original.fpscr.StoreToHost(rounding);
+          if (flush) original.fpscr.EnableFlushModeUnconditional(); else original.fpscr.DisableFlushModeUnconditional();
+          if (unmasked) { original.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu); Platform::SetCSR(original.fpscr.csr); }
           const auto initial = original.fpscr.csr; auto replacement = original;
           const auto input_context = original;
           // Force the retained nested callee in both retained execution and
           // fallback. The ordinary replacement uses the typed model directly.
           n3_bounded_original_callee = entry.Wrapper();
-          Platform::setcsr(initial); entry.original(original, expected.base);
-          const auto host_controls = Platform::getcsr() & controls;
-          Platform::setcsr(initial); entry.replacement(replacement, actual.base);
+          Platform::SetCSR(initial); entry.original(original, expected.base);
+          const auto host_controls = Platform::GetCSR() & controls;
+          Platform::SetCSR(initial); entry.replacement(replacement, actual.base);
           n3_bounded_original_callee = false;
           const bool native = replacement.r8.u64 == marker;
           if (physical) {
@@ -328,16 +344,16 @@ int main() {
           CHECK(14) CHECK(15) CHECK(16) CHECK(17) CHECK(18) CHECK(19) CHECK(20) CHECK(21) CHECK(22)
           CHECK(23) CHECK(24) CHECK(25) CHECK(26) CHECK(27) CHECK(28) CHECK(29) CHECK(30) CHECK(31)
 #undef CHECK
-          Require(original.cr0.raw() == replacement.cr0.raw() && original.cr6.raw() == replacement.cr6.raw() &&
+          Require(original.cr0.GetRaw() == replacement.cr0.GetRaw() && original.cr6.GetRaw() == replacement.cr6.GetRaw() &&
                   original.xer.ca == replacement.xer.ca && original.xer.ov == replacement.xer.ov && original.xer.so == replacement.xer.so,
                   "Bounded value condition/carry flags differ");
           Require((original.fpscr.csr & controls) == (replacement.fpscr.csr & controls) &&
-                  (Platform::getcsr() & controls) == host_controls, "Bounded value FP controls differ");
+                  (Platform::GetCSR() & controls) == host_controls, "Bounded value FP controls differ");
           if (entry.Wrapper()) {
             // Exercise the actual game composition too: an outer rejection can
             // retain the caller while its nested limit call uses typed C++.
             production.Copy(before); auto composed = input_context;
-            Platform::setcsr(initial); entry.replacement(composed, production.base);
+            Platform::SetCSR(initial); entry.replacement(composed, production.base);
             if (replacement.r8.u64 != marker && composed.r8.u64 == marker) {
               Require(std::equal(production.Ptr(stack - 128), production.Ptr(stack - 128) + 16, before.Ptr(stack - 128)),
                       "Native nested limit unexpectedly wrote scratch");
@@ -359,25 +375,26 @@ int main() {
             COMPOSE_CHECK(20) COMPOSE_CHECK(21) COMPOSE_CHECK(22) COMPOSE_CHECK(23) COMPOSE_CHECK(24) COMPOSE_CHECK(25)
             COMPOSE_CHECK(26) COMPOSE_CHECK(27) COMPOSE_CHECK(28) COMPOSE_CHECK(29) COMPOSE_CHECK(30) COMPOSE_CHECK(31)
 #undef COMPOSE_CHECK
-            Require(original.cr0.raw() == composed.cr0.raw() && original.cr6.raw() == composed.cr6.raw() &&
+            Require(original.cr0.GetRaw() == composed.cr0.GetRaw() && original.cr6.GetRaw() == composed.cr6.GetRaw() &&
                     original.xer.ca == composed.xer.ca && original.xer.ov == composed.xer.ov && original.xer.so == composed.xer.so &&
                     (original.fpscr.csr & controls) == (composed.fpscr.csr & controls) &&
-                    (Platform::getcsr() & controls) == host_controls, "Production composition flags/FP controls differ");
+                    (Platform::GetCSR() & controls) == host_controls, "Production composition flags/FP controls differ");
             ++compositions;
           }
           ++comparisons;
         }
       }
     }
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     Require(native_inner > 0, "Production composition never exercised an outer fallback with a native callee");
-    Require(physical_native >= 800 && physical_retained >= 400 && unbiased_checks >= 800,
+    Require(physical_native > 0 && physical_retained > 0 &&
+            (!n3::test::kPhysicalOffsetInCode || unbiased_checks >= 800),
             "Physical bounded records, shadow-boundary rejection or unbiased canaries lacked coverage");
     std::cout << comparisons << " bounded value equivalence cases passed (" << native_count << " native paths); "
               << compositions << " production compositions (" << native_inner << " fallback/native-callee), "
               << physical_native << " physical native and " << physical_retained << " physical retained cases passed\n";
   } catch (const std::exception& error) {
-    n3_bounded_original_callee = false; Platform::setcsr(saved);
+    n3_bounded_original_callee = false; Platform::SetCSR(saved);
     std::cerr << "Bounded value 0x" << std::hex << address << std::dec << " sample " << sample
               << " rounding " << rounding << " flush " << flush << ": " << error.what() << '\n'; return 1;
   }

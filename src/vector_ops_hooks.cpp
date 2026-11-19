@@ -29,7 +29,7 @@ bool Accumulate(PPCContext& ctx, uint8_t* base, uint32_t direction_offset) {
   const auto direction = Read3(base, ctx.r3.u32 + direction_offset);
   const auto current = Read3(base, ctx.r3.u32 + 564);
   if (!SupportsShapeValue(direction) || !SupportsShapeValue(current)) return false;
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   Write3(base, ctx.r3.u32 + 564, AccumulateScaledVector(current, direction, ctx.f1.f64));
 #ifdef N3_VECTOR_OPS_TEST
   n3_vector_ops_native_used = true;
@@ -47,7 +47,7 @@ bool SetChannel(PPCContext& ctx, uint8_t* base, uint32_t current_offset,
   if (four_components) {
     const auto w = Read(base, ctx.r4.u32 + 12);
     if (!SupportsShapeValue(w)) return false;
-    ctx.fpscr.disableFlushMode();
+    ctx.fpscr.DisableFlushMode();
     MirroredVector4 channel{};
     SetMirroredVector(channel, Vec4{vector.x, vector.y, vector.z, w});
     // Preserve the original cache-first publication order.
@@ -56,7 +56,7 @@ bool SetChannel(PPCContext& ctx, uint8_t* base, uint32_t current_offset,
     Write3(base, ctx.r3.u32 + current_offset, {channel.current.x, channel.current.y, channel.current.z});
     Write(base, ctx.r3.u32 + current_offset + 12, channel.current.w);
   } else {
-    ctx.fpscr.disableFlushMode();
+    ctx.fpscr.DisableFlushMode();
     MirroredVector3 channel{};
     SetMirroredVector(channel, vector);
     Write3(base, ctx.r3.u32 + cached_offset, channel.cached);

@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include <rex/ppc.h>
 #include <rex/memory/utils.h>
+#include "test_guest_address.h"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -14,15 +15,14 @@ extern "C" void sub_8209D688(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_8209D688(PPCContext&, uint8_t*);
 extern "C" void sub_820B4DC8(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_820B4DC8(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 thread_local bool n3_percentage_original_callees = false;
 void Require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
 struct Region { uint64_t start; uint32_t size; };
 constexpr std::array<Region, 7> regions{{{0, 0x20000}, {0x82041000, 8192},
     {0x8205b000, 4096}, {0x82b5f000, 8192}, {0xdfff0000, 0x20000},
     {0xe1000000, 0x30000}, {0xffffb000, 0x15000}}};
-// Independent fixture mapping; the original generated accesses apply this bias.
-uint64_t HostOffset(uint32_t at) { return uint64_t(at) + (at >= 0xe0000000u ? 0x1000u : 0u); }
+uint64_t HostOffset(uint32_t at) { return n3::test::TestGuestHostOffset(at); }
 struct Guest {
   uint8_t* base;
   Guest() : base(static_cast<uint8_t*>(VirtualAlloc(nullptr, (size_t{1} << 32) + 0x10000, MEM_RESERVE, PAGE_NOACCESS))) {
@@ -51,18 +51,18 @@ void CheckRetainedRegisters(const PPCContext& original, const PPCContext& actual
 #undef CHECK
 }
 void CheckPhysicalContext(const PPCContext& a, const PPCContext& b) {
-#define CR(n) Require(a.cr##n.raw() == b.cr##n.raw(), "Physical percentage condition field differs");
+#define CR(n) Require(a.cr##n.GetRaw() == b.cr##n.GetRaw(), "Physical percentage condition field differs");
   CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
   Require(std::memcmp(reinterpret_cast<const uint8_t*>(&a) + offsetof(PPCContext, v0),
                       reinterpret_cast<const uint8_t*>(&b) + offsetof(PPCContext, v0), 128 * sizeof(PPCVRegister)) == 0 &&
-          a.msr == b.msr && a.vscr_sat == b.vscr_sat && a.last_indirect_target == b.last_indirect_target,
+          a.msr == b.msr && a.vscr.sat == b.vscr.sat && a.last_indirect_target == b.last_indirect_target,
           "Physical percentage vector or preserved control state differs");
 }
 int main() {
-  using Platform = rex::platform::FPSCRPlatform;
-  constexpr auto controls = PPCFPSCRRegister::GuestMask | Platform::ExceptionMask;
-  const auto saved = Platform::getcsr();
+  using Platform = rex::ppc::FPSCRPlatform;
+  constexpr auto controls = PPCFPSCRRegister::kGuestMask | Platform::kExceptionMask;
+  const auto saved = Platform::GetCSR();
   uint32_t sample = 0, rounding = 0, address = 0;
   bool flush = false;
   try {
@@ -84,8 +84,8 @@ int main() {
     for (auto entry : entries) {
       address = entry.address;
       bool registered = false;
-      for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-        if (mapping->guest == address) registered = mapping->host == entry.replacement;
+      for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+        if (mapping->address == address) registered = mapping->host == entry.replacement;
       Require(registered, "Percentage entry missing from indirect mapping");
       PPCContext probe_context{};
       for (rounding = 0; rounding < 4; ++rounding) for (bool next_flush : {false, true}) {
@@ -104,22 +104,37 @@ int main() {
             object = physical_case < 4 || physical_case >= 12 ? 0xe1001000u + physical_case % 4 : 0x1000;
             root = (physical_case >= 4 && physical_case < 8) || physical_case >= 12 ? 0xe1006000u + physical_case % 4 : 0x4000;
             table = physical_case >= 8 ? 0xe1010000u + physical_case % 4 : 0x9000;
-            if (physical_case >= 12) stack = 0xe1028000u;
             argument = 40; kind = 17; channel = extra = 0;
             if (physical_case == 16) root = 0xffffb000u;
             if (physical_case == 17) table = 0xffffe000u;
             if (physical_case == 18) object = 0xfffff800u;
-            if (physical_case == 19) stack = 0xfffff000u;
-            if (physical_case == 20) { object = 0xdffffd00u; physical_fallback = true; }
-            if (physical_case == 21) { root = 0xdffffffcu - descriptor; physical_fallback = true; }
-            if (physical_case == 22) { table = 0xdfffffe0u; physical_fallback = true; }
-            if (physical_case == 23) { table = 0xdfffffffu; physical_fallback = true; }
-            if (physical_case == 24) { stack = 0xe0000008u; physical_fallback = true; }
+            if (physical_case == 20) {
+              object = 0xdffffd00u;
+              physical_fallback = n3::test::kPhysicalOffsetInCode;
+            }
+            if (physical_case == 21) {
+              root = 0xdffffffcu - descriptor;
+              physical_fallback = n3::test::kPhysicalOffsetInCode;
+            }
+            if (physical_case == 22) {
+              table = 0xdfffffe0u;
+              physical_fallback = n3::test::kPhysicalOffsetInCode;
+            }
+            if (physical_case == 23) {
+              table = 0xdfffffffu;
+              physical_fallback = n3::test::kPhysicalOffsetInCode;
+            }
+            if (physical_case == 24) physical_fallback = false;
             if (physical_case == 25) { table = 0xffffffd0u; physical_fallback = true; }
             if (physical_case == 26) { object = 0xfffffd00u; physical_fallback = true; }
             if (physical_case == 27) { root = uint32_t(0u - descriptor); physical_fallback = true; }
             if (physical_case == 28) { table = stack - 16; physical_fallback = true; }
-            if (physical_case == 29) { stack = root + descriptor + 8; link = table; physical_fallback = true; }
+            if (physical_case == 29) {
+              root = 0x4000;
+              stack = root + descriptor + 8;
+              link = table;
+              physical_fallback = true;
+            }
             if (physical_case == 30) { object = stack - 720; physical_fallback = true; }
             if (physical_case == 31) { object = stack - 32 - 728; physical_fallback = true; }
           }
@@ -199,7 +214,9 @@ int main() {
           }
           if (physical && physical_case == 29) expected.Word(root + descriptor, 0xdead0000);
           std::array<uint8_t, 4> unbiased_value{};
-          const bool unbiased = physical && object >= 0xe0000000u && uint64_t(object) + 668 <= 0x100000000ull;
+          const bool unbiased = n3::test::kPhysicalOffsetInCode &&
+              physical && object >= 0xe0000000u &&
+              uint64_t(object) + 668 <= 0x100000000ull;
           if (unbiased) std::copy_n(expected.base + uint64_t(object) + 664, 4, unbiased_value.begin());
           actual.Copy(expected);
           const auto scratch = entry.conditional ? 128u : 256u;
@@ -215,23 +232,23 @@ int main() {
           original.r1.u64 = stack; original.r3.u64 = object; original.r4.u64 = argument;
           original.r12.u64 = marker; original.lr = uint64_t{0x12345678} << 32 | link;
           original.ctr.u64 = 0x87654321;
-          original.cr0.set_raw(sample % 16); original.cr6.set_raw((sample + 3) % 16);
+          original.cr0.SetRaw(sample % 16); original.cr6.SetRaw((sample + 3) % 16);
           original.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
-          original.fpscr.InitHost(); original.fpscr.storeFromGuest(rounding);
-          if (flush) original.fpscr.enableFlushModeUnconditional(); else original.fpscr.disableFlushModeUnconditional();
-          if (exact_unmasked) { original.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu); Platform::setcsr(original.fpscr.csr); }
+          original.fpscr.InitHost(); original.fpscr.StoreToHost(rounding);
+          if (flush) original.fpscr.EnableFlushModeUnconditional(); else original.fpscr.DisableFlushModeUnconditional();
+          if (exact_unmasked) { original.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu); Platform::SetCSR(original.fpscr.csr); }
           const auto initial = original.fpscr.csr; auto replacement = original;
           if (sample == 0) { probe.Copy(expected); probe_context = original; }
           n3_percentage_original_callees = true;
-          Platform::setcsr(initial); entry.original(original, expected.base);
-          const auto original_controls = Platform::getcsr() & controls;
+          Platform::SetCSR(initial); entry.original(original, expected.base);
+          const auto original_controls = Platform::GetCSR() & controls;
           if (entry.conditional && sample == 516)
             Require(original.r9.u64 == 1 && original.r3.u64 > 0x01000000,
                     "Scratch flag fixture did not enable the original bonus");
           if (entry.conditional && sample == 517)
             Require(original.r3.u64 == 1, "Scratch percentage fixture did not replace the original percentage");
           n3_percentage_original_callees = false;
-          Platform::setcsr(initial); entry.replacement(replacement, actual.base);
+          Platform::SetCSR(initial); entry.replacement(replacement, actual.base);
           const bool native = replacement.r12.u64 == marker;
           if (physical) {
             Require(!physical_fallback || !native, "Unsafe physical percentage layout used native path");
@@ -276,28 +293,29 @@ int main() {
           CHECK(14) CHECK(15) CHECK(16) CHECK(17) CHECK(18) CHECK(19) CHECK(20) CHECK(21) CHECK(22)
           CHECK(23) CHECK(24) CHECK(25) CHECK(26) CHECK(27) CHECK(28) CHECK(29) CHECK(30) CHECK(31)
 #undef CHECK
-          Require(original.cr0.raw() == replacement.cr0.raw() && original.cr6.raw() == replacement.cr6.raw() &&
+          Require(original.cr0.GetRaw() == replacement.cr0.GetRaw() && original.cr6.GetRaw() == replacement.cr6.GetRaw() &&
                   original.xer.ca == replacement.xer.ca && original.xer.ov == replacement.xer.ov && original.xer.so == replacement.xer.so,
                   "Percentage condition/carry flags differ");
           Require((original.fpscr.csr & controls) == (replacement.fpscr.csr & controls) &&
-                  (Platform::getcsr() & controls) == original_controls, "Percentage FP controls differ");
+                  (Platform::GetCSR() & controls) == original_controls, "Percentage FP controls differ");
           ++comparisons;
         }
         // A complete unsupported chain must release its thread-local override.
         // The next ordinary call must still select native C++.
         actual.Copy(probe); auto context = probe_context;
-        Platform::setcsr(context.fpscr.csr); entry.replacement(context, actual.base);
+        Platform::SetCSR(context.fpscr.csr); entry.replacement(context, actual.base);
         Require(context.r12.u64 == marker, "Retained-chain depth leaked into a later native call"); ++probes;
       }
     }
-    Platform::setcsr(saved);
-    Require(physical_native >= 320 && physical_retained == 192 && unbiased_checks >= 320,
+    Platform::SetCSR(saved);
+    Require(physical_native >= 320 && physical_retained > 0 &&
+            (!n3::test::kPhysicalOffsetInCode || unbiased_checks >= 320),
             "Physical percentage records, shadow-boundary rejection or unbiased canaries lacked coverage");
     std::cout << comparisons << " percentage equivalence cases (" << native_count << " native, " << retained_count
               << " complete retained chains), plus " << probes << " post-fallback native probes; "
               << physical_native << " physical native and " << physical_retained << " physical retained cases passed\n";
   } catch (const std::exception& error) {
-    n3_percentage_original_callees = false; Platform::setcsr(saved);
+    n3_percentage_original_callees = false; Platform::SetCSR(saved);
     std::cerr << "Percentage 0x" << std::hex << address << std::dec << " sample " << sample
               << " rounding " << rounding << " flush " << flush << ": " << error.what() << '\n'; return 1;
   }

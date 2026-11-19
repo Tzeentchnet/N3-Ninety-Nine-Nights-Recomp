@@ -28,8 +28,8 @@ void Write3(uint8_t* base, uint32_t address, Vec3 value) {
 bool Eligible(const PPCContext& ctx, uint32_t output, uint32_t size, uint32_t scratch_size) {
   using namespace n3::guest;
   const auto object = ctx.r3.u32, stack = ctx.r1.u32;
-  using Platform = rex::platform::FPSCRPlatform;
-  if (!(ctx.fpscr.csr & Platform::FlushMask) && (Platform::getcsr() & Platform::FlushMask)) return false;
+  using Platform = rex::ppc::FPSCRPlatform;
+  if (!(ctx.fpscr.csr & Platform::kFlushMask) && (Platform::GetCSR() & Platform::kFlushMask)) return false;
   return ScalarExceptionsMasked(ctx) && FitsLinearGuestRange(object, 304) && FitsLinearGuestRange(output, size) &&
       DisjointGuestHostRanges(object, 304, output, size) && stack >= scratch_size &&
       FitsLinearGuestRange(stack - scratch_size, scratch_size) &&
@@ -48,7 +48,7 @@ extern "C" void sub_823602C0(PPCContext& ctx, uint8_t* base) {
   if (!Eligible(ctx, output, 24, 24)) return __imp__sub_823602C0(ctx, base);
   const auto box = ReadBox(base, ctx.r3.u32);
   if (!SupportsBoxGeometry(box)) return __imp__sub_823602C0(ctx, base);
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   const auto bounds = TransformedBoxBounds(box);
   Write3(base, output, bounds.minimum); Write3(base, output + 12, bounds.maximum);
   NativeUsed();
@@ -58,13 +58,13 @@ extern "C" void sub_823604B8(PPCContext& ctx, uint8_t* base) {
   const auto output = ctx.r7.u32;
   if (!Eligible(ctx, output, 12, 64)) return __imp__sub_823604B8(ctx, base);
   const auto box = ReadBox(base, ctx.r3.u32);
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR();
   const auto saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   Vec3 result{};
   if (!TryTransformBoxSample(box, {ctx.r4.s32, ctx.r5.s32, ctx.r6.s32}, result)) {
     ctx.fpscr.csr = saved_guest;
-    rex::platform::FPSCRPlatform::setcsr(saved_host);
+    rex::ppc::FPSCRPlatform::SetCSR(saved_host);
     return __imp__sub_823604B8(ctx, base);
   }
   Write3(base, output, result);

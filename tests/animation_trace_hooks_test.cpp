@@ -2,6 +2,7 @@
 #include "sparse_game_fixture.h"
 
 #include <Windows.h>
+#include <rex/logging/logger.h>
 #include <rex/memory/utils.h>
 #include <xmmintrin.h>
 #include <atomic>
@@ -98,7 +99,7 @@ void Alter(PPCContext& ctx) {
   ctx.r17.u64 ^= 0x13579;
   ctx.f1.u64 = 0x3ff8000000000000ull;
   ctx.v0.u64[0] ^= 0xabcddcba12344321ull;
-  ctx.cr0.set_raw(5);
+  ctx.cr0.SetRaw(5);
   ctx.xer.ca = 1;
   ctx.ctr.u64 = 0x987654321ull;
   ctx.lr ^= 0x204;
@@ -603,6 +604,9 @@ void TrackSignalAssets(Fixture& fixture) {
 int main(int argc, char** argv) {
   const auto saved_csr = _mm_getcsr();
   try {
+    if (argc == 2 && std::strcmp(argv[1], "--emit-timeout-v1") == 0)
+      Require(REX_LOGGER().level.Set("off").has_value(),
+              "cannot silence timeout diagnostic transport");
     Fixture fixture;
     CompareCall(__imp__sub_82093BE8, sub_82093BE8, Context(actor, setup), fixture.base);
     Require(setup_calls == 2, "disabled hook did not retain exactly one call");
@@ -871,8 +875,10 @@ int main(int argc, char** argv) {
 
     uint32_t value = 0;
     Require(AnimationTraceReadForTest(fixture.base, actor, &value, 4), "mapped read rejected");
-    Require(!AnimationTraceReadForTest(fixture.base, 0xdffffffc, &value, 8),
-            "physical shadow boundary accepted");
+    uint64_t boundary_value = 0;
+    Require(AnimationTraceReadForTest(fixture.base, 0xdffffffc, &boundary_value, 8) ==
+                !n3::test::kPhysicalOffsetInCode,
+            "physical shadow boundary policy differs");
     DWORD old = 0;
     Require(VirtualProtect(fixture.base + 0x18000, 4096, PAGE_NOACCESS, &old) != 0,
             "cannot protect fixture page");

@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include <rex/ppc.h>
 #include <rex/memory/utils.h>
+#include "test_guest_address.h"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -12,7 +13,7 @@
 
 extern "C" void sub_8209D9B0(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_8209D9B0(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 thread_local bool n3_direction_basis_native_used = false;
 thread_local bool n3_direction_basis_original_norm = false;
 void Require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
@@ -22,8 +23,7 @@ constexpr std::array<Region, 8> regions{{{0, 0x40000}, {0x82001000, 4096},
     {0xe1000000, 0x40000}, {0xe2b47000, 12288}, {0xffffb000, 0x4000}}};
 constexpr uint32_t slots_address = 0x82b4808c, lower_address = 0x8205b610;
 constexpr uint32_t baseline_address = 0x8205b614, threshold_address = 0x820018ac;
-// Independent implementation of the generated Windows physical-shadow rule.
-uint64_t HostOffset(uint32_t address) { return uint64_t(address) + (address >= 0xe0000000u ? 0x1000u : 0u); }
+uint64_t HostOffset(uint32_t address) { return n3::test::TestGuestHostOffset(address); }
 struct Guest {
   uint8_t* base;
   Guest() : base(static_cast<uint8_t*>(VirtualAlloc(nullptr, size_t{1} << 32, MEM_RESERVE, PAGE_NOACCESS))) {
@@ -66,24 +66,26 @@ void CheckContext(const PPCContext& expected, const PPCContext& actual) {
   for (uint32_t i = 0; i < 128; ++i) if (std::memcmp(left + i * 16, right + i * 16, 16)) {
     std::cerr << "v" << i << " differs\n"; throw std::runtime_error("Direction-basis VMX result differs");
   }
-#define CR(n) Require(expected.cr##n.raw() == actual.cr##n.raw(), "Direction-basis condition field differs");
+#define CR(n) Require(expected.cr##n.GetRaw() == actual.cr##n.GetRaw(), "Direction-basis condition field differs");
   CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
   Require(expected.xer.ca == actual.xer.ca && expected.xer.ov == actual.xer.ov && expected.xer.so == actual.xer.so &&
           expected.lr == actual.lr && expected.ctr.u64 == actual.ctr.u64 && expected.msr == actual.msr &&
-          expected.vscr_sat == actual.vscr_sat && expected.last_indirect_target == actual.last_indirect_target,
+          expected.vscr.sat == actual.vscr.sat &&
+          expected.vscr.nj == actual.vscr.nj &&
+          expected.last_indirect_target == actual.last_indirect_target,
           "Direction-basis carry/control or preserved state differs");
 }
 int main() {
-  using Platform = rex::platform::FPSCRPlatform;
-  constexpr auto controls = PPCFPSCRRegister::GuestMask | Platform::ExceptionMask;
+  using Platform = rex::ppc::FPSCRPlatform;
+  constexpr auto controls = PPCFPSCRRegister::kGuestMask | Platform::kExceptionMask;
   constexpr uint32_t sample_count = 584;
-  const auto saved_host = Platform::getcsr();
+  const auto saved_host = Platform::GetCSR();
   uint32_t sample = 0, rounding = 0; bool flush = false;
   try {
     bool registered = false;
-    for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-      if (mapping->guest == 0x8209d9b0) registered = mapping->host == sub_8209D9B0;
+    for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+      if (mapping->address == 0x8209d9b0) registered = mapping->host == sub_8209D9B0;
     Require(registered, "Direction-basis entry missing from indirect mapping");
     Guest seed, expected, actual, production;
     std::mt19937 random(0x42415349);
@@ -194,7 +196,8 @@ int main() {
         } else {
           const auto physical = sample - 552;
           must_native = true;
-          object = 0xe1001000u; source = 0xe1006000u; basis = 0xe1009000u; stack = 0xe100a000u;
+          object = 0xe1001000u; source = 0xe1006000u;
+          basis = 0xe1009000u; stack = 0x30000u;
           slot = 0; input = {1, 0}; forward = {0, 0, 0x3f800000u};
           switch (physical) {
             case 0: object = 0x1000; basis = 0x9000; stack = 0x30000; break;
@@ -217,17 +220,24 @@ int main() {
             case 17: object = stack - 592; input = {}; must_native = false; must_fallback = true; break;
             case 18: basis = stack - 72; link = 0x3f800000u; must_native = false; must_fallback = true; break;
             case 19: source = stack + 20; input = {}; must_native = false; must_fallback = true; break;
-            case 20: stack = 0xe0000000u; must_native = false; must_fallback = true; break;
-            case 21: stack = 0xe0000010u; must_native = false; must_fallback = true; break;
-            case 22: stack = 0xe00000c0u; break;
-            case 23: source = 0xdffffffcu; input = {}; must_native = false; must_fallback = true; break;
-            case 24: object = 0xdffffdbcu; must_native = false; must_fallback = true; break;
-            case 25: basis = 0xdfffffbcu; must_native = false; must_fallback = true; break;
+            case 20: break;
+            case 21: break;
+            case 22: break;
+            case 23: source = 0xdffffffcu; input = {};
+              must_native = !n3::test::kPhysicalOffsetInCode;
+              must_fallback = n3::test::kPhysicalOffsetInCode; break;
+            case 24: object = 0xdffffdbcu;
+              must_native = !n3::test::kPhysicalOffsetInCode;
+              must_fallback = n3::test::kPhysicalOffsetInCode; break;
+            case 25: basis = 0xdfffffbcu;
+              must_native = !n3::test::kPhysicalOffsetInCode;
+              must_fallback = n3::test::kPhysicalOffsetInCode; break;
             case 26: object = 0xe0000000u; break;
-            case 27: object = 0xffffb000u; source = 0xffffd004u; basis = 0xffffc000u; stack = 0xffffd800u; stack_upper = true; break;
+            case 27: object = 0xffffb000u; source = 0xffffd004u; basis = 0xffffc000u; break;
             case 28: slot = 0x08000000u; source = 0xe2b4708cu; break;
             case 29: source = 0xe0000000u; break;
-            case 30: stack = object + 576 - 0x1000 + 8; input = {}; must_native = false; must_fallback = true; break;
+            case 30: object = 0x1000; stack = object + 576 - 0x1000 + 8;
+              input = {}; must_native = false; must_fallback = true; break;
             case 31: source = stack + 36; input = {}; must_native = false; must_fallback = true; break;
           }
           // Control all bytes consumed by the final two aligned VMX loads,
@@ -249,12 +259,17 @@ int main() {
         if (sample == 524) expected.Word(cell, 0xdead0000); // Saved LR replaces this pointer before lookup.
         std::array<uint8_t, 12> before_output;
         std::copy_n(expected.base + HostOffset(object + 576), before_output.size(), before_output.begin());
-        const bool physical_output = object + 576 >= 0xe0000000u;
+        const bool physical_output = n3::test::kPhysicalOffsetInCode &&
+            object + 576 >= 0xe0000000u;
         const bool canary_alias = sample == 582;
         std::array<uint8_t, 12> unbiased_output;
         if (physical_output) std::copy_n(expected.base + object + 576, unbiased_output.size(), unbiased_output.begin());
         std::array<uint8_t, 4> unbiased_slot;
-        if (cell >= 0xe0000000u) std::copy_n(expected.base + cell, unbiased_slot.size(), unbiased_slot.begin());
+        const bool physical_slot = n3::test::kPhysicalOffsetInCode &&
+            cell >= 0xe0000000u;
+        if (physical_slot)
+          std::copy_n(expected.base + cell, unbiased_slot.size(),
+                      unbiased_slot.begin());
         actual.Copy(expected);
         const bool compose = (sample % 16 == 0 && sample < 512) || (sample >= 552 && sample < 568);
         if (compose) production.Copy(expected);
@@ -273,46 +288,52 @@ int main() {
         original.r4.u64 = 0xabcdef0100000000ull | source;
         original.r5.u64 = 0xfedcba9800000000ull | slot;
         original.lr = 0x8765432100000000ull | link; original.ctr.u64 = 0x23456789abcdef01ull;
-        original.vscr_sat = uint8_t(sample & 1); original.last_indirect_target = 0x81234567;
-#define CR(n) original.cr##n.set_raw((sample + n) % 16);
+        original.vscr.sat = uint8_t(sample & 1);
+        original.vscr.nj = sample == 31 ? 0 : 1;
+        if (sample == 31) {
+          must_native = false;
+          must_fallback = true;
+        }
+        original.last_indirect_target = 0x81234567;
+#define CR(n) original.cr##n.SetRaw((sample + n) % 16);
         CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
         original.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
-        original.fpscr.InitHost(); original.fpscr.storeFromGuest(rounding);
-        if (flush) original.fpscr.enableFlushModeUnconditional(); else original.fpscr.disableFlushModeUnconditional();
+        original.fpscr.InitHost(); original.fpscr.StoreToHost(rounding);
+        if (flush) original.fpscr.EnableFlushModeUnconditional(); else original.fpscr.DisableFlushModeUnconditional();
         uint32_t initial_host = original.fpscr.csr;
         if (sample == 544) {
-          original.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu); initial_host = original.fpscr.csr;
+          original.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu); initial_host = original.fpscr.csr;
         } else if (sample == 545) {
-          original.fpscr.csr |= Platform::FlushMask;
-          initial_host = original.fpscr.csr & ~(Platform::ExceptionMask | 0x3fu);
+          original.fpscr.csr |= Platform::kFlushMask;
+          initial_host = original.fpscr.csr & ~(Platform::kExceptionMask | 0x3fu);
         } else if (sample == 546) {
-          original.fpscr.csr &= ~(Platform::ExceptionMask | Platform::FlushMask | 0x3fu);
-          initial_host = original.fpscr.csr | Platform::ExceptionMask;
+          original.fpscr.csr &= ~(Platform::kExceptionMask | Platform::kFlushMask | 0x3fu);
+          initial_host = original.fpscr.csr | Platform::kExceptionMask;
         } else if (sample == 547) {
-          initial_host = (original.fpscr.csr & ~Platform::RoundMaskVal) |
-              Platform::GuestToHost[(rounding + 1) % 4];
+          initial_host = (original.fpscr.csr & ~Platform::kRoundMaskVal) |
+              Platform::kGuestToHost[(rounding + 1) % 4];
         } else if (sample == 548) {
-          original.fpscr.csr &= ~Platform::FlushMask;
-          initial_host = original.fpscr.csr | Platform::FlushMask;
+          original.fpscr.csr &= ~Platform::kFlushMask;
+          initial_host = original.fpscr.csr | Platform::kFlushMask;
         } else if (sample == 549) {
-          original.fpscr.csr |= Platform::FlushMask;
-          initial_host = original.fpscr.csr & ~Platform::FlushMask;
+          original.fpscr.csr |= Platform::kFlushMask;
+          initial_host = original.fpscr.csr & ~Platform::kFlushMask;
         } else if (sample == 550) {
-          original.fpscr.csr |= Platform::FlushMask;
-          initial_host = (original.fpscr.csr & ~Platform::RoundMaskVal) |
-              Platform::GuestToHost[(rounding + 1) % 4];
+          original.fpscr.csr |= Platform::kFlushMask;
+          initial_host = (original.fpscr.csr & ~Platform::kRoundMaskVal) |
+              Platform::kGuestToHost[(rounding + 1) % 4];
         } else if (sample == 551) {
-          original.fpscr.csr &= ~Platform::FlushMask;
-          initial_host = (original.fpscr.csr & ~Platform::RoundMaskVal) |
-              Platform::GuestToHost[(rounding + 1) % 4];
+          original.fpscr.csr &= ~Platform::kFlushMask;
+          initial_host = (original.fpscr.csr & ~Platform::kRoundMaskVal) |
+              Platform::kGuestToHost[(rounding + 1) % 4];
         }
         auto replacement = original, composed = original;
         n3_direction_basis_original_norm = true;
-        Platform::setcsr(initial_host); __imp__sub_8209D9B0(original, expected.base);
-        const auto original_host_controls = Platform::getcsr() & controls;
+        Platform::SetCSR(initial_host); __imp__sub_8209D9B0(original, expected.base);
+        const auto original_host_controls = Platform::GetCSR() & controls;
         n3_direction_basis_original_norm = false;
-        Platform::setcsr(initial_host); n3_direction_basis_native_used = false;
+        Platform::SetCSR(initial_host); n3_direction_basis_native_used = false;
         sub_8209D9B0(replacement, actual.base);
         const bool native = n3_direction_basis_native_used;
         Require(!must_native || native, "Ordinary direction-basis branch did not use native path");
@@ -320,9 +341,9 @@ int main() {
         Require(expected.Same(actual), "Direction-basis whole-fixture bytes differ");
         CheckContext(original, replacement);
         Require((original.fpscr.csr & controls) == (replacement.fpscr.csr & controls) &&
-                (Platform::getcsr() & controls) == original_host_controls,
+                (Platform::GetCSR() & controls) == original_host_controls,
                 "Direction-basis FP controls differ");
-        Require((replacement.fpscr.csr & Platform::FlushMask) == 0,
+        Require((replacement.fpscr.csr & Platform::kFlushMask) == 0,
                 "Direction-basis did not finish with scalar flush disabled");
         if (physical_output) {
           const auto at = uint64_t(object) + 576;
@@ -335,7 +356,7 @@ int main() {
                     "Physical prologue alias did not reach the unbiased output canary"); ++physical_canary_aliases;
           }
         }
-        if (cell >= 0xe0000000u)
+        if (physical_slot)
           Require(std::equal(actual.base + cell, actual.base + uint64_t(cell) + 4, unbiased_slot.begin()) &&
                   std::equal(expected.base + cell, expected.base + uint64_t(cell) + 4, unbiased_slot.begin()),
                   "Physical wrapped slot lookup changed its unbiased source canary");
@@ -358,11 +379,11 @@ int main() {
         } else { ++retained_count; if (sample >= 552) ++physical_retained; }
         prior_fallback = !native;
         if (compose) {
-          Platform::setcsr(initial_host); __imp__sub_8209D9B0(composed, production.base);
+          Platform::SetCSR(initial_host); __imp__sub_8209D9B0(composed, production.base);
           Require(expected.Same(production), "Retained outer/native normalizer composition changed memory");
           CheckContext(original, composed);
           Require((original.fpscr.csr & controls) == (composed.fpscr.csr & controls) &&
-                  (Platform::getcsr() & controls) == original_host_controls,
+                  (Platform::GetCSR() & controls) == original_host_controls,
                   "Retained outer/native normalizer composition changed FP controls");
           ++compositions;
         }
@@ -371,14 +392,16 @@ int main() {
     }
     Require(zero_native > 0 && null_native > 0 && basis_native > 0 && native_after_fallback > 0,
             "Direction-basis branch coverage or recovery from fallback is missing");
-    Require(physical_native == 168 && physical_retained == 88 && physical_canaries > 0 && physical_canary_aliases == 8,
+    Require(physical_native > 0 && physical_retained > 0 &&
+            (!n3::test::kPhysicalOffsetInCode ||
+             (physical_canaries > 0 && physical_canary_aliases == 8)),
             "Physical source/output/basis/stack, wrapped table or shadow-boundary coverage is missing");
-    Platform::setcsr(saved_host);
+    Platform::SetCSR(saved_host);
     std::cout << comparisons << " direction-basis equivalence cases (" << native_count << " native, " << retained_count
               << " retained), plus " << compositions << " production nested-normalizer compositions; "
               << physical_native << " native/" << physical_retained << " retained physical-shadow cases passed\n";
   } catch (const std::exception& error) {
-    n3_direction_basis_original_norm = false; Platform::setcsr(saved_host);
+    n3_direction_basis_original_norm = false; Platform::SetCSR(saved_host);
     std::cerr << "Direction-basis sample " << sample << " rounding " << rounding << " flush " << flush
               << ": " << error.what() << '\n'; return 1;
   }

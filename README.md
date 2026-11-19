@@ -5,7 +5,8 @@
 A native Windows recompilation of **N3: Ninety-Nine Nights** using
 [ReXGlue](https://github.com/rexglue/rexglue-sdk). PowerPC game code is
 translated ahead of time and runs through a native Windows host with a
-Direct3D 12 Xenos renderer.
+Direct3D 12 Xenos renderer by default, with Vulkan available as an opt-in
+development backend.
 
 No game assets, executable, generated game translations, or downloaded
 toolchains are included. You must supply your own supported game data.

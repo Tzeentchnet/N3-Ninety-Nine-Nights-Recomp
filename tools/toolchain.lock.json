@@ -1,11 +1,24 @@
 {
   "sdk": {
-    "version": "0.10.0.24-dev.gbd833a2",
-    "commit": "bd833a2ab69d305f99ddf57418fc38ffec8af93d",
-    "release_tag": "nightly-20261002-bd833a2a",
-    "asset_name": "rexglue-sdk-0.10.0.24-dev.gbd833a2-win-amd64.zip",
-    "url": "https://github.com/rexglue/rexglue-sdk/releases/download/nightly-20261002-bd833a2a/rexglue-sdk-0.10.0.24-dev.gbd833a2-win-amd64.zip",
-    "sha256": "1e19d7ec9be0d9d7e1a0088a34a33b068d4dea520181e81318528ef3b37627e7"
+    "version": "0.11.0",
+    "commit": "a3e1d82678ca20d68d4837a8e9ee4652ff073745",
+    "release_tag": "v0.11.0",
+    "asset_name": "rexglue-sdk-0.11.0-win-amd64.zip",
+    "source_url": "https://github.com/rexglue/rexglue-sdk.git",
+    "url": "https://github.com/rexglue/rexglue-sdk/releases/download/v0.11.0/rexglue-sdk-0.11.0-win-amd64.zip",
+    "sha256": "11ab67a3b8d7abaef501e77ea6c0e7dd588efe207540b46f7a302a03827a6611"
+  },
+  "sdk_source_dependencies": {
+    "vulkan_headers": {
+      "path": "thirdparty/Vulkan-Headers",
+      "url": "https://github.com/KhronosGroup/Vulkan-Headers.git",
+      "commit": "9fbc2a782ee3f8a4db64e7d991e23da75e893f44"
+    },
+    "vulkan_memory_allocator": {
+      "path": "thirdparty/VulkanMemoryAllocator",
+      "url": "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git",
+      "commit": "0f1a757da579831283413295cc7f3b47eb521c77"
+    }
   },
   "llvm": {
     "version": "20.1.8",

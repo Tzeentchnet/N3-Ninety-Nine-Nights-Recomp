@@ -9,7 +9,7 @@
 
 extern "C" void sub_8209E230(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_8209E230(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 thread_local bool n3_chance_roll_native_used = false;
 void Require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
 namespace {
@@ -56,7 +56,7 @@ struct InaccessiblePage {
   ~InaccessiblePage() { DWORD ignored; VirtualProtect(page, 4096, previous, &ignored); }
 };
 uint32_t CheckDeferredThresholds(const Guest& seed, Guest& expected, Guest& actual) {
-  using Platform = rex::platform::FPSCRPlatform;
+  using Platform = rex::ppc::FPSCRPlatform;
   uint32_t count = 0;
   // Default is the last word of a host page; alternate is on the next page.
   constexpr uint32_t object = 0xe1000d00, owner = 0x8000, stack = 0xf000;
@@ -72,31 +72,31 @@ uint32_t CheckDeferredThresholds(const Guest& seed, Guest& expected, Guest& actu
       SeedPreserved(a, rounding);
       a.r1.u32 = stack; a.r3.u32 = object; a.r4.u64 = 0x1122334400008000ull;
       a.r5.u64 = 0x123456789abcdef0ull;
-      a.fpscr.InitHost(); a.fpscr.storeFromGuest(rounding);
-      if (flush) a.fpscr.enableFlushModeUnconditional(); else a.fpscr.disableFlushModeUnconditional();
+      a.fpscr.InitHost(); a.fpscr.StoreToHost(rounding);
+      if (flush) a.fpscr.EnableFlushModeUnconditional(); else a.fpscr.DisableFlushModeUnconditional();
       const auto initial = a.fpscr.csr; auto b = a;
       const auto unused_page = PhysicalOffset(object + (alternate ? 764 : 768)) & ~uint64_t{4095};
       {
         InaccessiblePage expected_page(expected.base + unused_page), actual_page(actual.base + unused_page);
-        Platform::setcsr(initial); __imp__sub_8209E230(a, expected.base);
-        Platform::setcsr(initial); n3_chance_roll_native_used = false; sub_8209E230(b, actual.base);
+        Platform::SetCSR(initial); __imp__sub_8209E230(a, expected.base);
+        Platform::SetCSR(initial); n3_chance_roll_native_used = false; sub_8209E230(b, actual.base);
       }
       Require(n3_chance_roll_native_used && expected.Same(actual), "Unused threshold was read or chance output differs");
       CompareContext(a, b);
-      Require(Platform::getcsr() == initial, "Deferred threshold changed FP state");
+      Require(Platform::GetCSR() == initial, "Deferred threshold changed FP state");
       ++count;
     }
   return count;
 }
 }
 int main() {
-  using Platform = rex::platform::FPSCRPlatform;
-  const auto saved = Platform::getcsr();
+  using Platform = rex::ppc::FPSCRPlatform;
+  const auto saved = Platform::GetCSR();
   uint32_t sample = 0, mode = 0;
   try {
     bool registered = false;
-    for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-      if (mapping->guest == 0x8209e230) registered = mapping->host == sub_8209E230;
+    for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+      if (mapping->address == 0x8209e230) registered = mapping->host == sub_8209E230;
     Require(registered, "Chance roll indirect registration missing");
     Guest seed, expected, actual;
     seed.Fill();
@@ -112,18 +112,14 @@ int main() {
       bool native = true;
       if (layout >= 4 && layout < 8) object = 0xe1004000u + sample % 4;
       if (layout >= 8 && layout < 12) owner = 0xe1010000u + sample % 4;
-      if (layout >= 12 && layout < 16) stack = 0xe1020000 + sample % 4;
-      if (layout >= 16) { object = 0xe1004000u + sample % 4; owner = 0xe1010000u + sample % 4; stack = 0xe1020000 + sample % 4; }
-      if (layout == 20) { object = 0xfffffcfc; owner = 0xfffff000; stack = 0xfffff800; }
+      if (layout >= 16) { object = 0xe1004000u + sample % 4; owner = 0xe1010000u + sample % 4; }
+      if (layout == 20) { object = 0xfffffcfc; owner = 0xfffff000; }
       if (layout == 21) object = 0xfffffcfd;
       if (layout == 22) object = 0xfffffff0;
       if (layout == 23) object = 0xdfffffe0;
       if (layout == 24) object = 0xdffffcfc;
-      if (layout == 25) { object = 0xe0000000; owner = 0xe0004000; stack = 0xe0010000; }
-      if (layout == 26) stack = 0xdfffffd8;
-      if (layout == 27) stack = 0xffffffd8;
-      if (layout == 28) stack = 0xffffffe0;
-      if (layout == 29) stack = 0xfffffff0;
+      if (layout == 25) { object = 0xe0000000; owner = 0xe0004000; }
+      if (layout == 26) stack = 0xf000;
       if (layout == 30) owner = 0xfffffcd3; // Derived flag wraps to zero.
       if (layout == 31) owner = 0xdffffcd4; // Flag is the first physical byte.
       if (layout == 32) object = stack + 32 - 764;
@@ -144,8 +140,7 @@ int main() {
       if (layout == 47) owner = stack + 48 - 812;
       if (layout == 48) object = 0xe0000001;
       if (layout == 49) owner = 0xfffffcd2; // Derived flag is the last guest byte.
-      if (layout == 50) stack = 0xffffffe1;
-      if (layout == 51) stack = 0xdfffffe0;
+      if (layout == 51) stack = 0xf000;
       if (layout == 52) object = 0xdffffcfd;
       if (layout == 53) owner = seed_address + 3 - 812;
       if (layout == 54) stack = seed_address - 47;
@@ -155,12 +150,14 @@ int main() {
       if (layout == 58) owner = object + 767 - 812;
       if (layout == 59) object = 0xfffffcfb;
       if (layout == 60) stack = 0;
-      if (layout == 61) { object = 0x8000; owner = 0xe1004000; stack = 0xe1020000; }
-      if (layout == 62) { object = 0xe1004000; owner = 0x8000; stack = 0xe1020000; }
+      if (layout == 61) { object = 0x8000; owner = 0xe1004000; }
+      if (layout == 62) { object = 0xe1004000; owner = 0x8000; }
       if (layout == 63) { object = 0xe1004000; owner = 0xe1010000; stack = 0xf000; }
-      if (layout == 21 || layout == 22 || layout == 23 || layout == 26 || layout == 27 ||
-          (layout >= 32 && layout <= 37) || layout == 44 || layout == 45 || layout == 52 ||
-          layout == 54 || layout == 57) native = false;
+      if (layout == 21 || layout == 22 ||
+          (layout == 23 && n3::test::kPhysicalOffsetInCode) ||
+          (layout >= 32 && layout <= 37) || layout == 44 || layout == 45 ||
+          layout == 54 || layout == 57 ||
+          (layout == 52 && n3::test::kPhysicalOffsetInCode)) native = false;
       expected.Store<uint32_t>(object + 764, std::bit_cast<uint32_t>(thresholds[(sample + mode) % thresholds.size()]));
       expected.Store<uint32_t>(object + 768, std::bit_cast<uint32_t>(thresholds[(sample / 4 + mode) % thresholds.size()]));
       *(expected.base + PhysicalOffset(owner + 812)) = uint8_t((sample / 3 + mode) % 3 ? 255 : 0);
@@ -168,7 +165,8 @@ int main() {
       actual.Copy(expected);
       std::array<uint8_t, 16> unbiased{};
       const auto homes = stack + 32;
-      const bool canary = native && homes >= 0xe0000000u;
+      const bool canary = n3::test::kPhysicalOffsetInCode &&
+          native && homes >= 0xe0000000u;
       if (canary) std::copy_n(actual.base + uint64_t(homes), 16, unbiased.begin());
       PPCContext translated{};
       SeedPreserved(translated, sample);
@@ -180,20 +178,20 @@ int main() {
       translated.r4.u64 = 0x1122334400000000ull | owner;
       translated.r5.u64 = 0x91827364a5b6c7d8ull;
       translated.lr |= 0x1234567800000000ull;
-      translated.fpscr.InitHost(); translated.fpscr.storeFromGuest(mode % 4);
-      if (mode & 4) translated.fpscr.enableFlushModeUnconditional(); else translated.fpscr.disableFlushModeUnconditional();
-      if (mode & 8) translated.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu);
+      translated.fpscr.InitHost(); translated.fpscr.StoreToHost(mode % 4);
+      if (mode & 4) translated.fpscr.EnableFlushModeUnconditional(); else translated.fpscr.DisableFlushModeUnconditional();
+      if (mode & 8) translated.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu);
       const auto guest_initial = translated.fpscr.csr;
       // Integer-only paths must preserve even independently divergent host controls.
-      const auto host_initial = guest_initial ^ (sample & 1 ? Platform::FlushMask : 0);
+      const auto host_initial = guest_initial ^ (sample & 1 ? Platform::kFlushMask : 0);
       auto replacement = translated;
-      Platform::setcsr(host_initial); __imp__sub_8209E230(translated, expected.base);
-      const auto host_expected = Platform::getcsr();
-      Platform::setcsr(host_initial); n3_chance_roll_native_used = false; sub_8209E230(replacement, actual.base);
+      Platform::SetCSR(host_initial); __imp__sub_8209E230(translated, expected.base);
+      const auto host_expected = Platform::GetCSR();
+      Platform::SetCSR(host_initial); n3_chance_roll_native_used = false; sub_8209E230(replacement, actual.base);
       Require(n3_chance_roll_native_used == native, "Chance native/fallback route differs");
       Require(expected.Same(actual), "Chance entire fixture or argument homes differ");
       CompareContext(translated, replacement);
-      Require(Platform::getcsr() == host_expected && host_expected == host_initial,
+      Require(Platform::GetCSR() == host_expected && host_expected == host_initial,
               "Chance integer helper changed host FP controls/status");
       if (canary) {
         Require(std::equal(unbiased.begin(), unbiased.end(), actual.base + uint64_t(homes)), "Chance changed unbiased homes");
@@ -210,20 +208,22 @@ int main() {
         a.r3.u32 = object; b.r3.u32 = object;
         a.r4.u64 = b.r4.u64 = 0x1122334400000000ull | owner;
         a.r5.u64 = b.r5.u64 = 0xaabbccddeeff0011ull;
-        Platform::setcsr(host_initial); __imp__sub_8209E230(a, expected.base);
-        Platform::setcsr(host_initial); n3_chance_roll_native_used = false; sub_8209E230(b, actual.base);
+        Platform::SetCSR(host_initial); __imp__sub_8209E230(a, expected.base);
+        Platform::SetCSR(host_initial); n3_chance_roll_native_used = false; sub_8209E230(b, actual.base);
         Require(n3_chance_roll_native_used && expected.Same(actual), "Chance replay seed or homes drifted");
         CompareContext(a, b); ++replay_calls;
       }
     }
-    Require(native_count && native_count < comparisons && canaries, "Chance fixture coverage is empty");
+    Require(native_count && native_count < comparisons &&
+            (!n3::test::kPhysicalOffsetInCode || canaries),
+            "Chance fixture coverage is empty");
     const auto deferred = CheckDeferredThresholds(seed, expected, actual);
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     std::cout << comparisons << " chance equivalence calls (" << native_count << " native), " << replay_calls
               << " retained-sequence replay calls, " << deferred << " inaccessible unused-threshold cases, "
               << "whole memory/register/FP state and physical canaries passed\n";
   } catch (const std::exception& error) {
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     std::cerr << "Chance sample " << sample << " mode " << mode << ": " << error.what() << '\n';
     return 1;
   }

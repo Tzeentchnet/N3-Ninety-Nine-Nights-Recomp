@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include <rex/ppc.h>
 #include <rex/memory/utils.h>
+#include "test_guest_address.h"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -20,7 +21,7 @@ DECLARE_VECTOR(sub_82336D90)
 DECLARE_VECTOR(sub_82336DD0)
 DECLARE_VECTOR(sub_82336E48)
 DECLARE_VECTOR(sub_82336EB0)
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 thread_local bool n3_vector_ops_native_used = false;
 struct Entry { uint32_t address; PPCFunc* native; PPCFunc* original; bool setter; };
 constexpr std::array<Entry, 7> entries{{
@@ -38,7 +39,7 @@ namespace physical {
 struct Region { uint64_t at; uint32_t size; };
 constexpr std::array<Region, 4> regions{{{0, 0x20000}, {0xdfff0000, 0x20000},
     {0xe1000000, 0x20000}, {0xffffb000, 0x15000}}};
-uint64_t Offset(uint32_t at) { return uint64_t(at) + (at >= 0xe0000000u ? 0x1000u : 0u); }
+uint64_t Offset(uint32_t at) { return n3::test::TestGuestHostOffset(at); }
 struct Guest {
   uint8_t* base;
   Guest() : base(static_cast<uint8_t*>(VirtualAlloc(nullptr, (size_t{1} << 32) + 0x10000, MEM_RESERVE, PAGE_NOACCESS))) {
@@ -73,18 +74,18 @@ void Context(const PPCContext& a, const PPCContext& b, bool native) {
   FP(1) FP(14) FP(15) FP(16) FP(17) FP(18) FP(19) FP(20) FP(21) FP(22) FP(23)
   FP(24) FP(25) FP(26) FP(27) FP(28) FP(29) FP(30) FP(31)
 #undef FP
-#define CR(n) Require(a.cr##n.raw() == b.cr##n.raw(), "Physical vector condition field differs");
+#define CR(n) Require(a.cr##n.GetRaw() == b.cr##n.GetRaw(), "Physical vector condition field differs");
   CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
   Require(std::memcmp(reinterpret_cast<const uint8_t*>(&a) + offsetof(PPCContext, v0),
                       reinterpret_cast<const uint8_t*>(&b) + offsetof(PPCContext, v0), 128 * sizeof(PPCVRegister)) == 0 &&
           a.lr == b.lr && a.ctr.u64 == b.ctr.u64 && a.xer.ca == b.xer.ca && a.xer.ov == b.xer.ov && a.xer.so == b.xer.so &&
-          a.msr == b.msr && a.vscr_sat == b.vscr_sat && a.last_indirect_target == b.last_indirect_target,
+          a.msr == b.msr && a.vscr.sat == b.vscr.sat && a.last_indirect_target == b.last_indirect_target,
           "Physical vector preserved VMX/control state differs");
 }
 void Run() {
-  using Platform = rex::platform::FPSCRPlatform;
-  constexpr auto controls = PPCFPSCRRegister::GuestMask | Platform::ExceptionMask;
+  using Platform = rex::ppc::FPSCRPlatform;
+  constexpr auto controls = PPCFPSCRRegister::kGuestMask | Platform::kExceptionMask;
   Guest seed, expected, actual;
   std::mt19937 random(0x56504859);
   for (auto region : regions) for (uint32_t i = 0; i < region.size; ++i) seed.base[region.at + i] = uint8_t(random());
@@ -102,7 +103,10 @@ void Run() {
       if (sample == 14) input = object + 60;
       if (sample == 15) input = object + 5;
       if (sample == 16) input = object + 71;
-      if (sample == 17) { object = 0xdffffff0u; fallback = true; }
+      if (sample == 17) {
+        object = 0xdffffff0u;
+        fallback = n3::test::kPhysicalOffsetInCode;
+      }
       if (sample == 18) input = 0xdffffff8u;
       if (sample == 19) input = 0xfffffffcu;
       if (sample == 20) { object = 0xffffffd0u; fallback = true; }
@@ -115,13 +119,18 @@ void Run() {
       if (sample >= 30) object = 0xfffff800u + sample % 4;
       const bool unmasked = sample == 28 || sample == 29;
       fallback |= unmasked || (!entry.setter && sample == 27);
-      if (entry.setter) fallback |= (sample >= 14 && sample <= 16) || sample == 18 || sample == 19 ||
-          (sample >= 21 && sample <= 23) || (sample == 26 && input_size == 16);
+      if (entry.setter) fallback |= (sample >= 14 && sample <= 16) ||
+          (sample == 18 && n3::test::kPhysicalOffsetInCode) ||
+          sample == 19 || (sample >= 21 && sample <= 23) ||
+          (sample == 26 && input_size == 16 &&
+           n3::test::kPhysicalOffsetInCode);
       for (uint32_t at : {32u, 36u, 40u, 48u, 52u, 56u, 64u, 68u, 72u, 564u, 568u, 572u})
         expected.Scalar(object + at, float(1 + (at / 4) % 4));
       if (entry.setter) for (uint32_t at = 0; at < 16; at += 4) expected.Scalar(input + at, float(1 + at / 4));
       std::array<uint8_t, 112> unbiased{};
-      const bool canary = object >= 0xe0000000u && uint64_t(object) + (entry.setter ? 112 : 576) <= 0x100000000ull;
+      const bool canary = n3::test::kPhysicalOffsetInCode &&
+          object >= 0xe0000000u &&
+          uint64_t(object) + (entry.setter ? 112 : 576) <= 0x100000000ull;
       const auto offset = entry.setter ? 0u : 564u, size = entry.setter ? 112u : 12u;
       if (canary) std::copy_n(expected.base + uint64_t(object) + offset, size, unbiased.begin());
       actual.Copy(expected);
@@ -131,28 +140,28 @@ void Run() {
       SEED(10) SEED(11) SEED(12) SEED(13) SEED(14) SEED(15) SEED(16) SEED(17) SEED(18) SEED(19)
       SEED(20) SEED(21) SEED(22) SEED(23) SEED(24) SEED(25) SEED(26) SEED(27) SEED(28) SEED(29) SEED(30) SEED(31)
 #undef SEED
-      original.r1.u64 = 0xe1018000u; original.r3.u64 = 0x1234567800000000ull | object;
+      original.r1.u64 = 0x18000u; original.r3.u64 = 0x1234567800000000ull | object;
       original.r4.u64 = 0x8765432100000000ull | input; original.f1.f64 = 0.5;
       if (sample == 27 && !entry.setter) original.f1.u64 = 0x7ff8123456789abcull;
       original.lr = 0x82081234; original.ctr.u64 = 0x12345678;
       auto* vector = reinterpret_cast<uint8_t*>(&original) + offsetof(PPCContext, v0);
       for (uint32_t i = 0; i < 128 * sizeof(PPCVRegister); ++i) vector[i] = uint8_t(random());
-#define CR(n) original.cr##n.set_raw((sample + n) % 16);
+#define CR(n) original.cr##n.SetRaw((sample + n) % 16);
       CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
       original.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
-      original.fpscr.InitHost(); original.fpscr.storeFromGuest(rounding);
-      if (flush) original.fpscr.enableFlushModeUnconditional(); else original.fpscr.disableFlushModeUnconditional();
-      if (unmasked) original.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu);
+      original.fpscr.InitHost(); original.fpscr.StoreToHost(rounding);
+      if (flush) original.fpscr.EnableFlushModeUnconditional(); else original.fpscr.DisableFlushModeUnconditional();
+      if (unmasked) original.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu);
       const auto initial = original.fpscr.csr; auto replacement = original;
-      Platform::setcsr(initial); entry.original(original, expected.base);
-      const auto expected_controls = Platform::getcsr() & controls;
-      Platform::setcsr(initial); n3_vector_ops_native_used = false; entry.native(replacement, actual.base);
+      Platform::SetCSR(initial); entry.original(original, expected.base);
+      const auto expected_controls = Platform::GetCSR() & controls;
+      Platform::SetCSR(initial); n3_vector_ops_native_used = false; entry.native(replacement, actual.base);
       const bool native = n3_vector_ops_native_used;
       Require(native != fallback, "Physical vector routing did not preserve the supported/retained boundary");
       Require(expected.Same(actual), "Physical vector complete fixture differs"); Context(original, replacement, native);
       Require((original.fpscr.csr & controls) == (replacement.fpscr.csr & controls) &&
-              (Platform::getcsr() & controls) == expected_controls, "Physical vector FP controls differ");
+              (Platform::GetCSR() & controls) == expected_controls, "Physical vector FP controls differ");
       if (canary) {
         Require(std::equal(unbiased.begin(), unbiased.begin() + size, actual.base + uint64_t(object) + offset) &&
                 std::equal(unbiased.begin(), unbiased.begin() + size, expected.base + uint64_t(object) + offset),
@@ -160,21 +169,23 @@ void Run() {
       }
       if (native) ++native_count; else ++retained_count; ++comparisons;
     }
-  Require(native_count && retained_count && canaries, "Physical vector coverage was empty");
+  Require(native_count && retained_count &&
+          (!n3::test::kPhysicalOffsetInCode || canaries),
+          "Physical vector coverage was empty");
   std::cout << comparisons << " physical vector cases (" << native_count << " native, " << retained_count
             << " retained), including boundary/wrap, alias and unbiased canaries passed\n";
 }
 }
 int main() {
-  using Platform = rex::platform::FPSCRPlatform;
-  const auto saved = Platform::getcsr();
+  using Platform = rex::ppc::FPSCRPlatform;
+  const auto saved = Platform::GetCSR();
   try {
     std::mt19937 random(0x56454333);
     uint32_t comparisons = 0;
     for (const auto& entry : entries) {
       bool registered = false;
-      for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-        if (mapping->guest == entry.address) registered = mapping->host == entry.native;
+      for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+        if (mapping->address == entry.address) registered = mapping->host == entry.native;
       Require(registered, "Vector hook absent from indirect-call mapping");
       for (uint32_t rounding = 0; rounding < 4; ++rounding) {
         for (bool flush : {false, true}) {
@@ -211,14 +222,14 @@ int main() {
             original.f1.u64 = amount; original.lr = 0x82081234;
             original.r14.u64 = 0x123456789abcdef0; original.r31.u64 = 0xfedcba9876543210;
             original.f14.u64 = 0x40123456789abcde;
-            original.fpscr.InitHost(); original.fpscr.storeFromGuest(rounding);
-            if (flush) original.fpscr.enableFlushModeUnconditional();
-            else original.fpscr.disableFlushModeUnconditional();
+            original.fpscr.InitHost(); original.fpscr.StoreToHost(rounding);
+            if (flush) original.fpscr.EnableFlushModeUnconditional();
+            else original.fpscr.DisableFlushModeUnconditional();
             const auto initial = original.fpscr.csr;
             auto replacement = original;
             entry.original(original, expected.data());
-            const auto host_controls = Platform::getcsr() & PPCFPSCRRegister::GuestMask;
-            Platform::setcsr(initial);
+            const auto host_controls = Platform::GetCSR() & PPCFPSCRRegister::kGuestMask;
+            Platform::SetCSR(initial);
             entry.native(replacement, actual.data());
             if (actual != expected) {
               std::cerr << "Vector mismatch at 0x" << std::hex << entry.address << std::dec
@@ -230,9 +241,9 @@ int main() {
                     replacement.r31.u64 == original.r31.u64 && replacement.f1.u64 == original.f1.u64 &&
                     replacement.f14.u64 == original.f14.u64 && replacement.lr == original.lr,
                     "Vector hook broke its calling convention");
-            Require((replacement.fpscr.csr & PPCFPSCRRegister::GuestMask) ==
-                    (original.fpscr.csr & PPCFPSCRRegister::GuestMask) &&
-                    (Platform::getcsr() & PPCFPSCRRegister::GuestMask) == host_controls,
+            Require((replacement.fpscr.csr & PPCFPSCRRegister::kGuestMask) ==
+                    (original.fpscr.csr & PPCFPSCRRegister::kGuestMask) &&
+                    (Platform::GetCSR() & PPCFPSCRRegister::kGuestMask) == host_controls,
                     "Vector hook changed rounding/flush controls");
             ++comparisons;
           }
@@ -240,9 +251,9 @@ int main() {
       }
     }
     physical::Run();
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     std::cout << comparisons << " vector equivalence cases, double scalars, aliases, FP controls and registrations passed\n";
   } catch (const std::exception& error) {
-    Platform::setcsr(saved); std::cerr << error.what() << '\n'; return 1;
+    Platform::SetCSR(saved); std::cerr << error.what() << '\n'; return 1;
   }
 }

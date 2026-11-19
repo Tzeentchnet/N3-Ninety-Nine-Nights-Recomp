@@ -27,7 +27,7 @@ param(
     [ValidateSet('Configured','1','2','4','8','16')][string]$Anisotropic = 'Configured',
     [ValidateSet('Configured','720','1080','1440','2160')][string]$DisplayResolution = 'Configured',
     [ValidateSet('Configured','720','1440','2160')][string]$RenderResolution = 'Configured',
-    [ValidateSet('FSR1','Bilinear','Configured')][string]$Upscaler = 'FSR1',
+    [ValidateSet('D3D12','Vulkan','Configured')][string]$Renderer = 'D3D12',
     [ValidateSet('Configured','On','Off')][string]$VSync = 'Configured',
     [string]$VoiceDirectory,
     [string]$GameDirectory,
@@ -36,6 +36,7 @@ param(
     [string]$Profile,
     [string]$UserDirectory,
     [string]$CacheDirectory,
+    [string]$LogDirectory,
     [string]$LogFile,
     [switch]$ListMods,
     [switch]$UseEnabledMods,
@@ -201,15 +202,19 @@ $profileRoot = if ($Profile) {
 }
 $defaultUser = if ($profileRoot) { $profileRoot } else { Join-Path $root 'private/user' }
 $defaultCache = if ($profileRoot) { Join-Path $profileRoot 'cache' } else { Join-Path $root 'private/cache' }
-$defaultLog = if ($profileRoot) {
-    Join-Path $profileRoot 'logs/runtime.log'
-} else {
-    Join-Path $root 'logs/runtime-windowed.log'
-}
+$defaultLogDirectory = if ($profileRoot) { Join-Path $profileRoot 'logs' } else { Join-Path $root 'logs' }
 $createPaths = !$DryRun
 $userPath = Resolve-WritableDirectory $(if ($UserDirectory) { $UserDirectory } else { $defaultUser }) 'UserDirectory' $createPaths
 $cachePath = Resolve-WritableDirectory $(if ($CacheDirectory) { $CacheDirectory } else { $defaultCache }) 'CacheDirectory' $createPaths
-$logPath = Resolve-WritableFile $(if ($LogFile) { $LogFile } else { $defaultLog }) 'LogFile' $createPaths
+if ($LogDirectory -and $LogFile) {
+    throw '-LogDirectory and the legacy -LogFile option are mutually exclusive'
+}
+$logRoot = if ($LogFile) {
+    Split-Path (Resolve-WritableFile $LogFile 'LogFile' $createPaths) -Parent
+} else {
+    Resolve-WritableDirectory $(if ($LogDirectory) { $LogDirectory } else { $defaultLogDirectory }) 'LogDirectory' $createPaths
+}
+$logPath = Join-Path $logRoot 'n3.log'
 
 if ($ResetGameSelection -and !$DryRun) {
     $rememberedPath = Join-Path $userPath 'game-path.txt'
@@ -280,32 +285,32 @@ $executable = Join-Path $root "out/build/$preset/n3.exe"
 $launchArguments = [System.Collections.Generic.List[string]]::new()
 
 switch ($WindowMode) {
-    'Windowed' { $launchArguments.Add('--no-fullscreen') }
+    'Windowed' { $launchArguments.Add('--no-ui.fullscreen') }
     'Borderless' {
-        $launchArguments.Add('--fullscreen')
-        $launchArguments.Add('--no-fullscreen_exclusive')
+        $launchArguments.Add('--ui.fullscreen')
+        $launchArguments.Add('--no-ui.fullscreen_exclusive')
     }
     'Exclusive' {
-        $launchArguments.Add('--fullscreen')
-        $launchArguments.Add('--fullscreen_exclusive')
+        $launchArguments.Add('--ui.fullscreen')
+        $launchArguments.Add('--ui.fullscreen_exclusive')
     }
 }
 if ($PSBoundParameters.ContainsKey('Monitor')) {
-    $launchArguments.Add('--monitor')
+    $launchArguments.Add('--ui.monitor')
     $launchArguments.Add("$Monitor")
 }
 if ($PSBoundParameters.ContainsKey('Width') -or $PSBoundParameters.ContainsKey('Height')) {
-    $launchArguments.Add('--window_width')
+    $launchArguments.Add('--ui.window_width')
     $launchArguments.Add("$Width")
-    $launchArguments.Add('--window_height')
+    $launchArguments.Add('--ui.window_height')
     $launchArguments.Add("$Height")
 }
 if ($FrameRate -ne 'Configured') {
-    $launchArguments.Add('--n3_frame_rate')
+    $launchArguments.Add('--n3.frame_rate')
     $launchArguments.Add($(if ($FrameRate -eq 'Original') { '0' } else { $FrameRate }))
 }
 if ($TextLanguage -ne 'Configured') {
-    $launchArguments.Add('--n3_text_language')
+    $launchArguments.Add('--n3.text_language')
     $launchArguments.Add($TextLanguage.ToLowerInvariant())
 }
 if ($Anisotropic -ne 'Configured') {
@@ -316,11 +321,11 @@ if ($Anisotropic -ne 'Configured') {
         '8' = '4'
         '16' = '5'
     }
-    $launchArguments.Add('--anisotropic_override')
+    $launchArguments.Add('--gpu.anisotropic_override')
     $launchArguments.Add($anisotropicValues[$Anisotropic])
 }
 if ($DisplayResolution -ne 'Configured') {
-    $launchArguments.Add('--n3_display_resolution')
+    $launchArguments.Add('--n3.display_resolution')
     $launchArguments.Add($DisplayResolution)
 }
 if ($RenderResolution -ne 'Configured') {
@@ -330,51 +335,41 @@ if ($RenderResolution -ne 'Configured') {
         '2160' = '3'
     }
     $scale = $renderScales[$RenderResolution]
-    foreach ($flag in @(
-        '--draw_resolution_scale_x',
-        '--draw_resolution_scale_y',
-        '--resolution_scale',
-        '--n3_live_resolution_request'
-    )) {
+    foreach ($flag in @('--gpu.resolution_scale_x', '--gpu.resolution_scale_y')) {
         $launchArguments.Add($flag)
         $launchArguments.Add($scale)
     }
 }
-switch ($Upscaler) {
-    'FSR1' {
-        $launchArguments.Add('--present_effect')
-        $launchArguments.Add('fsr')
-    }
-    'Bilinear' {
-        $launchArguments.Add('--present_effect')
-        $launchArguments.Add('bilinear')
-    }
+if ($Renderer -ne 'Configured') {
+    $launchArguments.Add('--gpu.driver')
+    $launchArguments.Add($Renderer.ToLowerInvariant())
 }
 switch ($VSync) {
-    'On' { $launchArguments.Add('--n3_vsync') }
-    'Off' { $launchArguments.Add('--no-n3_vsync') }
+    'On' { $launchArguments.Add('--gpu.vsync') }
+    'Off' { $launchArguments.Add('--no-gpu.vsync') }
 }
 if ($VoiceDirectory) {
     $voicePath = Resolve-ReadDirectory $VoiceDirectory 'VoiceDirectory'
-    $launchArguments.Add('--n3_voice_directory')
+    $launchArguments.Add('--n3.voice_directory')
     $launchArguments.Add($voicePath)
 }
 if ($gamePath) {
-    $launchArguments.Add('--game_data_root')
+    $launchArguments.Add('--title.game_root')
     $launchArguments.Add($gamePath)
 }
-$launchArguments.Add('--user_data_root')
+$launchArguments.Add('--app.user_root')
 $launchArguments.Add($userPath)
-$launchArguments.Add('--cache_root')
+$launchArguments.Add('--app.cache_root')
 $launchArguments.Add($cachePath)
-$launchArguments.Add('--log_file')
-$launchArguments.Add($logPath)
+$launchArguments.Add('--app.log_root')
+$launchArguments.Add($logRoot)
 
 $plan = [ordered]@{
     schemaVersion = 1
     executable = $executable
     configuration = $Configuration
     windowMode = $WindowMode
+    renderer = $Renderer
     profile = $(if ($Profile) { $Profile } else { $null })
     setup = [bool]$Setup
     resetGameSelection = [bool]$ResetGameSelection

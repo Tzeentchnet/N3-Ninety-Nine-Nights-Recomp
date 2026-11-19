@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include <rex/ppc.h>
 #include <rex/memory/utils.h>
+#include "test_guest_address.h"
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -10,7 +11,7 @@
 namespace n3::test {
 // Independent oracle mapping, deliberately separate from the adapter helper.
 inline uint64_t PhysicalOffset(uint32_t address) {
-  return uint64_t(address) + (address >= 0xe0000000u ? 0x1000u : 0u);
+  return TestGuestHostOffset(address);
 }
 struct Region { uint64_t start; size_t size; };
 inline constexpr std::array<Region, 4> sparse_regions{{{0, 0x20000},
@@ -56,23 +57,23 @@ inline void SeedPreserved(PPCContext& ctx, uint32_t sample) {
   ctx.lr = 0x82081234; ctx.ctr.u64 = 0x1234567887654321ull;
   auto* vectors = reinterpret_cast<uint8_t*>(&ctx.v0);
   for (size_t i = 0; i < 128 * sizeof(PPCVRegister); ++i) vectors[i] = uint8_t(sample + i * 29);
-#define CR(n) ctx.cr##n.set_raw((sample + n) % 16);
+#define CR(n) ctx.cr##n.SetRaw((sample + n) % 16);
   CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
   ctx.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
-  ctx.vscr_sat = uint8_t(sample & 1); ctx.last_indirect_target = 0x81234567;
+  ctx.vscr.sat = uint8_t(sample & 1); ctx.last_indirect_target = 0x81234567;
 }
 inline bool SamePreserved(const PPCContext& a, const PPCContext& b) {
 #define CHECK(n) if (a.r##n.u64 != b.r##n.u64 || a.f##n.u64 != b.f##n.u64) return false;
   CHECK(14) CHECK(15) CHECK(16) CHECK(17) CHECK(18) CHECK(19) CHECK(20) CHECK(21) CHECK(22)
   CHECK(23) CHECK(24) CHECK(25) CHECK(26) CHECK(27) CHECK(28) CHECK(29) CHECK(30) CHECK(31)
 #undef CHECK
-#define CR(n) if (a.cr##n.raw() != b.cr##n.raw()) return false;
+#define CR(n) if (a.cr##n.GetRaw() != b.cr##n.GetRaw()) return false;
   CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
   return a.r1.u64 == b.r1.u64 && a.lr == b.lr && a.ctr.u64 == b.ctr.u64 &&
       a.xer.ca == b.xer.ca && a.xer.ov == b.xer.ov && a.xer.so == b.xer.so &&
       !std::memcmp(&a.v0, &b.v0, 128 * sizeof(PPCVRegister)) &&
-      a.vscr_sat == b.vscr_sat && a.msr == b.msr && a.last_indirect_target == b.last_indirect_target;
+      a.vscr.sat == b.vscr.sat && a.msr == b.msr && a.last_indirect_target == b.last_indirect_target;
 }
 }

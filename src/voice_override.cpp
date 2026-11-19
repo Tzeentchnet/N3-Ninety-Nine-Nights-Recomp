@@ -1,79 +1,58 @@
 #include "voice_override.h"
 
+#include "n3_settings.h"
 #include "voice_pack.h"
 
-#include <rex/cvar.h>
-#include <rex/filesystem/devices/host_path_device.h>
+#include <rex/filesystem/file_system.h>
 #include <rex/logging.h>
-#include <rex/runtime.h>
+#include <rex/kernel/title_runtime.h>
 
 #include <stdexcept>
 #include <string_view>
 
-REXCVAR_DEFINE_STRING(
-    n3_voice_directory, "", "N3/Audio",
-    "Alternate SoundRes directory from a user-owned compatible edition (restart required)")
-    .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
-
 namespace {
 
 constexpr std::string_view kMount = "\\Device\\N3VoiceOverride";
-rex::filesystem::VirtualFileSystem* mounted_vfs = nullptr;
-std::string mounted_link;
-
-std::filesystem::path PathFromUtf8(std::string_view value) {
-  std::u8string utf8;
-  utf8.reserve(value.size());
-  for (const auto c : value) utf8.push_back(static_cast<char8_t>(c));
-  return std::filesystem::path(utf8);
-}
 
 }  // namespace
 
-void ShutdownVoiceOverride() {
-  if (!mounted_vfs) return;
-  if (!mounted_link.empty()) mounted_vfs->UnregisterSymbolicLink(mounted_link);
-  mounted_vfs->UnregisterDevice(kMount);
-  mounted_vfs = nullptr;
-  mounted_link.clear();
-}
+void ShutdownVoiceOverride() {}
 
-bool InstallVoiceOverride(rex::Runtime& runtime,
+bool InstallVoiceOverride(rex::kernel::TitleRuntime& runtime,
                           const std::filesystem::path& game_data_root) {
-  ShutdownVoiceOverride();
-  const auto configured = REXCVAR_GET(n3_voice_directory);
+  const auto configured = N3_SETTINGS().voice_directory.Get();
   if (configured.empty()) return false;
 
-  const auto alternate = std::filesystem::absolute(PathFromUtf8(configured));
+  const auto alternate = std::filesystem::absolute(configured);
   const auto base = game_data_root / "data" / "Sound" / "ENG" / "SoundRes";
   const auto validation = n3::voice::ValidateVoicePack(base, alternate);
-  auto* vfs = runtime.file_system();
-  if (!vfs) throw std::runtime_error("Runtime file system is unavailable for the voice override");
+  auto& vfs = runtime.GetFileSystem();
 
-  std::string game_mount;
-  if (!vfs->FindSymbolicLink("game:", game_mount))
+  const auto game_mount = vfs.FindLink("game:");
+  if (!game_mount)
     throw std::runtime_error("Game mount is unavailable for the voice override");
-  const auto link = game_mount + "\\data\\Sound\\ENG\\SoundRes";
-  std::string existing;
-  if (vfs->FindSymbolicLink(link, existing))
+  const auto link = *game_mount + "\\data\\Sound\\ENG\\SoundRes";
+  if (vfs.FindLink(link))
     throw std::runtime_error("Game voice path is already overridden");
 
-  bool device_registered = false;
+  bool mounted = false;
   try {
-    auto device = std::make_unique<rex::filesystem::HostPathDevice>(
-        std::string(kMount), alternate, true);
-    if (!device->Initialize() || !vfs->RegisterDevice(std::move(device)))
+    if (auto result = vfs.Mount({std::string(kMount),
+                                 rex::filesystem::ProviderType::kHostDirectory,
+                                 alternate,
+                                 rex::filesystem::MountFlags::kNone,
+                                 {}});
+        !result) {
       throw std::runtime_error("Alternate voice directory could not be mounted");
-    device_registered = true;
-    if (!vfs->RegisterSymbolicLink(link, std::string(kMount)))
+    }
+    mounted = true;
+    if (auto result = vfs.Link(link, kMount); !result)
       throw std::runtime_error("Alternate voice path could not be linked");
   } catch (...) {
-    if (device_registered) vfs->UnregisterDevice(kMount);
+    if (mounted) (void)vfs.Unmount(kMount);
     throw;
   }
 
-  mounted_vfs = vfs;
-  mounted_link = link;
   REXLOG_INFO("Alternate voice banks mounted read-only: {} files ({} XWB, {} XSB)",
               validation.files, validation.wave_banks, validation.sound_banks);
   for (const auto& warning : validation.warnings)

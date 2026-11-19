@@ -22,7 +22,7 @@ jobs:
         if: runner.os == 'macOS'
         run: test "$(uname -m)" = arm64
       - name: Validate pinned SDK metadata
-        run: python -m unittest tools.sdk_lock_test tools.fix_generated_cmake_test tools.package_release_test
+        run: python -m unittest tools.sdk_lock_test tools.package_release_test
       - name: Test mod staging
         run: python -m unittest tools.mods_test
       - name: Test Windows launcher

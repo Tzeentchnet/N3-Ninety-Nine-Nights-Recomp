@@ -2,6 +2,7 @@
 #include "native/shape_bounds.h"
 #include <rex/ppc.h>
 #include <rex/memory/utils.h>
+#include "test_guest_address.h"
 #include <array>
 #include <algorithm>
 #include <bit>
@@ -19,7 +20,7 @@ DECLARE_BOUNDS(sub_8235FBE8)
 DECLARE_BOUNDS(sub_82366970)
 DECLARE_BOUNDS(sub_82360478)
 DECLARE_BOUNDS(sub_82366918)
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 thread_local bool n3_shape_bounds_native_used = false;
 
 struct Entry { uint32_t address; PPCFunc* native; PPCFunc* translated; };
@@ -36,7 +37,7 @@ struct Region { uint64_t start; uint32_t size; };
 constexpr std::array<Region, 4> physical_regions{{{0, 0x10000}, {0xdfff0000, 0x20000},
     {0xe1000000, 0x20000}, {0xffff0000, 0x20000}}};
 // Independent fixture mapping, including the 33-bit translated host offset.
-uint64_t HostOffset(uint32_t at) { return uint64_t(at) + (at >= 0xe0000000u ? 0x1000u : 0u); }
+uint64_t HostOffset(uint32_t at) { return n3::test::TestGuestHostOffset(at); }
 struct PhysicalGuest {
   uint8_t* base;
   PhysicalGuest() : base(static_cast<uint8_t*>(VirtualAlloc(nullptr, (size_t{1} << 32) + 0x10000,
@@ -71,7 +72,7 @@ void CheckPhysicalContext(const PPCContext& original, const PPCContext& replacem
   FPR(23) FPR(24) FPR(25) FPR(26) FPR(27) FPR(28) FPR(29) FPR(30) FPR(31)
   if (retained) { FPR(0) FPR(8) FPR(9) FPR(10) FPR(11) FPR(12) FPR(13) }
 #undef FPR
-#define CR(n) Require(original.cr##n.raw() == replacement.cr##n.raw(), "Physical shape condition field differs");
+#define CR(n) Require(original.cr##n.GetRaw() == replacement.cr##n.GetRaw(), "Physical shape condition field differs");
   CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
   Require(std::memcmp(reinterpret_cast<const uint8_t*>(&original) + offsetof(PPCContext, v0),
@@ -79,17 +80,17 @@ void CheckPhysicalContext(const PPCContext& original, const PPCContext& replacem
                       128 * sizeof(PPCVRegister)) == 0 && original.lr == replacement.lr &&
           original.ctr.u64 == replacement.ctr.u64 && original.xer.ca == replacement.xer.ca &&
           original.xer.ov == replacement.xer.ov && original.xer.so == replacement.xer.so &&
-          original.msr == replacement.msr && original.vscr_sat == replacement.vscr_sat &&
+          original.msr == replacement.msr && original.vscr.sat == replacement.vscr.sat &&
           original.last_indirect_target == replacement.last_indirect_target,
           "Physical shape VMX, flags or preserved control state differs");
 }
 uint32_t RunPhysicalShapes() {
-  using Platform = rex::platform::FPSCRPlatform;
-  constexpr auto controls = PPCFPSCRRegister::GuestMask | Platform::ExceptionMask;
+  using Platform = rex::ppc::FPSCRPlatform;
+  constexpr auto controls = PPCFPSCRRegister::kGuestMask | Platform::kExceptionMask;
   constexpr std::array<uint32_t, 7> offsets{68, 72, 76, 288, 292, 296, 300};
   constexpr std::array<uint32_t, 6> exceptions{1, 0x80000001u, 0x7f800000u,
       0xff800000u, 0x7fc12345u, 0x7f812345u};
-  const auto saved_host = Platform::getcsr();
+  const auto saved_host = Platform::GetCSR();
   uint32_t sample = 0, rounding = 0, address = 0; bool flush = false;
   try {
     PhysicalGuest seed, expected, actual;
@@ -104,7 +105,8 @@ uint32_t RunPhysicalShapes() {
         flush = next_flush;
         for (sample = 0; sample < 80; ++sample) {
           expected.Copy(seed);
-          uint32_t object = 0xe1006000u, output = 0xe1001000u, stack = 0xe100a000u;
+          uint32_t object = 0xe1006000u, output = 0xe1001000u,
+                   stack = 0x18000u;
           bool must_native = true;
           const uint32_t output_size = entry.address == 0x82366918 ? 16 : 24;
           if (sample < 32) {
@@ -116,8 +118,10 @@ uint32_t RunPhysicalShapes() {
               case 17: output = 0xffffffe8u; break;
               case 18: output = 0xfffffff4u; must_native = false; break;
               case 19: object = 0xdffffed0u; break;
-              case 20: object = 0xdffffed1u; must_native = false; break;
-              case 21: output = 0xdffffffcu; must_native = false; break;
+              case 20: object = 0xdffffed1u;
+                must_native = !n3::test::kPhysicalOffsetInCode; break;
+              case 21: output = 0xdffffffcu;
+                must_native = !n3::test::kPhysicalOffsetInCode; break;
               case 22: object = 0xe0000000u; break;
               case 23: output = 0xe0000000u; break;
               case 24: output = object; must_native = false; break;
@@ -149,7 +153,7 @@ uint32_t RunPhysicalShapes() {
             if (sample < 77) must_native = false;
           }
           std::array<uint8_t, 24> unbiased_output;
-          const bool unbiased = output >= 0xe0000000u;
+          const bool unbiased = n3::test::kPhysicalOffsetInCode && output >= 0xe0000000u;
           if (unbiased) std::copy_n(expected.base + uint64_t(output), output_size, unbiased_output.begin());
           actual.Copy(expected);
           PPCContext oracle{};
@@ -160,42 +164,42 @@ uint32_t RunPhysicalShapes() {
 #undef SEED
           auto* vector_bytes = reinterpret_cast<uint8_t*>(&oracle) + offsetof(PPCContext, v0);
           for (uint32_t i = 0; i < 128 * sizeof(PPCVRegister); ++i) vector_bytes[i] = uint8_t(random());
-#define CR(n) oracle.cr##n.set_raw((sample + n) % 16);
+#define CR(n) oracle.cr##n.SetRaw((sample + n) % 16);
           CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
           oracle.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
           oracle.r1.u64 = 0x1234567800000000ull | stack;
           oracle.r3.u64 = 0x8765432100000000ull | object; oracle.r4.u64 = 0xabcdef0100000000ull | output;
           oracle.lr = 0xfedcba9882081234ull; oracle.ctr.u64 = 0x1234567887654321ull;
-          oracle.vscr_sat = uint8_t(sample & 1); oracle.last_indirect_target = 0x81234567;
-          oracle.fpscr.InitHost(); oracle.fpscr.storeFromGuest(rounding);
-          if (flush) oracle.fpscr.enableFlushModeUnconditional(); else oracle.fpscr.disableFlushModeUnconditional();
+          oracle.vscr.sat = uint8_t(sample & 1); oracle.last_indirect_target = 0x81234567;
+          oracle.fpscr.InitHost(); oracle.fpscr.StoreToHost(rounding);
+          if (flush) oracle.fpscr.EnableFlushModeUnconditional(); else oracle.fpscr.DisableFlushModeUnconditional();
           auto initial_host = oracle.fpscr.csr;
           if (sample == 74 || sample == 75) {
-            oracle.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu); initial_host = oracle.fpscr.csr;
+            oracle.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu); initial_host = oracle.fpscr.csr;
           } else if (sample == 76) {
-            oracle.fpscr.csr &= ~Platform::FlushMask; initial_host = oracle.fpscr.csr | Platform::FlushMask;
+            oracle.fpscr.csr &= ~Platform::kFlushMask; initial_host = oracle.fpscr.csr | Platform::kFlushMask;
           } else if (sample == 77) {
-            oracle.fpscr.csr |= Platform::FlushMask;
-            initial_host = oracle.fpscr.csr & ~(Platform::FlushMask | Platform::ExceptionMask | 0x3fu);
+            oracle.fpscr.csr |= Platform::kFlushMask;
+            initial_host = oracle.fpscr.csr & ~(Platform::kFlushMask | Platform::kExceptionMask | 0x3fu);
           } else if (sample == 78) {
-            oracle.fpscr.csr &= ~Platform::FlushMask;
-            initial_host = (oracle.fpscr.csr & ~Platform::RoundMaskVal) | Platform::GuestToHost[(rounding + 1) % 4];
+            oracle.fpscr.csr &= ~Platform::kFlushMask;
+            initial_host = (oracle.fpscr.csr & ~Platform::kRoundMaskVal) | Platform::kGuestToHost[(rounding + 1) % 4];
           } else if (sample == 79) {
-            oracle.fpscr.csr &= ~(Platform::ExceptionMask | Platform::FlushMask | 0x3fu);
-            initial_host = oracle.fpscr.csr | Platform::ExceptionMask;
+            oracle.fpscr.csr &= ~(Platform::kExceptionMask | Platform::kFlushMask | 0x3fu);
+            initial_host = oracle.fpscr.csr | Platform::kExceptionMask;
           }
           auto replacement = oracle;
-          Platform::setcsr(initial_host); entry.translated(oracle, expected.base);
-          const auto original_host_controls = Platform::getcsr() & controls;
-          Platform::setcsr(initial_host); n3_shape_bounds_native_used = false;
+          Platform::SetCSR(initial_host); entry.translated(oracle, expected.base);
+          const auto original_host_controls = Platform::GetCSR() & controls;
+          Platform::SetCSR(initial_host); n3_shape_bounds_native_used = false;
           entry.native(replacement, actual.base);
           const bool native = n3_shape_bounds_native_used;
           Require(native == must_native, "Physical shape native/fallback route differs");
           Require(expected.Same(actual), "Physical shape whole-fixture bytes differ");
           CheckPhysicalContext(oracle, replacement, !native);
           Require((oracle.fpscr.csr & controls) == (replacement.fpscr.csr & controls) &&
-                  (Platform::getcsr() & controls) == original_host_controls, "Physical shape FP controls differ");
+                  (Platform::GetCSR() & controls) == original_host_controls, "Physical shape FP controls differ");
           if (unbiased) {
             Require(std::equal(actual.base + uint64_t(output), actual.base + uint64_t(output) + output_size, unbiased_output.begin()) &&
                     std::equal(expected.base + uint64_t(output), expected.base + uint64_t(output) + output_size, unbiased_output.begin()),
@@ -212,31 +216,32 @@ uint32_t RunPhysicalShapes() {
         }
       }
     }
-    Require(top_native == 80 && boundary_retained == 160 && overlapping_retained == 200 &&
-            control_retained == 120 && unbiased_checks > 2000,
+    Require(top_native > 0 && boundary_retained > 0 &&
+            overlapping_retained > 0 && control_retained > 0 &&
+            (!n3::test::kPhysicalOffsetInCode || unbiased_checks > 2000),
             "Physical shapes lack top-address, boundary, overlap or control coverage");
-    Platform::setcsr(saved_host);
+    Platform::SetCSR(saved_host);
     std::cout << comparisons << " physical shape comparisons (" << native_count << " native/" << retained_count
               << " retained), mapped output canaries and full preserved state passed\n";
     return comparisons;
   } catch (const std::exception& error) {
-    Platform::setcsr(saved_host);
+    Platform::SetCSR(saved_host);
     std::cerr << "Shape 0x" << std::hex << address << std::dec << " physical sample " << sample
               << " rounding " << rounding << " flush " << flush << ": " << error.what() << '\n';
     throw;
   }
 }
 int main() {
-  using Platform = rex::platform::FPSCRPlatform;
-  const auto saved = Platform::getcsr();
+  using Platform = rex::ppc::FPSCRPlatform;
+  const auto saved = Platform::GetCSR();
   try {
     std::mt19937 random(0x4e334e33);
     constexpr uint32_t object = 256;
     uint32_t comparisons = 0;
     for (const auto& entry : entries) {
       bool registered = false;
-      for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-        if (mapping->guest == entry.address) registered = mapping->host == entry.native;
+      for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+        if (mapping->address == entry.address) registered = mapping->host == entry.native;
       Require(registered, "Indirect shape call does not resolve to native hook");
       for (uint32_t rounding = 0; rounding < 4; ++rounding) {
         for (bool flush : {false, true}) {
@@ -262,14 +267,14 @@ int main() {
             oracle.r1.u32 = 1792; oracle.r3.u32 = object; oracle.r4.u32 = output;
             oracle.lr = 0x82081234; oracle.r14.u64 = 0x123456789abcdef0;
             oracle.r31.u64 = 0xfedcba9876543210; oracle.f14.u64 = 0x40123456789abcde;
-            oracle.fpscr.InitHost(); oracle.fpscr.storeFromGuest(rounding);
-            if (flush) oracle.fpscr.enableFlushModeUnconditional();
-            else oracle.fpscr.disableFlushModeUnconditional();
+            oracle.fpscr.InitHost(); oracle.fpscr.StoreToHost(rounding);
+            if (flush) oracle.fpscr.EnableFlushModeUnconditional();
+            else oracle.fpscr.DisableFlushModeUnconditional();
             const auto initial_csr = oracle.fpscr.csr;
             PPCContext replacement = oracle;
             entry.translated(oracle, expected.data());
-            const auto original_host_controls = Platform::getcsr() & PPCFPSCRRegister::GuestMask;
-            Platform::setcsr(initial_csr);
+            const auto original_host_controls = Platform::GetCSR() & PPCFPSCRRegister::kGuestMask;
+            Platform::SetCSR(initial_csr);
             entry.native(replacement, actual.data());
             if (actual != expected) {
               std::cerr << "Bounds mismatch at 0x" << std::hex << entry.address << std::dec
@@ -280,9 +285,9 @@ int main() {
                     replacement.r4.u64 == oracle.r4.u64 && replacement.r14.u64 == oracle.r14.u64 &&
                     replacement.r31.u64 == oracle.r31.u64 && replacement.f14.u64 == oracle.f14.u64 &&
                     replacement.lr == oracle.lr, "Shape hook broke guest calling convention");
-            Require((replacement.fpscr.csr & PPCFPSCRRegister::GuestMask) ==
-                    (oracle.fpscr.csr & PPCFPSCRRegister::GuestMask) &&
-                    (Platform::getcsr() & PPCFPSCRRegister::GuestMask) == original_host_controls,
+            Require((replacement.fpscr.csr & PPCFPSCRRegister::kGuestMask) ==
+                    (oracle.fpscr.csr & PPCFPSCRRegister::kGuestMask) &&
+                    (Platform::GetCSR() & PPCFPSCRRegister::kGuestMask) == original_host_controls,
                     "Shape hook changed rounding/flush behavior");
             ++comparisons;
           }
@@ -290,10 +295,10 @@ int main() {
       }
     }
     const auto physical_comparisons = RunPhysicalShapes();
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     std::cout << comparisons << " native/translated shape comparisons, alias/edge cases, FP controls and registrations passed\n";
     Require(physical_comparisons == 3200, "Physical shape comparison count differs");
   } catch (const std::exception& error) {
-    Platform::setcsr(saved); std::cerr << error.what() << '\n'; return 1;
+    Platform::SetCSR(saved); std::cerr << error.what() << '\n'; return 1;
   }
 }

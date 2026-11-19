@@ -4,7 +4,7 @@
 // Host-created callback contexts may start with csr=0. Guest rounding/flush
 // settings are meaningful, but zero host exception masks must not reach MXCSR.
 inline void InitializeCallbackFpState(PPCContext& context) {
-  const auto guest_bits = context.fpscr.csr & rex::ppc::FPSCRRegister::GuestMask;
+  const auto guest_bits = context.fpscr.csr & rex::ppc::FPSCRRegister::kGuestMask;
   context.fpscr.InitHost();
-  context.fpscr.restoreGuestBits(guest_bits);
+  context.fpscr.RestoreGuestBits(guest_bits);
 }

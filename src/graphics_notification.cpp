@@ -10,12 +10,10 @@ int64_t Now() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now().time_since_epoch()).count();
 }
-class GraphicsNotification final : public rex::ui::ImGuiDialog {
+class GraphicsNotification final : public rex::ui::DialogBase {
  public:
-  explicit GraphicsNotification(rex::ui::ImGuiDrawer* drawer) : ImGuiDialog(drawer) {}
- private:
-  void OnDraw(ImGuiIO& io) override {
-    if (Now() >= until.load()) return;
+  bool Draw(ImGuiIO& io) override {
+    if (Now() >= until.load()) return true;
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.85f),
                             ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowBgAlpha(0.92f);
@@ -29,10 +27,11 @@ class GraphicsNotification final : public rex::ui::ImGuiDialog {
     ImGui::End();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(2);
+    return true;
   }
 };
 }
-std::unique_ptr<rex::ui::ImGuiDialog> CreateGraphicsNotification(rex::ui::ImGuiDrawer* drawer) {
-  return std::make_unique<GraphicsNotification>(drawer);
+std::unique_ptr<rex::ui::IDialog> CreateGraphicsNotification() {
+  return std::make_unique<GraphicsNotification>();
 }
 void NotifyGraphicsSaved(bool success) { saved.store(success); until.store(Now() + 2500); }

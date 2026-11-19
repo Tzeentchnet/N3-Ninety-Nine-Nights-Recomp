@@ -19,7 +19,7 @@ The default development launch:
 
 - starts the `RelWithDebInfo` build;
 - forces a normal window, whose runtime default is 1280 x 720;
-- enables spatial FSR1 presentation upscaling;
+- selects the D3D12 renderer;
 - uses `private\game` as the owned extracted game tree;
 - stores saves, settings, remembered game paths, and diagnostics in
   `private\user`;
@@ -37,13 +37,13 @@ reparse points in game, mod, profile, cache, and log paths.
 | `-WindowMode` | `Windowed` (default), `Borderless`, `Exclusive`, `Configured` | Forces a normal window, borderless fullscreen, exclusive fullscreen, or leaves the saved ReXGlue fullscreen settings untouched. |
 | `-Width`, `-Height` | Positive pixels | Override one or both window dimensions for this launch. |
 | `-Monitor` | `0` through `16` | Selects the ReXGlue monitor index. |
-| `-FrameRate` | `Original`, `30`, `40`, `60` | Overrides `n3_frame_rate`; `Original` uses the original game timing value `0`. |
-| `-TextLanguage` | `English`, `French`, `German`, `Italian`, `Spanish` | Selects the matching original PAL text resources. |
+| `-FrameRate` | `Configured` (default), `Original`, `30`, `40`, `60` | Leaves the profile value untouched or overrides `n3.frame_rate`; `Original` uses the original game timing value `0`. |
+| `-TextLanguage` | `Configured` (default), `English`, `French`, `German`, `Italian`, `Spanish` | Leaves the profile value untouched or selects the matching original PAL text resources. |
 | `-VoiceDirectory` | Existing directory | Mounts a validated alternate `SoundRes` directory read only. |
-| `-Anisotropic` | `1`, `2`, `4`, `8`, `16` | Selects the numeric anisotropic-filtering override. |
-| `-DisplayResolution` | `720`, `1080`, `1440`, `2160` | Selects the display/output preset. It cannot be combined with `-Width` or `-Height`. |
-| `-RenderResolution` | `720`, `1440`, `2160` | Selects internal 1x, 2x, or 3x rendering. |
-| `-Upscaler` | `FSR1` (default), `Bilinear`, `Configured` | Selects spatial AMD FidelityFX Super Resolution 1, ordinary bilinear presentation, or the active profile value. |
+| `-Anisotropic` | `Configured` (default), `1`, `2`, `4`, `8`, `16` | Leaves the profile value untouched or selects the numeric anisotropic-filtering override. |
+| `-DisplayResolution` | `Configured` (default), `720`, `1080`, `1440`, `2160` | Leaves the profile value untouched or selects the display/output preset. It cannot be combined with `-Width` or `-Height`. |
+| `-RenderResolution` | `Configured` (default), `720`, `1440`, `2160` | Leaves the profile value untouched or selects internal 1x, 2x, or 3x rendering. |
+| `-Renderer` | `D3D12` (default), `Vulkan`, `Configured` | Selects the D3D12 or Vulkan Xenos driver, or leaves the active profile value untouched. |
 | `-VSync` | `Configured`, `On`, `Off` | Leaves the profile value untouched or forces host presentation VSync for this launch. |
 | `-GameDirectory` | Existing directory | Uses an explicit extracted game tree and bypasses remembered-path/native picker behavior. The normal default is `private\game`. |
 | `-Setup` | Switch | Omits the game-root override so the native application can use its remembered path or open its ISO/XEX picker. |
@@ -51,6 +51,7 @@ reparse points in game, mod, profile, cache, and log paths.
 | `-Profile` | Letters, digits, `.`, `_`, `-` | Uses isolated defaults below `private\profiles\<name>`. |
 | `-UserDirectory` | Directory path | Overrides the user/profile root. |
 | `-CacheDirectory` | Directory path | Overrides the cache root. |
+| `-LogDirectory` | Directory path | Overrides the runtime log directory. |
 | `-LogFile` | File path | Overrides the runtime log path. |
 | `-ListMods` | Switch | Lists discovered manifests and exits without requiring a build or game extraction. |
 | `-UseEnabledMods` | Switch | Stages IDs from `mods\enabled.txt`, lowest to highest priority. |
@@ -63,8 +64,8 @@ reparse points in game, mod, profile, cache, and log paths.
 | `-DryRun` | Switch | Prints the resolved launch plan as JSON without creating paths, resetting setup, staging mods, checking the executable, or starting the game. |
 
 Most options omitted from the command line remain available to the active
-profile's `n3.toml`. The launcher explicitly selects FSR1 by default; use
-`-Upscaler Configured` to leave `present_effect` to the profile. Other explicit
+profile's `n3.toml`. The launcher explicitly selects D3D12 by default; use
+`-Renderer Configured` to retain the profile's driver selection. Other explicit
 launcher values override saved values for that process.
 
 ## Window and graphics examples
@@ -83,9 +84,12 @@ pwsh -NoProfile -File tools\launch.ps1 `
   -WindowMode Exclusive `
   -DisplayResolution 2160 `
   -RenderResolution 2160 `
-  -Upscaler FSR1 `
   -Anisotropic 16 `
   -VSync On
+
+# Exercise Vulkan in an isolated profile.
+pwsh -NoProfile -File tools\launch.ps1 `
+  -Profile vulkan-test -Renderer Vulkan
 
 # Inspect the exact arguments without launching.
 pwsh -NoProfile -File tools\launch.ps1 `
@@ -95,13 +99,15 @@ pwsh -NoProfile -File tools\launch.ps1 `
 Higher frame-rate modes remain experimental. A requested limit does not fix the
 known accelerated-animation behavior or establish pacing across the game.
 
-FSR1 is the spatial EASU plus RCAS path already carried by the pinned ReXGlue
-presenter. It scales the guest front buffer to the host output and is independent
-of `-RenderResolution`, which controls internal Xenos rendering. When no
-upscaling is needed, the FSR1 selection retains its contrast-adaptive sharpening
-path. `-Upscaler Bilinear` disables FSR1 for an A/B comparison. This integration
-does not enable the separate experimental temporal FidelityFX runtime or claim
-FSR2/FSR3 support.
+Stable ReXGlue 0.11 uses bilinear presentation and no longer exposes the
+v0.10 `present_effect`/FSR1 path. `-RenderResolution` still controls internal
+Xenos rendering independently of the host window size. FSR1 restoration remains
+planned, but is not presented as an available option in this milestone.
+
+D3D12 is the supported default. Vulkan is opt-in and has completed bounded
+device, swapchain, and presentation validation on the development system with
+the validation layer enabled. That does not yet establish image quality,
+performance, or gameplay correctness across hardware and drivers.
 
 ## Profiles and paths
 
@@ -211,9 +217,10 @@ restage it after changing mod sources.
 - `-CopyModBase` and `-StageOnly` require a mod-selection mode.
 - Mod staging treats `-GameDirectory` as its immutable source, but always
   launches the completed `out\game` tree.
-- An explicit `-UserDirectory`, `-CacheDirectory`, or `-LogFile` takes
+- An explicit `-UserDirectory`, `-CacheDirectory`, `-LogDirectory`, or
+  `-LogFile` takes
   precedence over the corresponding named-profile default.
-- `-WindowMode Configured`, `-Upscaler Configured`, and `-VSync Configured`
+- `-WindowMode Configured`, `-Renderer Configured`, and `-VSync Configured`
   omit their command-line overrides, allowing `n3.toml` to decide.
 
 The launcher reports invalid combinations before creating directories or

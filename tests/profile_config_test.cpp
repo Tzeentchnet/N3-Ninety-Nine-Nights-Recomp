@@ -1,14 +1,19 @@
 #include "profile_config.h"
-#include <rex/cvar.h>
-#include <toml++/toml.hpp>
+#include <rex/settings_registry.h>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <chrono>
 
-REXCVAR_DEFINE_STRING(config_probe_path, "", "Test", "Persistence probe");
-REXCVAR_DEFINE_UINT32(config_probe_fps, 30, "Test", "Persistence probe");
-REXCVAR_DEFINE_BOOL(config_probe_enabled, false, "Test", "Persistence probe");
+class ProbeSettings final : public rex::SettingOwner {
+ public:
+  ProbeSettings() : SettingOwner("config_probe") {}
+
+  REX_SETTING(std::string, path, "", "Persistence probe");
+  REX_SETTING(rex::u32, fps, 30, "Persistence probe");
+  REX_SETTING(bool, enabled, false, "Persistence probe");
+};
+
 void Require(bool ok, const char* error) { if (!ok) throw std::runtime_error(error); }
 std::string Read(const std::filesystem::path& file) {
   std::ifstream in(file, std::ios::binary);
@@ -21,36 +26,45 @@ int main() {
     std::filesystem::create_directory(folder);
     const auto file = folder / "settings.toml";
     const std::string path = "C:\\Games\\N3\\a \"quoted\" folder\\next\nline\tend";
-    rex::cvar::SetFlagByName("config_probe_path", path);
-    rex::cvar::SetFlagByName("config_probe_fps", "60");
-    rex::cvar::SetFlagByName("config_probe_enabled", "true");
-    rex::cvar::ResetToDefault("fullscreen");
-    Require(rex::cvar::SetFlagByName("fullscreen", "true"), "Could not set explicit fullscreen default");
+    ProbeSettings settings;
+    Require(REX_SETTINGS().Register(settings).has_value(), "Could not register probe settings");
+    REX_SETTINGS().AddAlias("config_probe_path", "config_probe.path");
+    REX_SETTINGS().AddAlias("config_probe_fps", "config_probe.fps");
+    REX_SETTINGS().AddAlias("config_probe_enabled", "config_probe.enabled");
+    Require(settings.path.Set(path).has_value(), "Could not set probe path");
+    Require(settings.fps.Set(60).has_value(), "Could not set probe frame rate");
+    Require(settings.enabled.Set(true).has_value(), "Could not set probe toggle");
     SaveProfileConfig(file);
-    auto saved = toml::parse_file(file.string());
-    Require(saved["config_probe_path"].value_or(std::string{}) == path, "String escaping changed a saved value");
-    Require(saved["fullscreen"].value_or(false), "Explicit fullscreen=true was omitted because it matched the SDK default");
-    rex::cvar::ResetToDefault("fullscreen");
-    for (const auto* name : {"config_probe_path", "config_probe_fps", "config_probe_enabled"}) rex::cvar::ResetToDefault(name);
-    rex::cvar::LoadConfig(file);
-    Require(rex::cvar::GetFlagByName("config_probe_path") == path && rex::cvar::GetFlagByName("config_probe_fps") == "60" && rex::cvar::GetFlagByName("config_probe_enabled") == "true", "Saved settings did not reload");
+    Require(settings.path.Reset().has_value() && settings.fps.Reset().has_value() &&
+                settings.enabled.Reset().has_value(),
+            "Could not reset probe settings");
+    Require(REX_SETTINGS().Load(file).has_value(), "Saved settings did not reload");
+    Require(settings.path.Get() == path && settings.fps.Get() == 60 &&
+                settings.enabled.Get(),
+            "Saved settings did not reload");
     Require(!RepairLegacyProfileConfig(file), "Valid configuration was rewritten");
     {
       std::ofstream out(file);
       out << "# Auto-generated cvar configuration\nconfig_probe_path = \"C:\\Games\\N3\\folder\"\nconfig_probe_fps = 40\n";
     }
     Require(RepairLegacyProfileConfig(file), "Legacy Windows-path configuration was not repaired");
-    saved = toml::parse_file(file.string());
-    Require(saved["config_probe_path"].value_or(std::string{}) == "C:\\Games\\N3\\folder" && saved["config_probe_fps"].value_or(0) == 40, "Legacy settings changed during repair");
+    Require(settings.path.Reset().has_value() && settings.fps.Reset().has_value(),
+            "Could not reset repaired settings");
+    Require(REX_SETTINGS().Load(file).has_value(),
+            "Repaired legacy settings did not load");
+    Require(settings.path.Get() == "C:\\Games\\N3\\folder" &&
+                settings.fps.Get() == 40,
+            "Legacy settings changed during repair");
     const std::string malformed = "# Auto-generated cvar configuration\ninvalid = [\n";
     { std::ofstream out(file, std::ios::binary); out << malformed; }
     Require(!RepairLegacyProfileConfig(file) && Read(file) == malformed, "Unknown malformed config was altered");
     // Replacing a nonempty config with defaults must remove the old settings.
-    for (const auto* name : {"config_probe_path", "config_probe_fps", "config_probe_enabled"}) rex::cvar::ResetToDefault(name);
-    rex::cvar::ResetToDefault("fullscreen");
+    Require(settings.path.Reset().has_value() && settings.fps.Reset().has_value() &&
+                settings.enabled.Reset().has_value(),
+            "Could not reset probe settings");
     SaveProfileConfig(file);
-    Require(!toml::parse_file(file.string()).contains("config_probe_fps"), "Reset-to-default left an old value on disk");
-    Require(!toml::parse_file(file.string()).contains("fullscreen"), "Reset fullscreen default remained on disk");
+    Require(Read(file).find("[config_probe]") == std::string::npos,
+            "Reset-to-default left an old value on disk");
     std::filesystem::remove_all(folder);
     std::cout << "Configuration escaping, reload, legacy repair and default reset passed\n";
   } catch (const std::exception& error) {

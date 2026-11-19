@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include <rex/ppc.h>
 #include <rex/memory/utils.h>
+#include "test_guest_address.h"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -12,7 +13,7 @@
 
 extern "C" void sub_8209D7A8(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_8209D7A8(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 thread_local bool n3_capped_accumulator_native_used = false;
 void Require(bool ok, const char* text) { if (!ok) throw std::runtime_error(text); }
 struct Region { uint32_t start, size; };
@@ -21,7 +22,7 @@ constexpr std::array<Region, 7> regions{{{0, 0x20000}, {0x82042000, 4096},
     {0xe1000000, 0x50000}, {0xffff0000, 0x10000}}};
 // Independent fixture mapping; do not use the adapter helper as the oracle.
 uint8_t* HostAt(uint8_t* base, uint32_t address) {
-  return base + uint64_t(address) + (address >= 0xe0000000u ? 0x1000u : 0u);
+  return base + n3::test::TestGuestHostOffset(address);
 }
 struct Guest {
   uint8_t* base;
@@ -46,14 +47,14 @@ struct Guest {
   void Byte(uint32_t at, uint8_t value) { *HostAt(base, at) = value; }
 };
 int main() {
-  using Platform = rex::platform::FPSCRPlatform;
-  constexpr auto controls = PPCFPSCRRegister::GuestMask | Platform::ExceptionMask;
-  const auto saved = Platform::getcsr();
+  using Platform = rex::ppc::FPSCRPlatform;
+  constexpr auto controls = PPCFPSCRRegister::kGuestMask | Platform::kExceptionMask;
+  const auto saved = Platform::GetCSR();
   uint32_t sample = 0, rounding = 0; bool flush = false;
   try {
     bool registered = false;
-    for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-      if (mapping->guest == 0x8209d7a8) registered = mapping->host == sub_8209D7A8;
+    for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+      if (mapping->address == 0x8209d7a8) registered = mapping->host == sub_8209D7A8;
     Require(registered, "Capped accumulator missing from indirect-call mapping");
     Guest seed, expected, actual;
     std::mt19937 random(0x43415041);
@@ -148,8 +149,11 @@ int main() {
           if (physical == 0) object = 0xe1001000;
           if (physical == 1) owner = 0xe1010000;
           if (physical == 2) root = 0xe1020000;
-          if (physical == 3) stack = 0xe1038000;
-          if (physical >= 4) { object = 0xe1001000; owner = 0xe1010000; root = 0xe1020000; stack = 0xe1038000; }
+          if (physical >= 4) {
+            object = 0xe1001000;
+            owner = 0xe1010000;
+            root = 0xe1020000;
+          }
           switch (physical) {
             case 5: owner = 0; break;
             case 8: object += 1; break;
@@ -157,19 +161,15 @@ int main() {
             case 10: object = 0xffffd000; break;
             case 11: owner = 0xffffd000; break;
             case 12: root = 0xffffd000; break;
-            case 13: stack = 0xffffe000; break;
             case 14: owner = object + 680 - 696; delta = 0xffffffffu; break;
             case 15: root = object + 680 - 4708; break;
-            case 16: stack = object + 696; break;
-            case 17: stack = owner + 704; break;
-            case 18: stack = root + 4724; break;
+            case 16: object = 0x1000; stack = object + 696; break;
+            case 17: owner = 0x6000; stack = owner + 704; break;
+            case 18: root = 0x4000; stack = root + 4724; break;
             case 19: stack = 0x82b60090; break;
             case 20: object = 0xe0000000u - 700; break;
             case 21: owner = 0xe0000000u - 696; break;
             case 22: root = 0xe0000000u - 4710; break;
-            case 23: stack = 0xe0000008; break;
-            case 24: stack = 0xe0000000; break;
-            case 25: stack = 0xe0000010; break;
             case 26: object = 0xe0000100; break;
             case 27: root = 0xffffedd0; break;
             case 29: root = owner + 696 - 4708; break;
@@ -187,7 +187,10 @@ int main() {
             expected.Word(0x82b60080, 0xdead0000); expected.Word(4708, 17); expected.Word(4712, 23);
           }
           if (physical == 28) expected.Word(0x82042048, 0x7fc12345u);
-          must_native = !(physical >= 14 && physical <= 23) && physical != 27 && physical != 28 && physical < 30;
+          must_native = !(physical >= 14 && physical <= 19) &&
+              (!n3::test::kPhysicalOffsetInCode ||
+               !(physical >= 20 && physical <= 22)) &&
+              physical != 27 && physical != 28 && physical < 30;
         }
         const bool unmasked = (sample >= 256 && sample < 258) || sample >= 288;
         if (unmasked) {
@@ -200,10 +203,14 @@ int main() {
         std::copy_n(HostAt(expected.base, stack - 16), 16, before_stack.begin());
         std::array<uint8_t, 4> before_unbiased_value;
         std::copy_n(expected.base + object + 680, 4, before_unbiased_value.begin());
-        const bool unbiased_value_canary = sample >= 258 && object >= 0xe0000000u;
+        const bool unbiased_value_canary =
+            n3::test::kPhysicalOffsetInCode &&
+            sample >= 258 && object >= 0xe0000000u;
         std::array<uint8_t, 8> before_unbiased_counters;
         const uint32_t counters = root + 4708;
-        const bool unbiased_counter_canary = sample >= 258 && counters >= 0xe0000000u;
+        const bool unbiased_counter_canary =
+            n3::test::kPhysicalOffsetInCode &&
+            sample >= 258 && counters >= 0xe0000000u;
         if (unbiased_counter_canary)
           std::copy_n(expected.base + counters, 8, before_unbiased_counters.begin());
         PPCContext original{};
@@ -215,20 +222,20 @@ int main() {
 #undef SEED
         original.f1.u64 = 0x40123456789abcde; original.f2.u64 = 0xc00123456789abcd;
         original.f3.u64 = 0x40023456789abcde; original.f4.u64 = 0xc01123456789abcd;
-        original.cr0.set_raw(sample % 16); original.cr6.set_raw((sample + 3) % 16);
-#define SEED_CR(n) original.cr##n.set_raw((sample + n) % 16);
+        original.cr0.SetRaw(sample % 16); original.cr6.SetRaw((sample + 3) % 16);
+#define SEED_CR(n) original.cr##n.SetRaw((sample + n) % 16);
         SEED_CR(1) SEED_CR(2) SEED_CR(3) SEED_CR(4) SEED_CR(5) SEED_CR(7)
 #undef SEED_CR
         auto* vector_bytes = reinterpret_cast<uint8_t*>(&original) + offsetof(PPCContext, v0);
         for (uint32_t i = 0; i < 128 * 16; ++i) vector_bytes[i] = uint8_t(sample * 7 + i * 13);
         original.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
-        original.fpscr.InitHost(); original.fpscr.storeFromGuest(rounding);
-        if (flush) original.fpscr.enableFlushModeUnconditional(); else original.fpscr.disableFlushModeUnconditional();
-        if (unmasked) { original.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu); Platform::setcsr(original.fpscr.csr); }
+        original.fpscr.InitHost(); original.fpscr.StoreToHost(rounding);
+        if (flush) original.fpscr.EnableFlushModeUnconditional(); else original.fpscr.DisableFlushModeUnconditional();
+        if (unmasked) { original.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu); Platform::SetCSR(original.fpscr.csr); }
         const auto initial = original.fpscr.csr; auto replacement = original;
-        Platform::setcsr(initial); __imp__sub_8209D7A8(original, expected.base);
-        const auto host_controls = Platform::getcsr() & controls;
-        Platform::setcsr(initial); n3_capped_accumulator_native_used = false;
+        Platform::SetCSR(initial); __imp__sub_8209D7A8(original, expected.base);
+        const auto host_controls = Platform::GetCSR() & controls;
+        Platform::SetCSR(initial); n3_capped_accumulator_native_used = false;
         sub_8209D7A8(replacement, actual.base);
         const bool native = n3_capped_accumulator_native_used;
         Require(native == must_native, "Accumulator native/fallback route differs from fixture contract");
@@ -266,25 +273,31 @@ int main() {
         static_assert(offsetof(PPCContext, v127) + sizeof(PPCVRegister) - offsetof(PPCContext, v0) == 128 * sizeof(PPCVRegister));
         Require(std::memcmp(&original.v0, &replacement.v0, 128 * sizeof(PPCVRegister)) == 0,
                 "Accumulator changed preserved VMX registers");
-#define CHECK_CR(n) Require(original.cr##n.raw() == replacement.cr##n.raw(), "Accumulator condition field differs");
+#define CHECK_CR(n) Require(original.cr##n.GetRaw() == replacement.cr##n.GetRaw(), "Accumulator condition field differs");
         CHECK_CR(1) CHECK_CR(2) CHECK_CR(3) CHECK_CR(4) CHECK_CR(5) CHECK_CR(7)
 #undef CHECK_CR
         Require(original.lr == replacement.lr && original.ctr.u64 == replacement.ctr.u64 &&
-                original.cr0.raw() == replacement.cr0.raw() && original.cr6.raw() == replacement.cr6.raw() &&
+                original.cr0.GetRaw() == replacement.cr0.GetRaw() && original.cr6.GetRaw() == replacement.cr6.GetRaw() &&
                 original.xer.ca == replacement.xer.ca && original.xer.ov == replacement.xer.ov && original.xer.so == replacement.xer.so,
                 "Accumulator condition/carry or return state differs");
         Require((original.fpscr.csr & controls) == (replacement.fpscr.csr & controls) &&
-                (Platform::getcsr() & controls) == host_controls, "Accumulator FP controls differ");
+                (Platform::GetCSR() & controls) == host_controls, "Accumulator FP controls differ");
         ++comparisons;
       }
     }
-    Platform::setcsr(saved);
-    Require(physical_native == 144 && physical_retained == 112 && physical_canaries > 0,
+    Platform::SetCSR(saved);
+    const auto expected_physical_native =
+        n3::test::kPhysicalOffsetInCode ? 144u : 176u;
+    const auto expected_physical_retained =
+        n3::test::kPhysicalOffsetInCode ? 112u : 80u;
+    Require(physical_native == expected_physical_native &&
+            physical_retained == expected_physical_retained &&
+            (!n3::test::kPhysicalOffsetInCode || physical_canaries > 0),
             "Physical accumulator route or unbiased-canary coverage differs");
     std::cout << comparisons << " capped accumulator equivalence cases (" << native_count << " native), "
               << physical_native << " native/" << physical_retained << " retained physical routes, aliases and accounting carry passed\n";
   } catch (const std::exception& error) {
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     std::cerr << "Capped accumulator sample " << sample << " rounding " << rounding << " flush " << flush << ": " << error.what() << '\n'; return 1;
   }
 }

@@ -8,13 +8,12 @@ gameplay interface; it does not by itself establish a faster or correct port.
 
 ## SDK and build baseline
 
-As verified against GitHub's release API on 2 November 2026, the newest
-published ReXGlue Windows SDK is nightly `0.10.0.24-dev.gbd833a2`, full commit
-[`bd833a2ab69d305f99ddf57418fc38ffec8af93d`](https://github.com/rexglue/rexglue-sdk/tree/bd833a2ab69d305f99ddf57418fc38ffec8af93d).
-That is the exact archive already pinned in `tools/toolchain.lock.json`.
-ReXGlue `main` still diverges at the older v0.10.0 release; replacing the
-nightly with `main` would discard later codegen fixes, including Xenon memory
-ordering fences.
+As verified against GitHub's release API on 19 November 2026, the project pins
+stable ReXGlue `v0.11.0`, full commit
+[`a3e1d82678ca20d68d4837a8e9ee4652ff073745`](https://github.com/rexglue/rexglue-sdk/tree/a3e1d82678ca20d68d4837a8e9ee4652ff073745).
+The official Windows archive supplies the matching code generator; the game
+build compiles the modular runtime from the exact stable source plus two
+narrowly scoped renderer fixes.
 
 The lock file is the single source for SDK version, full commit, release tag,
 asset name, URL, and SHA-256. The current build process enforces it at each
@@ -24,27 +23,29 @@ boundary:
    reported version, and records the complete installed identity. A changed or
    inconsistent lock installs into a temporary directory before replacing the
    prior SDK.
-2. `tools/codegen.ps1` refuses a stale CLI before reading the supported XEX.
-   CMake independently compares `REXGLUE_VERSION_STRING` with the lock before
-   compiling the game. A tested post-codegen step restores N3's generated
-   header outputs and routes incremental Ninja codegen through the same checks,
-   so SDK regeneration cannot silently undo the ordering fix.
-3. `tools/bundle-sdk-source.py --if-needed` fingerprints the SDK pin and every
-   local renderer-extension input. The commit-named corresponding-source
-   archive and `tools/prepare-gpu.py` are derived from the lock rather than
-   hardcoded to one revision.
-4. `tools/build.ps1` regenerates source provenance when its inputs change,
-   refreshes the disposable SDK source tree across pin changes, builds the
-   D3D12 plugin, builds the host/generated code, and runs CTest.
-5. Packaging refuses uncommitted sources. Release manifests carry the source
+2. `tools/prepare-rexglue.py` checks out the locked source and all submodules,
+   adds the pinned Vulkan-Headers and Vulkan Memory Allocator trees, applies
+   `tools/rexglue/patches` in lexical order, and records hashes of the resulting
+   source state. Preparation is transactional and rejects stale or modified
+   trees.
+3. `tools/codegen.ps1` refuses a stale CLI before reading the supported XEX.
+   CMake independently compares the prepared source marker and SDK version with
+   the lock before compiling the game.
+4. `tools/bundle-sdk-source.py --if-needed` fingerprints the complete SDK pin,
+   extra source dependencies, patches, and local integration files. Its
+   commit-named corresponding-source archive contains every dependency and the
+   exact patch/build recipe.
+5. `tools/build.ps1` verifies the prepared source, builds the D3D12, Vulkan,
+   null, and supporting runtime modules with the host/generated code, and runs
+   CTest.
+6. Packaging refuses uncommitted sources. Release manifests carry the source
    commit and exact SDK binary/source provenance in addition to all packaged
    file hashes.
 
 Run `python tools/check-sdk.py` to compare the lock with the newest published
 Windows asset. This is an explicit network audit, not an automatic floating
-upgrade. The offline `tools.sdk_lock_test` and
-`tools.fix_generated_cmake_test` suites cover lock selection and post-codegen
-build integration.
+upgrade. The offline `tools.sdk_lock_test` suite covers the lock and pinned
+source dependencies.
 
 ## Recent project review
 
@@ -64,8 +65,8 @@ projects without an applicable source license was copied.
 
 Fable demonstrates building matched runtime and GPU binaries from a source
 fork, while Forza/ReIGlue test an extensive source-built runtime and codegen
-stack. N3 deliberately retains the official prebuilt runtime/codegen plus its
-source-built D3D12 plugin until a runtime change has title-specific evidence.
+stack. N3 now retains the official v0.11 code generator while building the
+matched stable runtime modules from source.
 Recent ReIGlue fixes for loaded-only RenderDoc attachment, fast keyboard taps,
 CPU/GPU readback ranges, and Xenon-accurate VMX floating-point operations are
 credible upstream candidates, but they modify runtime or generator components
@@ -109,35 +110,33 @@ construction as an engine interface.
 
 ## Vulkan migration
 
-The pinned [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk/tree/bd833a2ab69d305f99ddf57418fc38ffec8af93d)
-contains Vulkan and macOS/ARM64 support. Its macOS route uses Vulkan through
-MoltenVK. N3 currently packages a D3D12-only Windows runtime and a custom Xenos
-plugin; enabling a compiler flag alone is insufficient.
+The pinned [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk/tree/a3e1d82678ca20d68d4837a8e9ee4652ff073745)
+builds both Windows D3D12 and Vulkan drivers. The launcher makes D3D12 the
+default and Vulkan an explicit opt-in so profiles and shader caches can remain
+isolated.
 
-1. Build a separate Vulkan-capable runtime/plugin from pinned SDK/dependency
-   sources, preserving the working D3D12 release.
-2. Make renderer selection explicit. Preserve a D3D12 fallback while validating
-   Vulkan on Windows with isolated profiles and shader caches.
-3. Implement the same Graphics behavior on Vulkan: synchronized presentation,
-   filtering overrides, live render-scale changes, failure rollback and backend
-   traces. Do not silently accept a setting that the selected backend ignores.
-4. Compare title/menu, opening cutscene, first mission, effects, save/load and
-   frame times. Measure shader compilation stalls, CPU/GPU time and memory before
-   choosing optimizations or making Vulkan the default.
-5. Replace Windows picker/import progress, display sizing, crash reporting and
-   packaging adapters. Build the translated game/runtime for ARM64, stage
-   MoltenVK in a macOS application bundle, then validate on Apple Silicon hardware.
+Bounded validation on an NVIDIA GeForce RTX 5070 reached Vulkan device and
+swapchain creation, sustained the standard build for 25 seconds with
+Khronos validation enabled, and emitted neither the original binary-semaphore
+reuse VUID nor the old-swapchain-destroyed-while-in-use VUID after the tracked
+fix. This proves that the tested path initializes and presents without those
+specific synchronization violations; it does not prove correct images,
+performance, or gameplay.
 
-The SDK's [macOS release notes](https://github.com/rexglue/rexglue-sdk/releases/tag/v0.10.0)
-describe the upstream backend. N3's existing live-resolution and VSync extensions
-are D3D12-specific and require separate Vulkan implementations.
+Remaining work is to compare the title/menu, opening cutscene, first mission,
+effects, save/load, and frame times across D3D12 and Vulkan on multiple drivers.
+Vulkan should not become the default until those checks establish a benefit and
+acceptable compatibility. macOS/ARM64 additionally requires platform UI,
+filesystem, packaging, and MoltenVK validation rather than only compiling the
+backend.
 
 ## Deeper game changes
 
 The first extracted engine primitive is the [native frame clock](NATIVE-CODE.md).
 It is independent of the graphics backend and is checked against the retained
-translated initializer. The active game build remains on Direct3D 12; Vulkan
-development is parked following a system-freeze report.
+translated initializer. Direct3D 12 remains the default; Vulkan remains an
+opt-in development backend pending broader gameplay, image, performance, and
+driver validation.
 
 First establish original-speed timing: trace animation, combat and scripted
 event updates at the same gameplay point across 30/40/60 FPS. The current clock

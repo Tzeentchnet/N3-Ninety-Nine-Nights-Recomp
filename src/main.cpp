@@ -4,4 +4,4 @@
 
 #include "n3_app.h"
 
-REX_DEFINE_APP(n3, N3App::Create)
+REX_TITLE_APP(N3App)

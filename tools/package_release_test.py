@@ -16,12 +16,36 @@ SPEC.loader.exec_module(package_release)
 
 
 class PackageReleaseTests(unittest.TestCase):
+    def test_package_uses_modular_v011_renderers(self):
+        binaries = set(package_release.PACKAGE_BINARIES)
+        self.assertIn("rexgpu-xenos-d3d12.dll", binaries)
+        self.assertIn("rexgpu-xenos-vulkan.dll", binaries)
+        self.assertIn("rexgpu-xenos-null.dll", binaries)
+        self.assertIn("rexbase.dll", binaries)
+        self.assertIn("TracyClient.dll", binaries)
+        self.assertNotIn("rexruntime.dll", binaries)
+        self.assertNotIn("rexgpu-xenos.dll", binaries)
+
     def test_package_includes_project_license(self):
         license_path = package_release.PACKAGE_DOCUMENTS["LICENSE.txt"]
         self.assertEqual(license_path, package_release.ROOT / "LICENSE")
         self.assertIn(
             "BSD 3-Clause License",
             license_path.read_text(encoding="ascii"),
+        )
+
+    def test_package_records_patched_source_inputs(self):
+        self.assertEqual(
+            {dependency.name for dependency in package_release.SDK_SOURCE_DEPENDENCIES},
+            {"vulkan_headers", "vulkan_memory_allocator"},
+        )
+        patches = sorted((package_release.ROOT / "tools/rexglue/patches").glob("*.patch"))
+        self.assertEqual(
+            [path.name for path in patches],
+            [
+                "0001-pin-vulkan-dependencies.patch",
+                "0002-fix-renderer-synchronization.patch",
+            ],
         )
 
     def test_username_substring_inside_symbol_is_allowed(self):

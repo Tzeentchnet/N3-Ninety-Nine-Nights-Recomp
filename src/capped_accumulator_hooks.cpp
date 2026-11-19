@@ -53,10 +53,10 @@ bool Process(PPCContext& ctx, uint8_t* base) {
   n3::native::CappedAccumulatorState state{Read(base, value_address), total, count};
   n3::native::CappedAccumulatorUpdate update;
   const auto delta = ctx.r4.s32;
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   if (!n3::native::TryAccumulateCappedValue(state, parameters, delta, flag != 0, update)) {
-    ctx.fpscr.csr = saved_guest; rex::platform::FPSCRPlatform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; rex::ppc::FPSCRPlatform::SetCSR(saved_host); return false;
   }
   Write(base, value_address, state.value);
   if (flag) {
@@ -77,8 +77,8 @@ bool Process(PPCContext& ctx, uint8_t* base) {
   ctx.f10.f64 = double(parameters.percentage_adjustment);
   ctx.f11.s64 = parameters.percentage_adjustment; ctx.f12.f64 = double(delta);
   ctx.f13.f64 = double(parameters.baseline);
-  if (owner) ctx.cr6.compare<uint32_t>(flag, 0, ctx.xer);
-  else ctx.cr6.compare<uint32_t>(0, 0, ctx.xer);
+  if (owner) ctx.cr6.Compare<uint32_t>(flag, 0, ctx.xer);
+  else ctx.cr6.Compare<uint32_t>(0, 0, ctx.xer);
 #ifdef N3_CAPPED_ACCUMULATOR_TEST
   n3_capped_accumulator_native_used = true;
 #endif

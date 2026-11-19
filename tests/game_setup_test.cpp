@@ -1,6 +1,7 @@
 #include "game_setup.h"
-#include <rex/system/flags.h>
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <fstream>
 #include <iostream>
@@ -18,26 +19,21 @@ int wmain(int argc, wchar_t** argv) {
   if (!fs::create_directory(root)) return 1;
   int result = 0;
   try {
-    REXCVAR_SET(headless, true);
-    rex::PathConfig paths{};
-    paths.user_data_root = root;
-    Reject([&] { ResolveGameData(paths); });
+    Reject([&] { ResolveGameData({}, root, true); });
     std::ofstream(root / "game-path.txt") << "missing-game-folder";
-    Reject([&] { ResolveGameData(paths); });
-    paths.game_data_root = root;
-    Reject([&] { ResolveGameData(paths); });
+    Reject([&] { ResolveGameData({}, root, true); });
+    Reject([&] { ResolveGameData(root, root, true); });
     if (argc == 2) {
       const auto game = fs::absolute(argv[1]);
-      paths.game_data_root = game;
-      Require(ResolveGameData(paths)->game_data_root == game, "Explicit matching folder failed");
+      Require(*ResolveGameData(game, root, true) == game,
+              "Explicit matching folder failed");
       const auto text = game.generic_u8string();
       std::ofstream out(root / "game-path.txt", std::ios::binary | std::ios::trunc);
       out.write(reinterpret_cast<const char*>(text.data()), text.size());
       out.close();
-      paths.game_data_root.clear();
-      Require(ResolveGameData(paths)->game_data_root == game, "Remembered matching folder failed");
-      paths.game_data_root = root;
-      Reject([&] { ResolveGameData(paths); });
+      Require(*ResolveGameData({}, root, true) == game,
+              "Remembered matching folder failed");
+      Reject([&] { ResolveGameData(root, root, true); });
       std::cout << "Explicit and remembered game-folder verification passed\n";
     }
     std::cout << "Missing-data, stale-link, and invalid-override checks passed\n";

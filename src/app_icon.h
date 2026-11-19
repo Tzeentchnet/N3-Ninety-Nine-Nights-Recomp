@@ -1,5 +1,5 @@
 #pragma once
 
-namespace rex::ui { class Window; }
+namespace rex::ui { class IUISystem; }
 
-void ApplyAppIcon(rex::ui::Window& window);
+void ApplyAppIcon(rex::ui::IUISystem& ui);

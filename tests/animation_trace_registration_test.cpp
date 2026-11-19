@@ -40,7 +40,7 @@ extern "C" void sub_820927C0(PPCContext&, uint8_t*);
 extern "C" void sub_8209BE30(PPCContext&, uint8_t*);
 extern "C" void sub_82097D90(PPCContext&, uint8_t*);
 extern "C" void sub_8212ACA8(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 
 int main() {
   struct Entry { uint32_t guest; PPCFunc* host; };
@@ -67,8 +67,8 @@ int main() {
       {0x8212aca8, sub_8212ACA8}}};
   for (const auto& entry : entries) {
     bool found = false;
-    for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-      if (mapping->guest == entry.guest) found = mapping->host == entry.host;
+    for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+      if (mapping->address == entry.guest) found = mapping->host == entry.host;
     if (!found) {
       std::cerr << "animation trace hook is missing from indirect registration\n";
       return 1;

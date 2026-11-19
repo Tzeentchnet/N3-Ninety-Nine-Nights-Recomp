@@ -3,10 +3,11 @@ A fork of ReXGlue for Forza recompilations, starting with Forza Horizon 1:
 ReImagined.
 https://github.com/FH1-ReImagined/ReIGlue
 
-The N3 project incorporates three title-independent changes from ReIGlue:
-texture-watch validity (0008), the shared-memory valid-range fast path (0031),
-and corrected D3D12 fence HRESULT checks (0408). The corresponding commits and
-authors are recorded in tools/gpu/patches/README.txt.
+Earlier N3 v0.10 development builds incorporated three title-independent
+changes from ReIGlue: texture-watch validity (0008), the shared-memory
+valid-range fast path (0031), and corrected D3D12 fence HRESULT checks (0408).
+Those patches were retired with the ReXGlue v0.11 GPU rewrite. This notice is
+retained for the historical source and binary releases that contained them.
 
 ReXGlue
   https://github.com/rexglue/rexglue-sdk

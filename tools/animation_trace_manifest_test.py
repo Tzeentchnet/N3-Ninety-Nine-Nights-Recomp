@@ -64,7 +64,7 @@ def fixture_v3():
 
 
 TEST_PROVENANCE = {
-    "runtime_dll": "rexruntime.dll", "gpu_dll": "rexgpu-xenos.dll",
+    "runtime_dll": "rexbase.dll", "gpu_dll": "rexgpu-xenos-d3d12.dll",
     "host_executable": "c" * 64, "host_runtime_library": "d" * 64,
     "host_gpu_plugin": "e" * 64,
 }
@@ -699,45 +699,47 @@ class BinaryProvenanceTests(unittest.TestCase):
 
     def test_missing_ambiguous_or_mismatched_runtime_provenance_is_rejected(self):
         executable = Path("synthetic") / "n3.exe"
-        for imports in ((), ("rexruntime.dll", "rexruntimerd.dll")):
+        for imports in ((), ("rexbase.dll", "rexbaserd.dll")):
             with self.subTest(imports=imports), patch.object(
                     manifest, "_read_provenance_binary", return_value=synthetic_pe(*imports)), \
                     self.assertRaisesRegex(ValueError, "runtime imports"):
                 manifest.binary_provenance(executable)
         contents = {
-            "n3.exe": synthetic_pe("rexruntime.dll"),
-            "rexruntime.dll": synthetic_pe("kernel32.dll", export_name="rexruntime.dll"),
-            "rexgpu-xenos.dll": synthetic_pe("rexruntimerd.dll", export_name="rexgpu-xenos.dll"),
+            "n3.exe": synthetic_pe("rexbase.dll"),
+            "rexbase.dll": synthetic_pe("kernel32.dll", export_name="rexbase.dll"),
+            "rexgpu-xenos-d3d12.dll": synthetic_pe(
+                "rexbaserd.dll", export_name="rexgpu-xenos-d3d12.dll"),
         }
         with patch.object(manifest, "_read_provenance_binary",
                           side_effect=lambda path: contents[path.name]), \
                 self.assertRaisesRegex(ValueError, "disagree"):
             manifest.binary_provenance(executable)
-        contents["rexruntime.dll"] = synthetic_pe("kernel32.dll", export_name="rexruntimed.dll")
+        contents["rexbase.dll"] = synthetic_pe("kernel32.dll", export_name="rexbased.dll")
         with patch.object(manifest, "_read_provenance_binary",
                           side_effect=lambda path: contents[path.name]), \
                 self.assertRaisesRegex(ValueError, "export name mismatch"):
             manifest.binary_provenance(executable)
-        contents["rexruntime.dll"] = synthetic_pe("kernel32.dll", export_name="rexruntime.dll")
-        contents["rexgpu-xenos.dll"] = synthetic_pe(
-            "rexruntime.dll", export_name="rexgpu-xenosrd.dll")
+        contents["rexbase.dll"] = synthetic_pe("kernel32.dll", export_name="rexbase.dll")
+        contents["rexgpu-xenos-d3d12.dll"] = synthetic_pe(
+            "rexbase.dll", export_name="rexgpu-xenos-d3d12rd.dll")
         with patch.object(manifest, "_read_provenance_binary",
                           side_effect=lambda path: contents[path.name]), \
                 self.assertRaisesRegex(ValueError, "export name mismatch"):
             manifest.binary_provenance(executable)
-        contents["rexgpu-xenos.dll"] = synthetic_pe("rexruntime.dll", export_name="rexgpu-xenos.dll")
+        contents["rexgpu-xenos-d3d12.dll"] = synthetic_pe(
+            "rexbase.dll", export_name="rexgpu-xenos-d3d12.dll")
 
         def read_present(path):
             if path.name not in contents:
                 raise FileNotFoundError
             return contents[path.name]
-        for missing in ("rexruntime.dll", "rexgpu-xenos.dll"):
+        for missing in ("rexbase.dll", "rexgpu-xenos-d3d12.dll"):
             binary = contents.pop(missing)
             with self.subTest(missing=missing), patch.object(manifest, "_read_provenance_binary",
                     side_effect=read_present), self.assertRaises(FileNotFoundError):
                 manifest.binary_provenance(executable)
             contents[missing] = binary
-        for malformed in (b"MZ", synthetic_pe("rexruntime.dll")[:0x400]):
+        for malformed in (b"MZ", synthetic_pe("rexbase.dll")[:0x400]):
             with self.subTest(malformed=len(malformed)), self.assertRaises(ValueError):
                 manifest._pe_imports(malformed)
 
@@ -745,7 +747,7 @@ class BinaryProvenanceTests(unittest.TestCase):
 class RouteCliTests(unittest.TestCase):
     def setUp(self):
         self.provenance = {
-            "runtime_dll": "rexruntime.dll", "gpu_dll": "rexgpu-xenos.dll",
+            "runtime_dll": "rexbase.dll", "gpu_dll": "rexgpu-xenos-d3d12.dll",
             "host_executable": "a" * 64, "host_runtime_library": "b" * 64,
             "host_gpu_plugin": "c" * 64,
         }
@@ -854,7 +856,7 @@ class RouteCliTests(unittest.TestCase):
         self.assertEqual(report["build"]["binary_provenance_status"],
                          "unverified_historical_v4_route")
         self.assertTrue(report["correlation"]["eligible"])
-        for value in (None, {}, {"runtime_dll": "rexruntime.dll"}):
+        for value in (None, {}, {"runtime_dll": "rexbase.dll"}):
             malformed = route_v4()
             malformed["binary_provenance"] = value
             with self.subTest(provenance=value), self.assertRaises(ValueError):
@@ -891,7 +893,7 @@ class LargeTraceTests(unittest.TestCase):
         run = manifest.ROOT / "private" / "synthetic-trace-validation"
         trace_path, route_path = run / "user" / "animation-trace-v3.json", run / "route.json"
         provenance = {
-            "runtime_dll": "rexruntime.dll", "gpu_dll": "rexgpu-xenos.dll",
+            "runtime_dll": "rexbase.dll", "gpu_dll": "rexgpu-xenos-d3d12.dll",
             "host_executable": "a" * 64, "host_runtime_library": "b" * 64,
             "host_gpu_plugin": "c" * 64,
         }

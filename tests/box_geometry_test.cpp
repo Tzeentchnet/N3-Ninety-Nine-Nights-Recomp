@@ -14,7 +14,7 @@ extern "C" void sub_823602C0(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_823602C0(PPCContext&, uint8_t*);
 extern "C" void sub_823604B8(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_823604B8(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 struct Entry { uint32_t address; PPCFunc* native; PPCFunc* original; bool corner; };
 constexpr std::array<Entry, 2> entries{{
     {0x823602C0, sub_823602C0, __imp__sub_823602C0, false},
@@ -23,9 +23,9 @@ void Require(bool value, const char* message) {
   if (!value) throw std::runtime_error(message);
 }
 int main() {
-  using Platform = rex::platform::FPSCRPlatform;
-  constexpr auto controls = PPCFPSCRRegister::GuestMask | Platform::ExceptionMask;
-  const auto saved = Platform::getcsr();
+  using Platform = rex::ppc::FPSCRPlatform;
+  constexpr auto controls = PPCFPSCRRegister::kGuestMask | Platform::kExceptionMask;
+  const auto saved = Platform::GetCSR();
   uint32_t address = 0, sample = 0, rounding = 0;
   bool flush = false;
   try {
@@ -41,8 +41,8 @@ int main() {
     for (const auto& entry : entries) {
       address = entry.address;
       bool registered = false;
-      for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-        if (mapping->guest == address) registered = mapping->host == entry.native;
+      for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+        if (mapping->address == address) registered = mapping->host == entry.native;
       Require(registered, "Box entry missing from indirect-call mapping");
       for (rounding = 0; rounding < 4; ++rounding) for (bool next_flush : {false, true}) {
         flush = next_flush;
@@ -92,20 +92,20 @@ int main() {
           SEED(14) SEED(15) SEED(16) SEED(17) SEED(18) SEED(19) SEED(20) SEED(21) SEED(22)
           SEED(23) SEED(24) SEED(25) SEED(26) SEED(27) SEED(28) SEED(29) SEED(30) SEED(31)
 #undef SEED
-          original.cr0.set_raw(sample % 16); original.cr6.set_raw((sample + 3) % 16);
+          original.cr0.SetRaw(sample % 16); original.cr6.SetRaw((sample + 3) % 16);
           original.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
-          original.fpscr.InitHost(); original.fpscr.storeFromGuest(rounding);
-          if (flush) original.fpscr.enableFlushModeUnconditional();
-          else original.fpscr.disableFlushModeUnconditional();
+          original.fpscr.InitHost(); original.fpscr.StoreToHost(rounding);
+          if (flush) original.fpscr.EnableFlushModeUnconditional();
+          else original.fpscr.DisableFlushModeUnconditional();
           if (sample >= 1024) {
-            original.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu);
-            Platform::setcsr(original.fpscr.csr);
+            original.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu);
+            Platform::SetCSR(original.fpscr.csr);
           }
           const auto initial = original.fpscr.csr;
           auto replacement = original;
           entry.original(original, expected.data());
-          const auto host_controls = Platform::getcsr() & controls;
-          Platform::setcsr(initial);
+          const auto host_controls = Platform::GetCSR() & controls;
+          Platform::SetCSR(initial);
           entry.native(replacement, actual.data());
           const auto scratch = entry.corner ? 64 : 24;
           if (sample < 8) {
@@ -129,11 +129,11 @@ int main() {
           CHECK(14) CHECK(15) CHECK(16) CHECK(17) CHECK(18) CHECK(19) CHECK(20) CHECK(21) CHECK(22)
           CHECK(23) CHECK(24) CHECK(25) CHECK(26) CHECK(27) CHECK(28) CHECK(29) CHECK(30) CHECK(31)
 #undef CHECK
-          Require(original.cr0.raw() == replacement.cr0.raw() && original.cr6.raw() == replacement.cr6.raw() &&
+          Require(original.cr0.GetRaw() == replacement.cr0.GetRaw() && original.cr6.GetRaw() == replacement.cr6.GetRaw() &&
                   original.xer.ca == replacement.xer.ca && original.xer.ov == replacement.xer.ov &&
                   original.xer.so == replacement.xer.so, "Box condition/carry flags differ");
           Require((original.fpscr.csr & controls) == (replacement.fpscr.csr & controls) &&
-                  (Platform::getcsr() & controls) == host_controls, "Box FP controls differ");
+                  (Platform::GetCSR() & controls) == host_controls, "Box FP controls differ");
           ++comparisons;
         }
       }
@@ -144,10 +144,10 @@ int main() {
           entry.corner ? n3::test::GeometryKind::Sample : n3::test::GeometryKind::Bounds,
           n3_box_geometry_native_used, physical, physical_native);
     std::cout << physical << " physical box cases (" << physical_native << " native) passed\n";
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     std::cout << comparisons << " box equivalence cases, transforms, integer coordinates, aliases, FP controls and registrations passed\n";
   } catch (const std::exception& error) {
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     std::cerr << "Box 0x" << std::hex << address << std::dec << " sample " << sample
               << " rounding " << rounding << " flush " << flush << ": " << error.what() << '\n';
     return 1;

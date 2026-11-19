@@ -1,12 +1,15 @@
 # Development status
 
-Recorded 22 October 2026. The opening mission, following cutscene, and writing a
-save have been exercised successfully. Loading saved progress also succeeds on
-the tested opening route. Full-game coverage remains unvalidated.
+Updated 19 November 2026. The opening mission, following cutscene, and writing a
+save were exercised on the earlier runtime. Loading saved progress also
+succeeded on that tested opening route. The stable ReXGlue 0.11 migration has
+bounded renderer validation but has not yet repeated that complete gameplay
+route. Full-game coverage remains unvalidated.
 
 ## Current compatibility summary
 
-- **Platform:** Windows 10/11 x64 with Direct3D 12.
+- **Platform:** Windows 10/11 x64. Direct3D 12 is the default; Vulkan is an
+  opt-in development backend.
 - **Supported game:** USA/Europe executable `0.0.0.3`, identified in
   [game-build.json](game-build.json).
 - **Validated route:** opening mission, following cutscene, and save/load on the
@@ -23,7 +26,8 @@ the tested opening route. Full-game coverage remains unvalidated.
 - Generated 13,762 function assignments across 87 translated C++ source files.
 - Windows x64 Release and RelWithDebInfo compile and link succeed with Clang 20.1.8.
 - Runtime initializes Direct3D 12, input, audio, and XEX imports.
-- Five JavaScript extractor tests and forty native regression suites pass.
+- Five JavaScript extractor tests and all 51 current native regression suites
+  pass.
 - A 30-second boot test survived until the harness stopped it, without the prior
   unregistered-function or floating-point failure.
 - Windowed startup reaches the intro/title-screen presentation.
@@ -830,9 +834,10 @@ overlay reconstructs the last vector load after unaligned scalar stores, before
 the final normalized stores round their addresses down. Prologue/source aliases,
 post-write threshold dependencies and unsupported math retain the original.
 
-The three direction adapters now use the pinned runtime's physical-memory host
-bias at guest `0xE0000000` and above. All scalar/raw accesses and alias checks use
-the mapped host offsets. Cross-boundary buffers retain the original sequence.
+At that milestone, the three direction adapters used the then-pinned runtime's
+physical-memory host bias at guest `0xE0000000` and above. All scalar/raw
+accesses and alias checks used the mapped host offsets. Cross-boundary buffers
+retained the original sequence.
 An audit found forty older memory-backed typed entries still need this migration
 and physical fixtures. Their current equivalence evidence covers virtual memory.
 The next memory batch connects handle, payload, table and accounting adapters
@@ -1937,16 +1942,17 @@ visual, runtime, writer, staging and in-game stable release gates remain open.
 The exact verified `0.14.1` candidate ZIP may be published only as a GitHub
 prerelease with those limitations disclosed.
 
-## Spatial FSR1 and upstream ReXGlue review
+## Historical spatial FSR1 and upstream ReXGlue review
 
 Recorded 19 November 2026.
 
-**Verified, build and configuration:** the launcher exposes `-Upscaler FSR1`,
-`Bilinear`, and `Configured`, with FSR1 selected by default. Its regression
-script passes 80 command-construction checks, including the default FSR1
-override, explicit bilinear fallback, and profile-controlled omission.
+**Verified at that checkpoint, build and configuration:** the launcher exposed
+`-Upscaler FSR1`, `Bilinear`, and `Configured`, with FSR1 selected by default.
+Its regression script passed 80 command-construction checks, including the
+default FSR1 override, explicit bilinear fallback, and profile-controlled
+omission.
 
-The pinned ReXGlue source now builds a matched `rexruntime.dll` and Xenos plugin
+The then-pinned ReXGlue source built a matched `rexruntime.dll` and Xenos plugin
 with its existing spatial EASU/RCAS path enabled. The separate temporal
 FidelityFX runtime is disabled. The RelWithDebInfo source build completed and
 all 51 native CTests passed. Binary inspection confirmed the FSR effect and
@@ -1962,13 +1968,70 @@ also does not establish sustained windowed operation, image quality, scaling
 quality, performance, or gameplay correctness. An interactive capture and
 visual FSR1/bilinear comparison remain pending.
 
-**Upstream audit:** stable ReXGlue v0.11.0 at `ebac1cf0` is 338 commits beyond
-the pinned `bd833a2` SDK. The latest published Windows asset is development
-nightly `115171b4`, 347 commits beyond the pin and diverged from stable by 13
-commits ahead and four behind. Both include a broad GPU/module reorganization,
-so the pin was retained. Five independently applicable correctness fixes from
-upstream commits `0d5178cc` and `30eaa073` were adapted to the pinned paths and
-are applied reproducibly with the existing renderer patch pipeline. Vulkan-only
-changes and optimizations coupled to the reorganized GPU architecture were
-reviewed but not partially imported. `tools/check-sdk.py` consequently reports
-the intentional stale pin rather than passing a latest-release check.
+**Upstream audit at that checkpoint:** the v0.11 line was hundreds of commits
+beyond the then-pinned `bd833a2` SDK and contained a broad GPU/module
+reorganization, so it was not mixed into the FSR1 milestone. Five independently
+applicable correctness fixes from upstream commits `0d5178cc` and `30eaa073`
+were adapted to the old paths. Vulkan-only changes and optimizations coupled to
+the reorganized GPU architecture were not partially imported. At that
+checkpoint, `tools/check-sdk.py` reported the intentionally stale pin. The
+later full v0.11 migration is recorded below.
+
+## Stable ReXGlue 0.11.0 and bounded renderer validation
+
+Recorded 19 November 2026.
+
+The project is pinned to stable ReXGlue `v0.11.0`, commit
+`a3e1d82678ca20d68d4837a8e9ee4652ff073745`, with official Windows SDK
+archive SHA-256
+`11ab67a3b8d7abaef501e77ea6c0e7dd588efe207540b46f7a302a03827a6611`.
+The official SDK supplies code generation; the supported build compiles the
+matched modular runtime and D3D12, Vulkan, and null Xenos drivers from the exact
+stable source.
+
+Bootstrap now prepares that source transactionally under
+`.tools\rexglue-source`, initializes every stable submodule, pins
+Vulkan-Headers at `9fbc2a782ee3f8a4db64e7d991e23da75e893f44` and Vulkan Memory
+Allocator at `0f1a757da579831283413295cc7f3b47eb521c77`, and applies the two
+tracked patches under `tools\rexglue\patches`. The corresponding-source bundle
+contains the stable tree, all 17 dependency trees, both patches, build metadata,
+and source manifests.
+
+The v0.11 migration includes typed settings and lifecycle integration, modular
+runtime loading, v0.11 VFS/UI/clock/PPC interfaces, the v0.11 physical-address
+policy, VSCR.NJ-aware optimized VMX hooks, and host allocator linkage for every
+SDK-facing test executable. The supported RelWithDebInfo source build completed
+and all 51 CTests passed in 14.36 seconds; the clean Release build passed the
+same 51 CTests in 13.19 seconds. Two focused ReXGlue regressions also verify
+that allocating or subsequently protecting a title-facing physical alias does
+not remove write access from the raw GPU view.
+
+**D3D12 bounded hardware result:** an NVIDIA GeForce RTX 5070 initialized the
+D3D12 device and reached title/menu setup. The original GPU command-thread
+access violation at raw physical address `0x21FC7E03C` was traced to
+guest allocation and protection state being applied to ReXGlue's precommitted
+raw physical GPU view. The patch keeps only that host view read/write while its
+page table and ordinary guest aliases retain title-visible protection and
+write-watch behavior. Three independent standard-build runs each survived a
+20-second bound without the crash or a device-loss signature and were stopped
+by exact PID.
+
+**Vulkan bounded hardware result:** the same system loaded the Khronos
+validation layer, created the RTX 5070 Vulkan device and 1280 x 720 swapchain,
+and sustained the standard build for a 25-second bound. Presentation semaphores
+are now owned per swapchain image, and swapchain retirement waits for the
+presentation queue outside the normal frame path. Neither
+`VUID-vkQueueSubmit-pSignalSemaphores-00067` nor
+`VUID-vkDestroySwapchainKHR-swapchain-01282` appeared in the final bounded log.
+The process was stopped by exact PID.
+
+Stable v0.11 removed the v0.10 FSR1/CAS/temporal `present_effect` surface.
+Current presentation is bilinear, D3D12 remains the launcher default, Vulkan is
+explicit opt-in, and restoring selectable FSR1 is deferred.
+
+These results establish compilation, regression coverage, device/swapchain
+initialization, and the absence of the two observed renderer failures during
+bounded runs on one machine. They do not establish correct images, sustained
+performance, other-driver compatibility, save compatibility, or gameplay
+correctness. The opening route, cutscene, first mission, and save/load checks
+must be repeated on the final v0.11 package.

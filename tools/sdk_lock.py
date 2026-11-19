@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 import json
 from pathlib import Path
+from pathlib import PurePosixPath
 import re
 from urllib.parse import unquote, urlsplit
 
@@ -17,12 +18,21 @@ class SdkLock:
     commit: str
     release_tag: str
     asset_name: str
+    source_url: str
     url: str
     sha256: str
 
     @property
     def source_archive_name(self):
         return f"ReXGlue-{self.commit[:7]}-corresponding-source.zip"
+
+
+@dataclass(frozen=True)
+class SdkSourceDependency:
+    name: str
+    path: str
+    url: str
+    commit: str
 
 
 def load_toolchain_lock(path=LOCK_PATH):
@@ -44,6 +54,7 @@ def load_sdk_lock(path=LOCK_PATH):
             commit=record["commit"],
             release_tag=record["release_tag"],
             asset_name=record["asset_name"],
+            source_url=record["source_url"],
             url=record["url"],
             sha256=record["sha256"],
         )
@@ -55,6 +66,8 @@ def load_sdk_lock(path=LOCK_PATH):
         raise ValueError("SDK commit must be a full lowercase Git commit")
     if not re.fullmatch(r"[0-9a-f]{64}", lock.sha256):
         raise ValueError("SDK SHA-256 must be a lowercase hexadecimal digest")
+    if lock.source_url != "https://github.com/rexglue/rexglue-sdk.git":
+        raise ValueError("SDK source URL must identify the upstream Git repository")
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+-dev\.g[0-9a-f]{7})?", lock.version):
         raise ValueError("SDK version has an unsupported format")
     if "-dev." in lock.version:
@@ -82,14 +95,72 @@ def load_sdk_lock(path=LOCK_PATH):
     return lock
 
 
+def load_sdk_source_dependencies(path=LOCK_PATH):
+    document = load_toolchain_lock(path)
+    try:
+        records = document["sdk_source_dependencies"]
+    except KeyError as error:
+        raise ValueError("Toolchain lock has no SDK source dependencies") from error
+    if not isinstance(records, dict) or not records:
+        raise ValueError("SDK source dependencies must be a nonempty object")
+    dependencies = []
+    paths = set()
+    for name, record in records.items():
+        try:
+            dependency = SdkSourceDependency(
+                name=name,
+                path=record["path"],
+                url=record["url"],
+                commit=record["commit"],
+            )
+        except (KeyError, TypeError) as error:
+            raise ValueError(
+                f"SDK source dependency {name!r} is incomplete: {error}"
+            ) from error
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", dependency.name):
+            raise ValueError(f"Invalid SDK source dependency name: {dependency.name!r}")
+        source_path = PurePosixPath(dependency.path)
+        if (
+            source_path.is_absolute()
+            or ".." in source_path.parts
+            or len(source_path.parts) < 2
+            or source_path.parts[0] != "thirdparty"
+        ):
+            raise ValueError(
+                f"SDK source dependency path must be below thirdparty: {dependency.path!r}"
+            )
+        if dependency.path in paths:
+            raise ValueError(f"Duplicate SDK source dependency path: {dependency.path}")
+        paths.add(dependency.path)
+        parsed = urlsplit(dependency.url)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "github.com"
+            or not parsed.path.endswith(".git")
+        ):
+            raise ValueError(
+                f"SDK source dependency URL must be a GitHub HTTPS repository: {dependency.url}"
+            )
+        if not re.fullmatch(r"[0-9a-f]{40}", dependency.commit):
+            raise ValueError(
+                f"SDK source dependency commit must be a full lowercase Git commit: {name}"
+            )
+        dependencies.append(dependency)
+    return tuple(dependencies)
+
+
 def verify_latest_release(lock, releases):
+    stable = "-dev." not in lock.version
     candidates = []
     for release in releases:
         if not isinstance(release, dict) or release.get("draft"):
             continue
         for asset in release.get("assets", []):
             name = asset.get("name", "")
-            if name.endswith("-win-amd64.zip"):
+            asset_stable = re.fullmatch(
+                r"rexglue-sdk-[0-9]+\.[0-9]+\.[0-9]+-win-amd64\.zip", name
+            )
+            if name.endswith("-win-amd64.zip") and bool(asset_stable) == stable:
                 candidates.append((release, asset))
     if not candidates:
         raise ValueError("GitHub returned no published Windows AMD64 SDK assets")
@@ -97,7 +168,7 @@ def verify_latest_release(lock, releases):
     digest = asset.get("digest", "")
     observed = {
         "release_tag": release.get("tag_name"),
-        "commit": release.get("target_commitish"),
+        "commit": release.get("resolved_commit", release.get("target_commitish")),
         "asset_name": asset.get("name"),
         "url": asset.get("browser_download_url"),
         "sha256": digest.removeprefix("sha256:"),

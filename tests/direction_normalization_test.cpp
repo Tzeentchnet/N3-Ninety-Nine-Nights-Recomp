@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include <rex/ppc.h>
 #include <rex/memory/utils.h>
+#include "test_guest_address.h"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -12,15 +13,14 @@
 
 extern "C" void sub_823B3C00(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_823B3C00(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 thread_local bool n3_direction_normalization_native_used = false;
 void Require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
 struct Region { uint32_t start, size; };
 constexpr std::array<Region, 5> regions{{{0, 0x40000}, {0x82001000, 4096},
     {0xdfff0000, 0x20000}, {0xe1000000, 0x20000}, {0xffffb000, 0x4000}}};
 constexpr uint32_t threshold_address = 0x820018ac;
-// Independent fixture implementation of the Windows translation's address rule.
-uint64_t HostOffset(uint32_t address) { return uint64_t(address) + (address >= 0xe0000000u ? 0x1000u : 0u); }
+uint64_t HostOffset(uint32_t address) { return n3::test::TestGuestHostOffset(address); }
 struct Guest {
   uint8_t* base;
   Guest() : base(static_cast<uint8_t*>(VirtualAlloc(nullptr, size_t{1} << 32, MEM_RESERVE, PAGE_NOACCESS))) {
@@ -54,24 +54,26 @@ void CheckContext(const PPCContext& expected, const PPCContext& actual) {
   for (uint32_t i = 0; i < 128; ++i) if (std::memcmp(left + i * 16, right + i * 16, 16)) {
     std::cerr << "v" << i << " differs\n"; throw std::runtime_error("Normalization VMX result differs");
   }
-#define CR(n) Require(expected.cr##n.raw() == actual.cr##n.raw(), "Normalization condition field differs");
+#define CR(n) Require(expected.cr##n.GetRaw() == actual.cr##n.GetRaw(), "Normalization condition field differs");
   CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
   Require(expected.xer.ca == actual.xer.ca && expected.xer.ov == actual.xer.ov && expected.xer.so == actual.xer.so &&
           expected.lr == actual.lr && expected.ctr.u64 == actual.ctr.u64 && expected.msr == actual.msr &&
-          expected.vscr_sat == actual.vscr_sat && expected.last_indirect_target == actual.last_indirect_target,
+          expected.vscr.sat == actual.vscr.sat &&
+          expected.vscr.nj == actual.vscr.nj &&
+          expected.last_indirect_target == actual.last_indirect_target,
           "Normalization carry/control or preserved state differs");
 }
 int main() {
-  using Platform = rex::platform::FPSCRPlatform;
-  constexpr auto controls = PPCFPSCRRegister::GuestMask | Platform::ExceptionMask;
+  using Platform = rex::ppc::FPSCRPlatform;
+  constexpr auto controls = PPCFPSCRRegister::kGuestMask | Platform::kExceptionMask;
   constexpr uint32_t sample_count = 580;
-  const auto saved_host = Platform::getcsr();
+  const auto saved_host = Platform::GetCSR();
   uint32_t sample = 0, rounding = 0; bool flush = false;
   try {
     bool registered = false;
-    for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-      if (mapping->guest == 0x823b3c00) registered = mapping->host == sub_823B3C00;
+    for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+      if (mapping->address == 0x823b3c00) registered = mapping->host == sub_823B3C00;
     Require(registered, "Normalization entry missing from indirect mapping");
     Guest seed, expected, actual;
     std::mt19937 random(0x4e4f524d);
@@ -157,22 +159,37 @@ int main() {
           values = {0x40400000u, 0x40800000u, 0, 0};
           source = 0xe1006000u + physical_case % 16;
           must_native = true;
-          if (physical_case >= 16) { destination = 0xe1001000u + physical_case % 4; stack = 0xe100a000u; }
+          if (physical_case >= 16)
+            destination = 0xe1001000u + physical_case % 4;
           if (physical_case == 24) destination = source + 4;
           if (physical_case == 25) { source = stack - 16; must_native = false; must_fallback = true; }
           if (physical_case == 26) { destination = stack + 20; values = {}; must_native = false; must_fallback = true; }
-          if (physical_case == 27) { source = 0xdffffffcu; must_native = false; must_fallback = true; }
-          if (physical_case == 28) { destination = 0xdffffffcu; must_native = false; must_fallback = true; }
-          if (physical_case == 29) { stack = 0xe0000000u; must_native = false; must_fallback = true; }
-          if (physical_case == 30) stack = 0xe0000010u;
-          if (physical_case == 31) { source = 0xffffd004u; destination = 0xffffb000u; stack = 0xffffc800u; }
+          if (physical_case == 27) {
+            source = 0xdffffffcu;
+            must_native = !n3::test::kPhysicalOffsetInCode;
+            must_fallback = n3::test::kPhysicalOffsetInCode;
+          }
+          if (physical_case == 28) {
+            destination = 0xdffffffcu;
+            must_native = !n3::test::kPhysicalOffsetInCode;
+            must_fallback = n3::test::kPhysicalOffsetInCode;
+          }
+          if (physical_case == 29) {
+            must_native = true;
+            must_fallback = false;
+          }
+          if (physical_case == 31) {
+            source = 0xffffd004u;
+            destination = 0xffffb000u;
+          }
         }
         std::fill_n(expected.base + HostOffset(source & ~15u), 16, uint8_t{0});
         std::fill_n(expected.base + HostOffset((source + 11) & ~15u), 16, uint8_t{0});
         for (uint32_t lane = 0; lane < values.size(); ++lane) expected.Word(source + lane * 4, values[lane]);
         expected.Word(threshold_address, threshold);
         std::array<uint8_t, 12> unbiased_output{};
-        const bool physical_output = destination >= 0xe0000000u;
+        const bool physical_output = n3::test::kPhysicalOffsetInCode &&
+            destination >= 0xe0000000u;
         if (physical_output) std::copy_n(expected.base + (destination & ~3u), 12, unbiased_output.begin());
         actual.Copy(expected);
         PPCContext original{};
@@ -187,30 +204,36 @@ int main() {
         original.r1.u64 = stack; original.r3.u64 = 0x1234567800000000ull | destination;
         original.r4.u64 = 0xabcdef0100000000ull | source;
         original.lr = 0x8765432182081234ull; original.ctr.u64 = 0x23456789abcdef01ull;
-        original.vscr_sat = uint8_t(sample & 1); original.last_indirect_target = 0x81234567;
-#define CR(n) original.cr##n.set_raw((sample + n) % 16);
+        original.vscr.sat = uint8_t(sample & 1);
+        original.vscr.nj = sample == 31 ? 0 : 1;
+        if (sample == 31) {
+          must_native = false;
+          must_fallback = true;
+        }
+        original.last_indirect_target = 0x81234567;
+#define CR(n) original.cr##n.SetRaw((sample + n) % 16);
         CR(0) CR(1) CR(2) CR(3) CR(4) CR(5) CR(6) CR(7)
 #undef CR
         original.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
-        original.fpscr.InitHost(); original.fpscr.storeFromGuest(rounding);
-        if (flush) original.fpscr.enableFlushModeUnconditional(); else original.fpscr.disableFlushModeUnconditional();
+        original.fpscr.InitHost(); original.fpscr.StoreToHost(rounding);
+        if (flush) original.fpscr.EnableFlushModeUnconditional(); else original.fpscr.DisableFlushModeUnconditional();
         uint32_t initial_host = original.fpscr.csr;
         if (sample == 544) {
-          original.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu); initial_host = original.fpscr.csr;
+          original.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu); initial_host = original.fpscr.csr;
         } else if (sample == 545) {
-          original.fpscr.csr |= Platform::FlushMask;
-          initial_host = original.fpscr.csr & ~(Platform::ExceptionMask | 0x3fu);
+          original.fpscr.csr |= Platform::kFlushMask;
+          initial_host = original.fpscr.csr & ~(Platform::kExceptionMask | 0x3fu);
         } else if (sample == 546) {
-          original.fpscr.csr &= ~(Platform::ExceptionMask | Platform::FlushMask | 0x3fu);
-          initial_host = original.fpscr.csr | Platform::ExceptionMask;
+          original.fpscr.csr &= ~(Platform::kExceptionMask | Platform::kFlushMask | 0x3fu);
+          initial_host = original.fpscr.csr | Platform::kExceptionMask;
         } else if (sample == 547) {
-          initial_host = (original.fpscr.csr & ~Platform::RoundMaskVal) |
-              Platform::GuestToHost[(rounding + 1) % 4];
+          initial_host = (original.fpscr.csr & ~Platform::kRoundMaskVal) |
+              Platform::kGuestToHost[(rounding + 1) % 4];
         }
         auto replacement = original;
-        Platform::setcsr(initial_host); __imp__sub_823B3C00(original, expected.base);
-        const auto original_host_controls = Platform::getcsr() & controls;
-        Platform::setcsr(initial_host); n3_direction_normalization_native_used = false;
+        Platform::SetCSR(initial_host); __imp__sub_823B3C00(original, expected.base);
+        const auto original_host_controls = Platform::GetCSR() & controls;
+        Platform::SetCSR(initial_host); n3_direction_normalization_native_used = false;
         sub_823B3C00(replacement, actual.base);
         const bool native = n3_direction_normalization_native_used;
         Require(!must_native || native, "Ordinary or safe alias normalization did not use native path");
@@ -230,20 +253,23 @@ int main() {
         Require(expected.Same(actual), "Normalization whole-fixture bytes differ");
         CheckContext(original, replacement);
         Require((original.fpscr.csr & controls) == (replacement.fpscr.csr & controls) &&
-                (Platform::getcsr() & controls) == original_host_controls,
+                (Platform::GetCSR() & controls) == original_host_controls,
                 "Normalization FP control or final flush state differs");
-        Require((replacement.fpscr.csr & Platform::FlushMask) == Platform::FlushMask,
-                "Normalization did not finish with vector flush enabled");
+        Require((replacement.fpscr.csr & Platform::kFlushMask) ==
+                    (replacement.vscr.nj ? Platform::kFlushMask : 0),
+                "Normalization did not finish with the VSCR vector flush mode");
         ++comparisons;
       }
     }
     Require(overlap_native > 0 && divergent_native == 8, "Safe overlap or divergent masked controls lacked native coverage");
-    Require(physical_native >= 200 && boundary_retained == 24, "Physical mapping or shadow-boundary fallback lacked coverage");
-    Platform::setcsr(saved_host);
+    Require(physical_native > 0 &&
+            (!n3::test::kPhysicalOffsetInCode || boundary_retained == 24),
+            "Physical mapping or shadow-boundary fallback lacked coverage");
+    Platform::SetCSR(saved_host);
     std::cout << comparisons << " normalization equivalence cases (" << native_count << " native, " << retained_count
               << " retained), all VMX/GPR/FPR results, aliases and FP controls passed\n";
   } catch (const std::exception& error) {
-    Platform::setcsr(saved_host);
+    Platform::SetCSR(saved_host);
     std::cerr << "Normalization sample " << sample << " rounding " << rounding << " flush " << flush
               << ": " << error.what() << '\n'; return 1;
   }

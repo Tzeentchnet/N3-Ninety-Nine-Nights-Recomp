@@ -45,7 +45,7 @@ bool Process(PPCContext& ctx, uint8_t* base) {
   ctx.r11.s64 = wide;
   ctx.r8.u64 = uint64_t(wide) - ctx.r10.u64;
   ctx.r3.u64 = decision.accepted ? 1 : 0;
-  ctx.cr6.compare<int32_t>(int32_t(decision.sample), decision.threshold, ctx.xer);
+  ctx.cr6.Compare<int32_t>(int32_t(decision.sample), decision.threshold, ctx.xer);
 #ifdef N3_CHANCE_ROLL_TEST
   n3_chance_roll_native_used = true;
 #endif

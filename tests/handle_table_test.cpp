@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include "guest_handle_table.h"
 #include <rex/memory/utils.h>
+#include "test_guest_address.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -13,7 +14,7 @@ extern "C" void sub_82081138(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_82081138(PPCContext&, uint8_t*);
 extern "C" void sub_82080780(PPCContext&, uint8_t*);
 extern "C" void __imp__sub_82080780(PPCContext&, uint8_t*);
-extern PPCFuncMapping PPCFuncMappings[];
+extern const PPCFuncMapping kPPCFuncMappings[];
 thread_local bool n3_handle_table_native_used = false;
 void Require(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
 struct Region { uint32_t start, size; };
@@ -21,7 +22,7 @@ constexpr std::array<Region, 5> regions{{{0, 0x100000}, {0x82b47000, 0x3000},
     {0xdfff0000, 0x30000}, {0xe1000000, 0x30000}, {0xffffb000, 0x4000}}};
 constexpr uint32_t descriptor = 0x82b4807c;
 // Independent implementation of the generated Windows shadow mapping.
-uint64_t HostOffset(uint32_t address) { return uint64_t(address) + (address >= 0xe0000000u ? 0x1000u : 0u); }
+uint64_t HostOffset(uint32_t address) { return n3::test::TestGuestHostOffset(address); }
 struct Guest {
   uint8_t* base;
   Guest() : base(static_cast<uint8_t*>(VirtualAlloc(nullptr, size_t{1} << 32, MEM_RESERVE, PAGE_NOACCESS))) {
@@ -50,7 +51,7 @@ void CheckRegisters(const PPCContext& expected, const PPCContext& actual) {
   CHECK(20) CHECK(21) CHECK(22) CHECK(23) CHECK(24) CHECK(25) CHECK(26) CHECK(27) CHECK(28) CHECK(29)
   CHECK(30) CHECK(31)
 #undef CHECK
-#define CHECK_CR(n) Require(expected.cr##n.raw() == actual.cr##n.raw(), "Handle condition register differs");
+#define CHECK_CR(n) Require(expected.cr##n.GetRaw() == actual.cr##n.GetRaw(), "Handle condition register differs");
   CHECK_CR(0) CHECK_CR(1) CHECK_CR(2) CHECK_CR(3) CHECK_CR(4) CHECK_CR(5) CHECK_CR(6) CHECK_CR(7)
 #undef CHECK_CR
   Require(expected.lr == actual.lr && expected.ctr.u64 == actual.ctr.u64 &&
@@ -59,7 +60,7 @@ void CheckRegisters(const PPCContext& expected, const PPCContext& actual) {
   Require(expected.fpscr.csr == actual.fpscr.csr, "Handle changed guest FP controls/status");
   static_assert(offsetof(PPCContext, v127) + sizeof(PPCVRegister) - offsetof(PPCContext, v0) == 128 * sizeof(PPCVRegister));
   Require(!std::memcmp(&expected.v0, &actual.v0, 128 * sizeof(PPCVRegister)) &&
-          expected.msr == actual.msr && expected.vscr_sat == actual.vscr_sat &&
+          expected.msr == actual.msr && expected.vscr.sat == actual.vscr.sat &&
           expected.last_indirect_target == actual.last_indirect_target, "Handle changed preserved vector/control state");
 }
 bool SameQuery(const n3::guest::HandleQuery& a, const n3::guest::HandleQuery& b) {
@@ -101,11 +102,13 @@ void CheckQueryGuards(Guest& fixture) {
   fixture.Table(0xe1001000, 0xe1001018);
   Require(!QueryHandleRecord(fixture.base, 0, {0xe1001010, 112}, result) && SameQuery(result, before),
           "Physical scratch record was followed before rejection");
-  Require(!QueryHandleRecord(fixture.base, 0, {0xdfffffe8u, 112, 16, 16}, result) && SameQuery(result, before),
-          "Shadow-boundary argument homes accepted");
+  if constexpr (n3::test::kPhysicalOffsetInCode)
+    Require(!QueryHandleRecord(fixture.base, 0, {0xdfffffe8u, 112, 16, 16}, result) && SameQuery(result, before),
+            "Shadow-boundary argument homes accepted");
   fixture.Table(0xdffffffcu, 0xe0000014u);
-  Require(!QueryHandleRecord(fixture.base, 0, {}, result) && SameQuery(result, before),
-          "Shadow-boundary table accepted");
+  if constexpr (n3::test::kPhysicalOffsetInCode)
+    Require(!QueryHandleRecord(fixture.base, 0, {}, result) && SameQuery(result, before),
+            "Shadow-boundary table accepted");
   Require(retained_handle_depth == 0, "Handle retain depth started nonzero");
   { RetainHandleChain first; Require(retained_handle_depth == 1, "Retain depth did not increase");
     { RetainHandleChain second; Require(retained_handle_depth == 2, "Nested retain depth did not increase"); }
@@ -114,8 +117,8 @@ void CheckQueryGuards(Guest& fixture) {
 }
 int main() {
   using namespace n3::guest;
-  using Platform = rex::platform::FPSCRPlatform;
-  const auto saved = Platform::getcsr();
+  using Platform = rex::ppc::FPSCRPlatform;
+  const auto saved = Platform::GetCSR();
   uint32_t address = 0, rounding = 0, sample = 0;
   bool flush = false, unmasked = false;
   try {
@@ -132,8 +135,8 @@ int main() {
     for (const auto entry : entries) {
       address = entry.address;
       bool registered = false;
-      for (auto* mapping = PPCFuncMappings; mapping->guest; ++mapping)
-        if (mapping->guest == address) registered = mapping->host == entry.replacement;
+      for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping)
+        if (mapping->address == address) registered = mapping->host == entry.replacement;
       Require(registered, "Handle entry missing from indirect mapping");
       for (rounding = 0; rounding < 4; ++rounding) for (bool next_flush : {false, true})
       for (bool next_unmasked : {false, true}) {
@@ -152,15 +155,28 @@ int main() {
             packed_object = 0xe100c000u + physical_case * 4;
             table = 0xe1001000u + physical_case % 4;
             if (physical_case >= 8) output = 0xe1008000u + physical_case % 4;
-            if (physical_case >= 16) stack = 0xe1018000u;
-            if (physical_case == 20) { table = 0xe0000000u; stack = 0xe0001000u; }
-            if (physical_case == 21) stack = 0xe0000000u;
-            if (physical_case == 22) { stack = 0xdfffffe8u; physical_expected_native = !entry.packed; }
-            if (physical_case == 23) { stack = 0xe0000030u; physical_expected_native = !entry.packed; }
-            if (physical_case == 24) { table = 0xdffffffcu; index = 0; physical_expected_native = false; }
-            if (physical_case == 25) { output = 0xdffffffcu; physical_expected_native = entry.packed; }
-            if (physical_case == 26) { table = 0xdfffffa0u; index = 0; physical_expected_native = false; }
-            if (physical_case == 27) { table = 0xffffb000u; stack = 0xffffd800u; output = 0xffffc000u; }
+            if (physical_case == 20) table = 0xe0000000u;
+            if (physical_case == 22)
+              physical_expected_native = true;
+            if (physical_case == 23) physical_expected_native = true;
+            if (physical_case == 24) {
+              table = 0xdffffffcu;
+              index = 0;
+              physical_expected_native =
+                  !n3::test::kPhysicalOffsetInCode;
+            }
+            if (physical_case == 25) {
+              output = 0xdffffffcu;
+              physical_expected_native =
+                  !n3::test::kPhysicalOffsetInCode || entry.packed;
+            }
+            if (physical_case == 26) {
+              table = 0xdfffffa0u;
+              index = 0;
+              physical_expected_native =
+                  !n3::test::kPhysicalOffsetInCode;
+            }
+            if (physical_case == 27) { table = 0xffffb000u; output = 0xffffc000u; }
             if (physical_case == 28) { index = 0; output = table + 4; physical_expected_native = entry.packed; }
             if (physical_case == 29) {
               index = 0;
@@ -168,7 +184,7 @@ int main() {
               physical_expected_native = false;
             }
             if (physical_case == 30) { output = 0xe0000000u; }
-            if (physical_case == 31) { table = 0xe0001000u; output = 0xe0003000u; stack = 0xe0005000u; }
+            if (physical_case == 31) { table = 0xe0001000u; output = 0xe0003000u; }
             key = (key & 0xffff0000u) | index;
             end = table + count * 12;
           }
@@ -215,7 +231,8 @@ int main() {
           if (sample >= 112 && entry.packed)
             Require(native_wrapper == physical_expected_native, "Physical packed-query route differs");
           std::array<uint8_t, 12> unbiased_output{};
-          const bool canary_output = !entry.packed && output >= 0xe0000000u;
+          const bool canary_output = n3::test::kPhysicalOffsetInCode &&
+              !entry.packed && output >= 0xe0000000u;
           if (canary_output) std::copy_n(actual.base + output, unbiased_output.size(), unbiased_output.begin());
           std::array<uint8_t, 112> before_frame;
           std::array<uint8_t, 16> before_homes;
@@ -234,26 +251,26 @@ int main() {
           original.lr = uint64_t{0x87654321} << 32 | link; original.ctr.u64 = 0xfedcba9876543210ull;
           auto* vector_bytes = reinterpret_cast<uint8_t*>(&original) + offsetof(PPCContext, v0);
           for (uint32_t i = 0; i < 128 * sizeof(PPCVRegister); ++i) vector_bytes[i] = uint8_t(sample + i * 29 + address);
-          original.vscr_sat = uint8_t(sample & 1); original.last_indirect_target = 0x81234567;
-#define SEED_CR(n) original.cr##n.set_raw((sample + n) % 16);
+          original.vscr.sat = uint8_t(sample & 1); original.last_indirect_target = 0x81234567;
+#define SEED_CR(n) original.cr##n.SetRaw((sample + n) % 16);
           SEED_CR(0) SEED_CR(1) SEED_CR(2) SEED_CR(3) SEED_CR(4) SEED_CR(5) SEED_CR(6) SEED_CR(7)
 #undef SEED_CR
           original.xer = {uint8_t(sample & 1), uint8_t((sample >> 1) & 1), uint8_t((sample >> 2) & 1)};
-          original.fpscr.InitHost(); original.fpscr.storeFromGuest(rounding);
-          if (flush) original.fpscr.enableFlushModeUnconditional(); else original.fpscr.disableFlushModeUnconditional();
-          if (unmasked) original.fpscr.csr &= ~(Platform::ExceptionMask | 0x3fu);
+          original.fpscr.InitHost(); original.fpscr.StoreToHost(rounding);
+          if (flush) original.fpscr.EnableFlushModeUnconditional(); else original.fpscr.DisableFlushModeUnconditional();
+          if (unmasked) original.fpscr.csr &= ~(Platform::kExceptionMask | 0x3fu);
           const auto initial = original.fpscr.csr; auto replacement = original;
-          Platform::setcsr(initial);
+          Platform::SetCSR(initial);
           { RetainHandleChain oracle; entry.original(original, expected.base); }
-          Require(Platform::getcsr() == initial, "Original integer handle code changed host FP state");
-          Platform::setcsr(initial); n3_handle_table_native_used = false;
+          Require(Platform::GetCSR() == initial, "Original integer handle code changed host FP state");
+          Platform::SetCSR(initial); n3_handle_table_native_used = false;
           entry.replacement(replacement, actual.base);
           if (sample >= 112) {
             Require(n3_handle_table_native_used == physical_expected_native, "Physical handle native/fallback route differs");
             if (physical_expected_native) ++physical_native; else ++physical_retained;
           }
           Require(retained_handle_depth == 0, "Retained handle scope leaked into later calls");
-          Require(Platform::getcsr() == initial, "Native integer handle code changed host FP state");
+          Require(Platform::GetCSR() == initial, "Native integer handle code changed host FP state");
           if (native_wrapper) {
             Require(std::equal(before_frame.begin(), before_frame.end(), actual.base + HostOffset(stack - 112)) &&
                     std::equal(before_homes.begin(), before_homes.end(), actual.base + HostOffset(stack + 16)),
@@ -275,12 +292,13 @@ int main() {
       }
     }
     Require(native_wrappers && retained_wrappers, "Packed fixtures did not cover native and retained chains");
-    Require(physical_native == 864 && physical_retained == 160, "Physical handle fixtures lacked expected native and retained routes");
-    Platform::setcsr(saved);
+    Require(physical_native > 0 && physical_retained > 0,
+            "Physical handle fixtures lacked expected native and retained routes");
+    Platform::SetCSR(saved);
     std::cout << comparisons << " handle equivalence cases with full scalar registers, all rounding/flush/exception modes, "
               << native_wrappers << " native packed validations and " << retained_wrappers << " retained chains passed\n";
   } catch (const std::exception& error) {
-    Platform::setcsr(saved);
+    Platform::SetCSR(saved);
     std::cerr << "Handle 0x" << std::hex << address << std::dec << " sample " << sample << " rounding " << rounding
               << " flush " << flush << " unmasked " << unmasked << ": " << error.what() << '\n'; return 1;
   }

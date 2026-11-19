@@ -95,15 +95,15 @@ bool ReadLimit(PPCContext& ctx, uint8_t* base, uint32_t scratch, LimitInputs& in
 bool Compute(PPCContext& ctx, uint8_t* base, bool adjust) {
   LimitInputs inputs;
   if (!ReadLimit(ctx, base, adjust ? 128 : 16, inputs)) return false;
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   ValueLimitResult limit;
   BoundedValueState state{adjust ? Float(base, ctx.r3.u32 + 664) : 0};
   BoundedValueUpdate update;
   const auto lower = adjust ? Float(base, lower_bound) : 0;
   if (!TryComputeValueLimit(inputs.parameters, limit) ||
       (adjust && !TryAdjustBoundedValue(state, ctx.r4.s32, std::bit_cast<int32_t>(uint32_t(limit.value)), lower, update))) {
-    ctx.fpscr.csr = saved_guest; rex::platform::FPSCRPlatform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; rex::ppc::FPSCRPlatform::SetCSR(saved_host); return false;
   }
   const auto object = ctx.r3.u32;
   ctx.r3.u64 = limit.value;
@@ -114,23 +114,23 @@ bool Compute(PPCContext& ctx, uint8_t* base, bool adjust) {
   if (adjust) {
     Write(base, object + 664, std::bit_cast<uint32_t>(state.value));
     ctx.f0.f64 = double(update.upper_bound);
-    ctx.cr6.compare(double(update.lower_clamped ? lower : update.sum), double(update.upper_bound));
+    ctx.cr6.Compare(double(update.lower_clamped ? lower : update.sum), double(update.upper_bound));
     ctx.lr = uint32_t(ctx.lr);
   } else {
     ctx.f0.f64 = double(inputs.parameters.percentage_unit);
     ctx.r11.u64 = limit.truncated_bits;
-    ctx.cr6.compare<uint32_t>(inputs.record, inputs.count, ctx.xer);
+    ctx.cr6.Compare<uint32_t>(inputs.record, inputs.count, ctx.xer);
   }
   return true;
 }
 bool ComputeGetter(PPCContext& ctx, uint8_t* base, LimitLayout layout) {
   LimitInputs inputs;
   if (!ReadLimit(ctx, base, 16, inputs, layout)) return false;
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   ValueLimitResult limit;
   if (!TryComputeValueLimit(inputs.parameters, limit)) {
-    ctx.fpscr.csr = saved_guest; rex::platform::FPSCRPlatform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; rex::ppc::FPSCRPlatform::SetCSR(saved_host); return false;
   }
   ctx.r3.u64 = limit.truncated_bits;
   ctx.r4.u64 = std::bit_cast<uint32_t>(inputs.parameters.percentage_adjustment);
@@ -140,7 +140,7 @@ bool ComputeGetter(PPCContext& ctx, uint8_t* base, LimitLayout layout) {
   ctx.r11.u64 = inputs.record_address;
   ctx.f0.f64 = double(inputs.parameters.percentage_unit);
   ctx.xer.ca = false;
-  ctx.cr6.compare<uint32_t>(inputs.record, inputs.count, ctx.xer);
+  ctx.cr6.Compare<uint32_t>(inputs.record, inputs.count, ctx.xer);
   return true;
 }
 bool SetModifier(PPCContext& ctx, uint8_t* base) {
@@ -148,13 +148,13 @@ bool SetModifier(PPCContext& ctx, uint8_t* base) {
   const auto target = ctx.r3.u32 + ((ctx.r5.u32 & 0xff) ? 728 : 732);
   LimitInputs inputs;
   if (!ReadLimit(ctx, base, 128, inputs, additive_layout, target)) return false;
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   ValueLimitState state{inputs.parameters, Float(base, ctx.r3.u32 + 664)};
   ValueLimitModifierUpdate update;
   const auto replacement = ctx.r4.u32;
   if (!TrySetValueLimitModifier(state, replacement, ctx.r5.u32, update)) {
-    ctx.fpscr.csr = saved_guest; rex::platform::FPSCRPlatform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; rex::ppc::FPSCRPlatform::SetCSR(saved_host); return false;
   }
   Write(base, target, replacement);
   if (update.upper_clamped)
@@ -163,20 +163,20 @@ bool SetModifier(PPCContext& ctx, uint8_t* base) {
   ctx.r7.u64 = inputs.channel * 4; ctx.r9.u64 = state.parameters.additive_offset;
   ctx.r11.u64 = update.limit.truncated_bits;
   ctx.f0.f64 = double(update.upper_bound); ctx.f13.f64 = double(update.previous_value);
-  ctx.xer.ca = false; ctx.cr6.compare(double(update.previous_value), double(update.upper_bound));
+  ctx.xer.ca = false; ctx.cr6.Compare(double(update.previous_value), double(update.upper_bound));
   ctx.lr = uint32_t(ctx.lr);
   return true;
 }
 bool AdjustPercentage(PPCContext& ctx, uint8_t* base) {
   LimitInputs inputs;
   if (!ReadLimit(ctx, base, 256, inputs)) return false;
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   ValueLimitState state{inputs.parameters, Float(base, ctx.r3.u32 + 664)};
   const auto lower = Float(base, lower_bound);
   PercentageValueUpdate update;
   if (!TryAdjustValueByPercentage(state, ctx.r4.s32, lower, update)) {
-    ctx.fpscr.csr = saved_guest; rex::platform::FPSCRPlatform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; rex::ppc::FPSCRPlatform::SetCSR(saved_host); return false;
   }
   Write(base, ctx.r3.u32 + 664, std::bit_cast<uint32_t>(state.value));
   ctx.r3.u64 = update.limit.value; ctx.r4.u64 = uint64_t(inputs.record) * 3;
@@ -186,7 +186,7 @@ bool AdjustPercentage(PPCContext& ctx, uint8_t* base) {
   ctx.r11.s64 = int32_t(0x82060000u);
   ctx.f0.f64 = double(update.bounded.upper_bound); ctx.f13.f64 = double(lower);
   ctx.xer.ca = false;
-  ctx.cr6.compare(double(update.bounded.lower_result), double(update.bounded.upper_bound));
+  ctx.cr6.Compare(double(update.bounded.lower_result), double(update.bounded.upper_bound));
   ctx.lr = uint32_t(ctx.lr);
   return true;
 }
@@ -197,8 +197,8 @@ bool ConditionalPercentage(PPCContext& ctx, uint8_t* base) {
       !DisjointGuestHostRanges(object, 1380, stack - 128, 128)) return false;
   LimitInputs inputs;
   if (!ReadLimit(ctx, base, 128, inputs, {8, 736, false})) return false;
-  const auto saved_host = rex::platform::FPSCRPlatform::getcsr(), saved_guest = ctx.fpscr.csr;
-  ctx.fpscr.disableFlushMode();
+  const auto saved_host = rex::ppc::FPSCRPlatform::GetCSR(), saved_guest = ctx.fpscr.csr;
+  ctx.fpscr.DisableFlushMode();
   ValueLimitResult limit;
   ConditionalPercentageValueResult result;
   const auto first = *GuestHostAddress(base, object + 1336);
@@ -207,7 +207,7 @@ bool ConditionalPercentage(PPCContext& ctx, uint8_t* base) {
   if (!TryComputeValueLimit(inputs.parameters, limit) ||
       !TryAddConditionalPercentage(limit.truncated_bits, first, second, std::bit_cast<int32_t>(percentage_bits),
                                    inputs.parameters.percentage_unit, result)) {
-    ctx.fpscr.csr = saved_guest; rex::platform::FPSCRPlatform::setcsr(saved_host); return false;
+    ctx.fpscr.csr = saved_guest; rex::ppc::FPSCRPlatform::SetCSR(saved_host); return false;
   }
   ctx.r3.u64 = result.value;
   ctx.r4.u64 = std::bit_cast<uint32_t>(inputs.parameters.percentage_adjustment);
@@ -225,7 +225,7 @@ bool ConditionalPercentage(PPCContext& ctx, uint8_t* base) {
   }
   ctx.r10.s64 = first ? int32_t(0x82060000u) : second;
   ctx.f0.f64 = double(inputs.parameters.percentage_unit);
-  ctx.xer.ca = false; ctx.cr6.compare<uint32_t>(uint32_t(ctx.r9.u64), 0, ctx.xer);
+  ctx.xer.ca = false; ctx.cr6.Compare<uint32_t>(uint32_t(ctx.r9.u64), 0, ctx.xer);
   ctx.lr = uint32_t(ctx.lr);
   return true;
 }

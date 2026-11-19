@@ -19,7 +19,7 @@ bool Copy(PPCContext& ctx, uint8_t* base) {
   const auto source = ReadStatePayload(base, source_address);
   StatePayload destination;
   if (!TryCopyStatePayload(source, destination)) return false;
-  ctx.fpscr.disableFlushMode();
+  ctx.fpscr.DisableFlushMode();
   WriteStatePayload(base, destination_address, destination);
   ctx.r5.u64 = source.words56[2]; ctx.r6.u64 = source.words56[1]; ctx.r7.u64 = source.word96;
   ctx.r8.u64 = source.words56[6]; ctx.r9.u64 = source.words56[5];

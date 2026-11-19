@@ -35,7 +35,7 @@ void Publish(PPCContext& ctx, KindLookup lookup, uint32_t mask) {
   ctx.r7.u64 = decision.selected_bits;
   ctx.r8.u64 = lookup.flags; ctx.r9.u64 = lookup.offset; ctx.r10.u64 = lookup.kind;
   ctx.r11.u64 = uint64_t(int64_t(std::bit_cast<int32_t>(flags_address)));
-  ctx.cr6.compare<int32_t>(std::bit_cast<int32_t>(decision.selected_bits), 0, ctx.xer);
+  ctx.cr6.Compare<int32_t>(std::bit_cast<int32_t>(decision.selected_bits), 0, ctx.xer);
 }
 bool Query(PPCContext& ctx, uint8_t* base, uint32_t mask) {
   KindLookup lookup;
@@ -87,14 +87,14 @@ bool RelatedQuery(PPCContext& ctx, uint8_t* base) {
   ctx.r11.u64 = argument_matches;
   if (argument_tag_matches) ctx.r9.u64 = value;
   ctx.r8.u64 = argument_matches;
-  ctx.cr6.compare<uint32_t>(argument_matches, 0, ctx.xer);
+  ctx.cr6.Compare<uint32_t>(argument_matches, 0, ctx.xer);
   ctx.r3.u64 = 0;
   if (!argument_matches) {
     ctx.r7.u64 = related_full; ctx.r5.u64 = tag; ctx.r6.u64 = related_extra;
     ctx.r10.u64 = related_value; ctx.r11.u64 = related_matches;
     if (related_tag_matches) ctx.r4.u64 = value;
     rex::memory::store_and_swap<uint32_t>(GuestHostAddress(base, scratch), related_extra);
-    ctx.cr6.compare<uint32_t>(related_matches, 0, ctx.xer);
+    ctx.cr6.Compare<uint32_t>(related_matches, 0, ctx.xer);
     if (!related_matches) Publish(ctx, lookup, 8);
   }
   Used(); return true;
@@ -115,13 +115,13 @@ bool CategoryQuery(PPCContext& ctx, uint8_t* base) {
   const bool allowed = CategoryAllowsKindFlags(std::bit_cast<int32_t>(category));
   if (allowed && !Lookup(base, object, lookup)) return false;
   ctx.r11.u64 = begin; ctx.r10.u64 = offset; ctx.r9.u64 = record_full; ctx.r8.u64 = category;
-  ctx.r3.u64 = 0; ctx.cr6.compare<int32_t>(std::bit_cast<int32_t>(category), 1024, ctx.xer);
+  ctx.r3.u64 = 0; ctx.cr6.Compare<int32_t>(std::bit_cast<int32_t>(category), 1024, ctx.xer);
   if (allowed) {
     const auto decision = QueryKindFlags({lookup.flags}, 16);
     ctx.r7.u64 = lookup.kind; ctx.r6.u64 = lookup.offset; ctx.r5.u64 = lookup.flags;
     ctx.r4.u64 = decision.selected_bits; ctx.r3.u64 = decision.enabled;
     ctx.r11.u64 = uint64_t(int64_t(std::bit_cast<int32_t>(flags_address)));
-    ctx.cr6.compare<int32_t>(int32_t(decision.selected_bits), 0, ctx.xer);
+    ctx.cr6.Compare<int32_t>(int32_t(decision.selected_bits), 0, ctx.xer);
   }
   Used(); return true;
 }
@@ -129,10 +129,10 @@ void ByteQuery(PPCContext& ctx, uint8_t* base) {
   const auto object = ctx.r3.u32;
   const auto request = uint8_t(ctx.r4.u32);
   uint8_t guard = 0;
-  ctx.r11.u64 = request; ctx.cr6.compare<uint32_t>(request, 0, ctx.xer);
+  ctx.r11.u64 = request; ctx.cr6.Compare<uint32_t>(request, 0, ctx.xer);
   if (request) {
     guard = *GuestHostAddress(base, object + 160);
-    ctx.r10.u64 = guard; ctx.cr6.compare<uint32_t>(guard, 0, ctx.xer);
+    ctx.r10.u64 = guard; ctx.cr6.Compare<uint32_t>(guard, 0, ctx.xer);
   }
   const auto stored = request && !guard ? uint8_t{0} : *GuestHostAddress(base, object + 716);
   ctx.r3.u64 = SelectStateByte(request, guard, stored); Used();
