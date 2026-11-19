@@ -23,6 +23,13 @@ a section explicitly says otherwise.
 | [Supported game build](game-build.json) | Disc and executable identity used by import and compatibility checks |
 | [Release documentation](releases/README.md) | Current package-document contract and archived upstream release records |
 
+## Reporting issues
+
+Report fork-specific problems through the
+[fork issue tracker](https://github.com/Tzeentchnet/N3-Ninety-Nine-Nights-Recomp/issues).
+Include the commit, active profile and mod configuration, logs, and reproduction
+steps. Never upload game files, disc images, saves, or private paths.
+
 ## Evidence labels
 
 Reverse-engineering and modding claims use these labels:

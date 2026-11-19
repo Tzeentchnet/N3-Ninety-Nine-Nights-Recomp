@@ -4,6 +4,16 @@ Recorded 22 October 2026. The opening mission, following cutscene, and writing a
 save have been exercised successfully. Loading saved progress also succeeds on
 the tested opening route. Full-game coverage remains unvalidated.
 
+## Current compatibility summary
+
+- **Platform:** Windows 10/11 x64 with Direct3D 12.
+- **Supported game:** USA/Europe executable `0.0.0.3`, identified in
+  [game-build.json](game-build.json).
+- **Validated route:** opening mission, following cutscene, and save/load on the
+  tested opening path.
+- **Known limitation:** full-game coverage is incomplete, and higher frame-rate
+  modes can accelerate animation.
+
 ## Verified
 
 - XDVDFS game partition found at byte offset `0x0FD90000` in the supplied disc.

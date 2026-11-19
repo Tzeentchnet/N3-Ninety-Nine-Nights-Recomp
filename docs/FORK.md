@@ -16,6 +16,7 @@ As checked on 2 November 2026:
 | Shared upstream baseline | [`d1416e56`](https://github.com/WK2D/N3-Ninety-Nine-Nights-Recomp/commit/d1416e56cf3066e4b07d0bd50fa8dbd1bd1e590d) |
 | Upstream-only commits at audit | 0 |
 | Published fork releases | None |
+| Fork releases | [Tzeentchnet releases](https://github.com/Tzeentchnet/N3-Ninety-Nine-Nights-Recomp/releases) |
 | Latest upstream release | [v0.1.0-alpha.12](https://github.com/WK2D/N3-Ninety-Nine-Nights-Recomp/releases/tag/v0.1.0-alpha.12) |
 
 The private repository is an independent GitHub copy rather than a
@@ -24,6 +25,19 @@ In local development, `origin` is the read-only WK2D upstream and `private` is
 the maintained Tzeentchnet repository.
 
 ## Fork-only work
+
+The fork adds:
+
+- hardened, provenance-checked ReXGlue SDK installation, code generation,
+  GPU-source preparation, builds, and release packaging;
+- selected ReIGlue renderer fixes, PAL text-language selection, validated
+  alternate voice overlays, and additional profile/frame-pacing work;
+- an expanded development launcher with window modes, graphics overrides,
+  isolated profiles, native setup/reset, custom paths, dry runs, and mod staging;
+- deterministic offline loose-file mods plus a Blender-oriented asset-authoring
+  and handoff plan;
+- expanded engineering, release, and historical documentation; and
+- a project-level BSD 3-Clause license.
 
 The major implementation milestones through the project-license update are:
 
