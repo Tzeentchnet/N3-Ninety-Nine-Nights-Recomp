@@ -16,15 +16,22 @@ The project's disc extractor implements the XDVDFS structure documented by
 Xenia's disc image reader. ReXGlue's own dependency notices remain applicable to
 downloaded libraries and any future packaged binary distribution.
 
-N3 applies two narrowly scoped renderer corrections under
-`tools/rexglue/patches/`: the raw physical GPU view remains writable instead of
-inheriting title-alias allocation or page-protection state, and Vulkan
-presentation uses swapchain-image semaphores with an idle barrier during
-swapchain retirement.
-The same patch set also backports ReXGlue's later source-pinning approach for
-Vulkan-Headers and Vulkan Memory Allocator. No separate temporal FidelityFX
-runtime or DLL is included, and stable ReXGlue 0.11 does not contain the earlier
-FSR1 presentation-effect path.
+N3 applies a small, tracked patch set under `tools/rexglue/patches/`: the raw
+physical GPU view remains writable instead of inheriting title-alias allocation
+or page-protection state; Vulkan presentation uses swapchain-image semaphores
+with an idle barrier during swapchain retirement; settings edits are deferred
+until commit; capped host presentation can repeat the latest game frame; and
+the earlier spatial FSR1 presentation path is adapted to the stable v0.11
+D3D12 and Vulkan presenters. The same patch set also backports ReXGlue's later
+source-pinning approach for Vulkan-Headers and Vulkan Memory Allocator.
+
+The six generated D3D12 and Vulkan FSR1 shader headers are preserved from
+ReXGlue commit `b025c4a8fdb2abb9f3779de9b340bd06c4c3c103`, the parent before
+upstream removed that path. They implement AMD FidelityFX Super Resolution 1
+EASU and RCAS. FSR1 is distributed under AMD's MIT terms; the complete notice
+is in `LICENSES/AMD-FidelityFX-FSR1.txt` and is included in runtime and
+corresponding-source packages. No separate temporal FidelityFX runtime, modern
+FidelityFX SDK, NVIDIA Streamline/NGX component, or DLSS binary is included.
 
 Vulkan-Headers is pinned at
 `9fbc2a782ee3f8a4db64e7d991e23da75e893f44`; Vulkan Memory Allocator is
@@ -54,7 +61,8 @@ runtime, renderer, or original game data is included.
 
 Current development builds the complete matched modular ReXGlue 0.11 runtime
 from the exact stable source plus the tracked patches. D3D12 is the Windows
-default; Vulkan and null drivers are also supplied. Third-party components
+default; Vulkan and null drivers are also supplied. Spatial AMD FSR1
+presentation is available on D3D12 and Vulkan. Third-party components
 include SDL3, FFmpeg, libmspack, spdlog, simde, xxHash, toml++, Dear ImGui,
 CLI11, Tracy, glslang, Vulkan-Headers, Vulkan Memory Allocator, and small
 vendored utility libraries. Their notices, including notices embedded in source

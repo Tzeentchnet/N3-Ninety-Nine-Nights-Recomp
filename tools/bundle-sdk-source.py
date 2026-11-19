@@ -71,6 +71,7 @@ def extension_files():
         "CMakeLists.txt",
         "THIRD_PARTY.md",
         "LICENSE",
+        "LICENSES/AMD-FidelityFX-FSR1.txt",
     ] + [
         path.relative_to(ROOT).as_posix()
         for path in sorted((ROOT / "tools" / "rexglue" / "patches").glob("*.patch"))

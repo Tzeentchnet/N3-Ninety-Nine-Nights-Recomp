@@ -1995,9 +1995,10 @@ Bootstrap now prepares that source transactionally under
 `.tools\rexglue-source`, initializes every stable submodule, pins
 Vulkan-Headers at `9fbc2a782ee3f8a4db64e7d991e23da75e893f44` and Vulkan Memory
 Allocator at `0f1a757da579831283413295cc7f3b47eb521c77`, and applies the four
-tracked patches under `tools\rexglue\patches`. The corresponding-source bundle
-contains the stable tree, all 17 dependency trees, all four patches, build
-metadata, and source manifests.
+original migration patches plus the tracked FSR1 restoration under
+`tools\rexglue\patches`. The corresponding-source bundle contains the stable
+tree, all 17 dependency trees, all five patches, build metadata, source
+manifests, and the AMD FSR1 notice.
 
 The v0.11 migration includes typed settings and lifecycle integration, modular
 runtime loading, v0.11 VFS/UI/clock/PPC interfaces, the v0.11 physical-address
@@ -2027,9 +2028,10 @@ presentation queue outside the normal frame path. Neither
 `VUID-vkDestroySwapchainKHR-swapchain-01282` appeared in the final bounded log.
 The process was stopped by exact PID.
 
-Stable v0.11 removed the v0.10 FSR1/CAS/temporal `present_effect` surface.
-Current presentation is bilinear, D3D12 remains the launcher default, Vulkan is
-explicit opt-in, and restoring selectable FSR1 is deferred.
+Stable v0.11 removed the v0.10 FSR1/CAS/temporal `present_effect` surface. The
+current patch set restores only the vendor-neutral spatial FSR1 EASU+RCAS path;
+modern temporal upscalers remain absent. D3D12 and FSR1 are the development
+launcher defaults, with Vulkan and bilinear available as explicit alternatives.
 
 These results establish compilation, regression coverage, device/swapchain
 initialization, and the absence of the two observed renderer failures during
@@ -2065,9 +2067,10 @@ the existing validated external-pack path. The verified supported extraction
 contains only `data\Sound\ENG\SoundRes`; its French, German, Italian, and Spanish
 resources are text/font data, not alternate voice banks.
 
-The reconstructed ReXGlue tree applies all four tracked patches cleanly. The
-launcher regression passes 98 checks, the SDK/package checks pass 15 tests, and
-the RelWithDebInfo source build passes all 51 native CTests in 13.71 seconds.
+At that checkpoint, the reconstructed ReXGlue tree applied the then-current
+four tracked patches cleanly. The launcher regression passed 98 checks, the
+SDK/package checks passed 15 tests, and the RelWithDebInfo source build passed
+all 51 native CTests in 13.71 seconds.
 Focused ReXGlue tests pass 13 assertions for numeric allowed-value validation
 and 5 assertions for capped presenter polling. The frame-rate regression
 normalizes recognized 30/40/60 clock initializers to the 30 FPS game policy and
@@ -2091,3 +2094,60 @@ These checks do not establish gameplay speed across a complete mission, visual
 correctness, 60 unique game frames per second, or interactive F5 keyboard
 navigation. The settings validator and editor paths are covered, but a manual
 F5 interaction pass remains pending.
+
+## Spatial FSR1 on stable ReXGlue 0.11
+
+Recorded 19 November 2026.
+
+Patch `0005` restores ReXGlue's vendor-neutral spatial FSR1 EASU+RCAS
+presentation flow on the stable v0.11 D3D12 and Vulkan presenters. The six
+generated shader headers match ReXGlue commit
+`b025c4a8fdb2abb9f3779de9b340bd06c4c3c103`, the parent immediately before
+upstream removed the path. Intermediate render targets, chained EASU passes,
+RCAS sharpening, dithering, and the bilinear fallback are adapted to the v0.11
+backend lifetimes and synchronization. The stable runtime and SDK pins did not
+change.
+
+The development launcher exposes `-Upscaler FSR1`, `Bilinear`, and
+`Configured`, with FSR1 selected by default. Its command-construction regression
+passes 106 checks, including the default override, explicit bilinear selection,
+and configured omission. Source reconstruction and its marker check pass with
+all five patches. The SDK/package suite passes 16 tests, the latest stable SDK
+check still verifies v0.11.0, and the final RelWithDebInfo source build passes
+all 51 native CTests in 14.46 seconds.
+
+**D3D12 bounded A/B:** separate FSR1 and bilinear runs requested a 1920 x 1080
+window with 720p internal rendering and survived their 20-second bounds on the
+NVIDIA GeForce RTX 5070 until stopped by exact PID. Captures of the same
+Phantagram splash frame were non-black and correctly composed. On the captured
+logo region, the same simple edge-response measurement was 7.66 for FSR1 and
+4.75 for bilinear, confirming that the selected paths produce the expected
+distinct sharpening behavior. Neither log contained a device-removal,
+access-violation, exception, or renderer-error signature.
+
+**Vulkan bounded A/B:** separate 20-second FSR1 and bilinear runs enabled
+Khronos validation, created 1920 x 1080 swapchains on the same RTX 5070, and
+were stopped by exact PID. No VUID, validation error, device-loss,
+access-violation, or exception signature appeared. Captures of the same splash
+frame were non-black and correctly composed; the corresponding edge-response
+measurement was 8.99 for FSR1 and 5.65 for bilinear.
+
+These are bounded startup and single-frame image checks, not a broad
+image-quality study. They establish that both backend pipelines initialize,
+present valid images, select different filters, and survive a genuine upscale
+configuration on one driver. They do not establish performance cost, artifact
+behavior in motion, later-mission rendering, HDR behavior, other vendors or
+drivers, sustained play, or full gameplay correctness.
+
+FSR4, DLSS Super Resolution, and frame generation remain architectural
+investigations rather than selectable features. The current presenter receives
+the final guest color image but not real motion vectors, depth, projection
+jitter, exposure, camera-reset metadata, camera transforms, or a HUD-less image
+and UI mask. Those are required for correct temporal reconstruction and frame
+generation. N3's HUD is already baked into the presented guest image. ReXGlue
+[issue 526](https://github.com/rexglue/rexglue-sdk/issues/526) and the closed,
+unmerged [PR 527](https://github.com/rexglue/rexglue-sdk/pull/527) explored a
+Vulkan-only presentation-layer DLSS shortcut with zero motion/depth and a reset
+every frame; that is not equivalent to temporal DLSS and is not included here.
+No modern FidelityFX SDK, NVIDIA Streamline/NGX code, or proprietary DLSS binary
+is tracked or packaged.

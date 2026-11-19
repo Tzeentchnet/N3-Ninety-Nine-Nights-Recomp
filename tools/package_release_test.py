@@ -34,6 +34,19 @@ class PackageReleaseTests(unittest.TestCase):
             license_path.read_text(encoding="ascii"),
         )
 
+    def test_package_includes_fsr1_license(self):
+        license_path = package_release.PACKAGE_DOCUMENTS[
+            "licenses/AMD-FidelityFX-FSR1.txt"
+        ]
+        self.assertEqual(
+            license_path,
+            package_release.ROOT / "LICENSES/AMD-FidelityFX-FSR1.txt",
+        )
+        self.assertIn(
+            "Advanced Micro Devices, Inc.",
+            license_path.read_text(encoding="ascii"),
+        )
+
     def test_package_records_patched_source_inputs(self):
         self.assertEqual(
             {dependency.name for dependency in package_release.SDK_SOURCE_DEPENDENCIES},
@@ -47,6 +60,7 @@ class PackageReleaseTests(unittest.TestCase):
                 "0002-fix-renderer-synchronization.patch",
                 "0003-defer-settings-edits.patch",
                 "0004-repeat-capped-presents.patch",
+                "0005-restore-fsr1-presentation.patch",
             ],
         )
 

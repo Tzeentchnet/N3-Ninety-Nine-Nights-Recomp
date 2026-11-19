@@ -29,6 +29,7 @@ param(
     [ValidateSet('Configured','720','1080','1440','2160')][string]$DisplayResolution = 'Configured',
     [ValidateSet('Configured','720','1440','2160')][string]$RenderResolution = 'Configured',
     [ValidateSet('D3D12','Vulkan','Configured')][string]$Renderer = 'D3D12',
+    [ValidateSet('FSR1','Bilinear','Configured')][string]$Upscaler = 'FSR1',
     [ValidateSet('Configured','On','Off')][string]$VSync = 'Configured',
     [string]$VoiceDirectory,
     [string]$GameDirectory,
@@ -407,6 +408,10 @@ if ($Renderer -ne 'Configured') {
     $launchArguments.Add('--gpu.driver')
     $launchArguments.Add($Renderer.ToLowerInvariant())
 }
+if ($Upscaler -ne 'Configured') {
+    $launchArguments.Add('--gpu.xenos.present_effect')
+    $launchArguments.Add($Upscaler.ToLowerInvariant())
+}
 switch ($VSync) {
     'On' { $launchArguments.Add('--gpu.vsync') }
     'Off' { $launchArguments.Add('--no-gpu.vsync') }
@@ -432,6 +437,7 @@ $plan = [ordered]@{
     configuration = $Configuration
     windowMode = $WindowMode
     renderer = $Renderer
+    upscaler = $Upscaler
     profile = $(if ($Profile) { $Profile } else { $null })
     setup = [bool]$Setup
     resetGameSelection = [bool]$ResetGameSelection

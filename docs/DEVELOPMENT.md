@@ -44,10 +44,20 @@ stable source under `.tools\rexglue-source`. Bootstrap verifies ReXGlue
 submodule, pins Vulkan-Headers and Vulkan Memory Allocator, and applies the
 small patches under `tools\rexglue\patches`.
 
-ReXGlue 0.11 removed the earlier presentation-effect API, including its FSR1
-path. The current build uses v0.11's bilinear presentation. Restoring a
-selectable FSR1 implementation is a later milestone rather than a hidden
-version downgrade.
+ReXGlue 0.11 removed the earlier presentation-effect API. Patch `0005` restores
+the vendor-neutral spatial FSR1 EASU+RCAS path from the last upstream parent
+before that removal, adapted to the v0.11 D3D12 and Vulkan presenters. The base
+remains pinned to stable v0.11.0 rather than downgrading the runtime. Generated
+shader headers and AMD's MIT notice are tracked so the prepared source does not
+depend on an older checkout.
+
+No modern temporal FidelityFX or NVIDIA DLSS SDK is bundled. FSR4 and DLSS
+Super Resolution need real motion vectors, depth, jitter, exposure, history
+reset, and related per-frame metadata that ReXGlue's final-color presenter does
+not currently receive. Frame generation additionally needs consecutive real
+frames, camera and UI separation data, latency integration, and pacing. A
+single-frame path with zero motion/depth and a reset every frame would not be a
+correct temporal implementation, so those modes are not exposed.
 
 To use an existing Visual Studio 2022 x64 development environment, run
 `tools\bootstrap.ps1 -ToolsOnly`. Exact SDK, compiler, CMake, Ninja, URL, and

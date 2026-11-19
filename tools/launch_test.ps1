@@ -52,7 +52,9 @@ Assert-ArgumentValue $default '--app.user_root' (Join-Path $root 'private/user')
 Assert-ArgumentValue $default '--app.cache_root' (Join-Path $root 'private/cache')
 Assert-ArgumentValue $default '--app.log_root' (Join-Path $root 'logs')
 Assert-ArgumentValue $default '--gpu.driver' 'd3d12'
+Assert-ArgumentValue $default '--gpu.xenos.present_effect' 'fsr1'
 Assert-ArgumentValue $default '--n3.frame_rate' '60'
+Assert-True ($default.upscaler -eq 'FSR1') 'Default launcher upscaler is not FSR1'
 
 $graphics = Invoke-Plan @(
     '-DryRun',
@@ -66,6 +68,7 @@ $graphics = Invoke-Plan @(
     '-DisplayResolution', '1080',
     '-RenderResolution', '2160',
     '-Renderer', 'Vulkan',
+    '-Upscaler', 'Bilinear',
     '-VSync', 'Off'
 )
 Assert-Argument $graphics '--ui.fullscreen'
@@ -79,6 +82,7 @@ Assert-ArgumentValue $graphics '--n3.display_resolution' '1080'
 Assert-ArgumentValue $graphics '--gpu.resolution_scale_x' '3'
 Assert-ArgumentValue $graphics '--gpu.resolution_scale_y' '3'
 Assert-ArgumentValue $graphics '--gpu.driver' 'vulkan'
+Assert-ArgumentValue $graphics '--gpu.xenos.present_effect' 'bilinear'
 Assert-Argument $graphics '--no-gpu.vsync'
 Assert-True ($graphics.userDirectory -eq (Join-Path $root 'private/profiles/test-profile')) 'Named profile user path is incorrect'
 Assert-True ($graphics.cacheDirectory -eq (Join-Path $root 'private/profiles/test-profile/cache')) 'Named profile cache path is incorrect'
@@ -94,6 +98,7 @@ $window = Invoke-Plan @(
     '-Width', '1920',
     '-Height', '1080',
     '-Renderer', 'Configured',
+    '-Upscaler', 'Configured',
     '-VSync', 'On'
 )
 Assert-Argument $window '--ui.fullscreen'
@@ -101,6 +106,7 @@ Assert-Argument $window '--no-ui.fullscreen_exclusive'
 Assert-ArgumentValue $window '--ui.window_width' '1920'
 Assert-ArgumentValue $window '--ui.window_height' '1080'
 Assert-NoArgument $window '--gpu.driver'
+Assert-NoArgument $window '--gpu.xenos.present_effect'
 Assert-Argument $window '--gpu.vsync'
 
 $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ('n3-launch-test-' + [guid]::NewGuid().ToString('N'))

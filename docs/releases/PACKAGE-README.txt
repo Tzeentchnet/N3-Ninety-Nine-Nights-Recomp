@@ -35,13 +35,15 @@ left/right changes its value, and B returns.
 - Anisotropic filtering: 1x, 2x, 4x, 8x, or 16x.
 - Display resolution: 720p, 1080p, 1440p, or 4K.
 - Render resolution: 720p (1x), 1440p (2x), or 4K (3x).
+- Presentation effect: spatial FSR1 or bilinear.
 - VSync: On or Off.
 
 Presentation rate does not change the established original-speed 30 FPS game
 clock. The latest game frame is repeated for a 60 Hz host output target; this is
 not true 60 FPS gameplay. Display size and internal rendering are independent.
-Stable ReXGlue 0.11 uses bilinear presentation. FSR1 is not available in this
-milestone.
+Spatial FSR1 uses EASU and RCAS on the final guest image; it does not generate
+frames. Bilinear presentation remains available for comparison. Temporal FSR4,
+DLSS upscaling, and frame generation are not included.
 
 LANGUAGE AND OPTIONAL VOICES
 The supported disc includes English, French, German, Italian, and Spanish text
@@ -64,6 +66,8 @@ n3.exe --title.game_root "path\to\game-folder"
 n3.exe --n3.text_language spanish
 n3.exe --n3.voice_directory "path\to\SoundRes"
 n3.exe --gpu.driver vulkan
+n3.exe --gpu.xenos.present_effect fsr1
+n3.exe --gpu.xenos.present_effect bilinear
 
 A source checkout also provides an offline loose-file mod stager. It is not
 included in this runtime ZIP. A staged tree still requires the verified
@@ -83,10 +87,11 @@ which is not included.
 THIRD-PARTY SOFTWARE
 ReXGlue and its dependencies are credited in THIRD_PARTY.md and licenses/.
 The source-built modular ReXGlue 0.11 runtime includes the tracked D3D12
-physical-memory and Vulkan presentation corrections. Matching source, patches,
-notices, and build scripts are supplied in the optional corresponding-source
-archive. FFmpeg and libmspack include LGPL components. Microsoft C/C++ runtime
-DLLs are included under Microsoft's applicable terms.
+physical-memory and Vulkan presentation corrections plus spatial AMD FSR1.
+Matching source, patches, notices, and build scripts are supplied in the
+optional corresponding-source archive. FFmpeg and libmspack include LGPL
+components. Microsoft C/C++ runtime DLLs are included under Microsoft's
+applicable terms.
 
 PROJECT AND BUG REPORTS
 https://github.com/Tzeentchnet/N3-Ninety-Nine-Nights-Recomp

@@ -200,6 +200,7 @@ def prepare_source():
             run_git(
                 [
                     "apply",
+                    "--index",
                     "--ignore-space-change",
                     "--ignore-whitespace",
                     "-",

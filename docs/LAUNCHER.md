@@ -22,6 +22,7 @@ The default development launch:
 - targets 60 host presentations per second while retaining the established
   original-speed 30 FPS game timing;
 - selects the D3D12 renderer;
+- selects spatial FSR1 presentation;
 - uses `private\game` as the owned extracted game tree;
 - stores saves, settings, remembered game paths, and diagnostics in
   `private\user`;
@@ -47,6 +48,7 @@ reparse points in game, mod, profile, cache, and log paths.
 | `-DisplayResolution` | `Configured` (default), `720`, `1080`, `1440`, `2160` | Leaves the profile value untouched or selects the display/output preset. It cannot be combined with `-Width` or `-Height`. |
 | `-RenderResolution` | `Configured` (default), `720`, `1440`, `2160` | Leaves the profile value untouched or selects internal 1x, 2x, or 3x rendering. |
 | `-Renderer` | `D3D12` (default), `Vulkan`, `Configured` | Selects the D3D12 or Vulkan Xenos driver, or leaves the active profile value untouched. |
+| `-Upscaler` | `FSR1` (default), `Bilinear`, `Configured` | Selects spatial AMD FidelityFX Super Resolution 1 EASU+RCAS presentation, selects the bilinear fallback, or leaves the active profile value untouched. |
 | `-VSync` | `Configured`, `On`, `Off` | Leaves the profile value untouched or forces host presentation VSync for this launch. |
 | `-GameDirectory` | Existing directory | Uses an explicit extracted game tree and bypasses remembered-path/native picker behavior. The normal default is `private\game`. |
 | `-Setup` | Switch | Omits the game-root override so the native application can use its remembered path or open its ISO/XEX picker. |
@@ -69,7 +71,8 @@ reparse points in game, mod, profile, cache, and log paths.
 Most options omitted from the command line remain available to the active
 profile's `n3.toml`. The launcher explicitly selects D3D12 by default; use
 `-Renderer Configured` to retain the profile's driver selection. Other explicit
-launcher values override saved values for that process.
+launcher values override saved values for that process. Likewise,
+`-Upscaler Configured` leaves `gpu.xenos.present_effect` untouched.
 
 ## Window and graphics examples
 
@@ -93,6 +96,10 @@ pwsh -NoProfile -File tools\launch.ps1 `
 # Exercise Vulkan in an isolated profile.
 pwsh -NoProfile -File tools\launch.ps1 `
   -Profile vulkan-test -Renderer Vulkan
+
+# Compare the bilinear fallback against default FSR1 presentation.
+pwsh -NoProfile -File tools\launch.ps1 `
+  -Profile bilinear-test -Upscaler Bilinear
 
 # Inspect the exact arguments without launching.
 pwsh -NoProfile -File tools\launch.ps1 `
@@ -123,10 +130,21 @@ assuming that matching voice banks exist; on the supported disc,
 explicitly. `-VoiceDirectory` remains available for a compatible complete voice
 bank from another user-owned edition.
 
-Stable ReXGlue 0.11 uses bilinear presentation and no longer exposes the
-v0.10 `present_effect`/FSR1 path. `-RenderResolution` still controls internal
-Xenos rendering independently of the host window size. FSR1 restoration remains
-planned, but is not presented as an available option in this milestone.
+The stable ReXGlue 0.11 base is patched with the earlier vendor-neutral spatial
+FSR1 EASU+RCAS presentation path on both D3D12 and Vulkan. FSR1 operates on the
+final guest color image, including N3's baked-in HUD. It sharpens at native
+size, upscales when the host output is larger, and uses bilinear presentation
+for any final resize that EASU cannot perform. The F5 setting
+`gpu.xenos.present_fsr1_sharpness_reduction` controls RCAS sharpness in stops;
+lower values are sharper and changes require a restart.
+
+`-RenderResolution` controls internal Xenos rendering independently of the host
+window or display size. Use `-Upscaler Bilinear` for an A/B comparison, or
+`-Upscaler Configured` to retain the saved setting. FSR1 is spatial: it does not
+create extra frames and does not require motion vectors or frame history.
+Modern temporal FSR4, DLSS Super Resolution, and frame generation are not
+launcher choices because the current presenter is not supplied the required
+motion, depth, jitter, exposure, reset, camera, and HUD-separation inputs.
 
 D3D12 is the supported default. Vulkan is opt-in and has completed bounded
 device, swapchain, and presentation validation on the development system with

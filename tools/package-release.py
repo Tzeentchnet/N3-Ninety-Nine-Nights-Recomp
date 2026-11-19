@@ -18,6 +18,7 @@ PACKAGE_DOCUMENTS = {
     "LICENSE.txt": ROOT / "LICENSE",
     "README.txt": ROOT / "docs/releases/PACKAGE-README.txt",
     "THIRD_PARTY.md": ROOT / "THIRD_PARTY.md",
+    "licenses/AMD-FidelityFX-FSR1.txt": ROOT / "LICENSES/AMD-FidelityFX-FSR1.txt",
 }
 PACKAGE_BINARIES = (
     "n3.exe",
