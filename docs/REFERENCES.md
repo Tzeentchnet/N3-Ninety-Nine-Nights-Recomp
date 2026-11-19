@@ -39,9 +39,36 @@ runtime kernel, and GPU/audio/input integration. Its bundled CLI differs from
 older wiki examples: this revision uses `n3_manifest.toml` with `[project]` and
 `[entrypoint]` sections. The local scripts follow the installed CLI/parser.
 
-This remains the newest published nightly at review time. The repository's
-`main` branch diverges at the older v0.10.0 release, so replacing the nightly
-with `main` would discard the later nightly changes rather than upgrade it.
+As reviewed on 19 November 2026, stable `main` is
+[v0.11.0](https://github.com/rexglue/rexglue-sdk/releases/tag/v0.11.0) at
+`ebac1cf0d04bab0042a5dd6148b34ab3953e9c0d`, 338 commits after the pin. The
+newest published Windows asset is development-branch nightly
+[`115171b4`](https://github.com/rexglue/rexglue-sdk/commit/115171b419407cd783febd38ad25ddaa3b7463bd),
+347 commits after the pin. That nightly is 13 commits ahead of and four commits
+behind stable v0.11.0. Both lines include a broad GPU/module reorganization, so
+replacing the pin is not a surgical renderer update. It requires rebasing the
+live-resolution presenter, regenerating translated integration, and repeating
+gameplay validation.
+
+The pinned source already contains ReXGlue's spatial FSR1 EASU/RCAS presenter
+path, but the published pinned runtime binaries were built with it disabled.
+N3 now source-builds a matched runtime and Xenos plugin with that spatial path
+enabled. The external temporal FidelityFX runtime remains disabled.
+
+The review did identify two later upstream correctness commits that apply
+cleanly to the pinned renderer:
+
+- [`0d5178cc`](https://github.com/rexglue/rexglue-sdk/commit/0d5178ccb8122e37548af5417434ddde51463d6b)
+  fixes `SV_SampleIndex` emission for sample-rate memexport pixel shaders.
+- [`30eaa073`](https://github.com/rexglue/rexglue-sdk/commit/30eaa07332a5857c7c3a6489329d2b4fbcac494a)
+  provides four applicable D3D12/Xenos corrections: extreme-FXAA pipeline
+  validation, bindless sampler layout lookup and IDs, 3D tiled-depth alignment,
+  and depth render-target encoding comparison.
+
+The adapted patches retain exact commit provenance under `tools/gpu/patches/`.
+Vulkan-only exponent-bias and paint-pipeline changes were not imported. The
+new worker-wait and depth-test optimizations depend on the reorganized GPU
+architecture and remain deferred rather than being partially transplanted.
 
 ## Forza Horizon 1: ReImagined and ReIGlue
 
@@ -56,18 +83,17 @@ allocation and global lock when requested shared-memory pages are already valid
 generated-header output declaration (`0096`) is also reflected in
 `generated/rexglue.cmake` to prevent stale PCH/header scheduling under Ninja.
 
-Forza's wheel, online-service, VR, HDR, upscaler, Vulkan, texture-pack, and
-Forza-specific resolve changes are outside N3's current requirements. Its audio
-fallback and XMA hardening would require replacing the prebuilt runtime rather
-than the project-built GPU plugin; N3 has no matching failure evidence, so those
+Forza's wheel, online-service, VR, HDR, custom upscaler, Vulkan, texture-pack,
+and title-specific resolve changes are outside N3's current requirements. N3's
+FSR1 path comes from the pinned ReXGlue presenter rather than Forza code. Its
+audio fallback and XMA hardening have no matching N3 failure evidence, so those
 larger changes remain candidates rather than untested imports.
 
 The follow-up build review also examined ReIGlue's loaded-only RenderDoc probe,
 keyboard tap queue, opt-in CPU/GPU readback synchronization, and VMX
-floating-point accuracy work through `6e47a08c`. They affect the runtime or
-generator rather than N3's project-built plugin alone. They remain deferred
-until N3 can build a matched source SDK and run regenerated-code equivalence
-and gameplay checks.
+floating-point accuracy work through `6e47a08c`. They affect broader runtime or
+generator behavior and remain deferred pending specific N3 evidence and
+gameplay checks.
 
 ## Recent ReXGlue build references
 

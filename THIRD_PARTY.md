@@ -4,8 +4,9 @@ Project-authored source and documentation are licensed under the BSD 3-Clause
 License in [`LICENSE`](LICENSE). The components and adapted work identified
 below retain their respective copyright notices and license terms.
 
-ReXGlue supplies generated project/build boilerplate and the downloaded runtime.
-It is derived in part from Xenia. Its source and licence are available at:
+ReXGlue supplies generated project/build boilerplate, the downloaded code
+generator, and the source-built runtime and Xenos plugin. It is derived in part
+from Xenia. Its source and licence are available at:
 
 - https://github.com/rexglue/rexglue-sdk/tree/bd833a2ab69d305f99ddf57418fc38ffec8af93d
 - https://github.com/rexglue/rexglue-sdk/blob/bd833a2ab69d305f99ddf57418fc38ffec8af93d/LICENSE
@@ -22,6 +23,15 @@ texture-watch validity, add a shared-memory valid-range fast path first carried
 by Recompiled Halo Reach, and fix D3D12 fence HRESULT checks. Exact source
 commits are listed under `tools/gpu/patches/`; the applicable notice and licence
 are in `LICENSES/ReIGlue.txt` and the corresponding-source archive.
+
+The source-built runtime and plugin enable ReXGlue's existing spatial AMD
+FidelityFX Super Resolution 1 EASU/RCAS presenter path. No separate temporal
+FidelityFX SDK runtime or DLL is included. The renderer also adapts five
+title-independent fixes from later BSD-licensed ReXGlue commits: sample-rate
+memexport semantics, extreme-FXAA initialization checking, bindless sampler
+layout lookup and IDs, 3D tiled-depth alignment, and depth render-target
+encoding comparison. Exact upstream commits are recorded under
+`tools/gpu/patches/`.
 
 Bootstrap downloads official LLVM, CMake, Ninja, and Microsoft development tools.
 Their respective licences apply. The pinned portable Microsoft-tool downloader
@@ -43,10 +53,11 @@ runtime, renderer, or original game data is included.
 
 ## Binary releases
 
-The first Windows alpha includes the unmodified ReXGlue runtime and Xenos GPU DLLs
-from the pinned SDK. Alpha 2 and later development builds retain that runtime and
-rebuild the Xenos plugin with the live-resolution extension in `tools/gpu/`.
-Current development also applies the three ReIGlue corrections described above;
+The first Windows alpha includes the unmodified ReXGlue runtime and Xenos GPU
+DLLs from the pinned SDK. Alpha 2 and later builds rebuild the Xenos plugin with
+the live-resolution extension in `tools/gpu/`. Current development source-builds
+both the matched runtime and plugin to enable spatial FSR1 and applies the three
+ReIGlue corrections plus the five later ReXGlue corrections described above.
 `tools/prepare-gpu.py` applies the extension and patches to a separate ignored
 source tree without modifying the installed SDK.
 Alpha 3 also builds a project presenter from the SDK's D3D12 presenter sources to

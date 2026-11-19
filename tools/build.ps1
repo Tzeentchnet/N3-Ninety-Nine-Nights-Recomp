@@ -46,7 +46,9 @@ try {
     $env:PATH = "$localTools/llvm/bin;$localTools/ninja;$env:PATH"
     & (Join-Path $PSScriptRoot 'codegen.ps1') -Python $pythonExecutable
     $preset = 'win-amd64-' + $Configuration.ToLowerInvariant()
-    & $cmake --preset $preset "-DCMAKE_PREFIX_PATH=$localTools/rexglue-sdk/win-amd64" `
+    $sdkSource = Join-Path $localTools 'live-gpu-source/rexglue-sdk'
+    & $cmake --preset $preset "-DREXSDK_DIR=$sdkSource" `
+        -DREXGLUE_BUILD_TESTS=OFF -DREXGLUE_ENABLE_FIDELITYFX=OFF `
         "-DPython3_EXECUTABLE=$pythonExecutable"
     if ($LASTEXITCODE) { throw 'CMake configure failed.' }
     & $cmake --build --preset $preset --parallel $Jobs

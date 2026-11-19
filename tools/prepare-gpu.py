@@ -30,7 +30,7 @@ if source.exists() and (
 ):
     shutil.rmtree(source)
 if marker.is_file() and marker.read_text(encoding='ascii').strip() == fingerprint:
-    print('Pinned GPU extension is up to date')
+    print('Pinned ReXGlue source is up to date')
     raise SystemExit(0)
 
 patch_targets = set()
@@ -41,6 +41,8 @@ for patch in patches:
 with zipfile.ZipFile(archive) as z:
     # Refresh only files modified by the extension when already extracted.
     names = sorted(patch_targets | {
+        'CMakeLists.txt',
+        'thirdparty/CMakeLists.txt',
         'src/graphics/CMakeLists.txt', 'src/graphics/d3d12/command_processor.cpp',
         'include/rex/graphics/d3d12/command_processor.h', 'src/graphics/graphics_system.cpp',
         'src/graphics/d3d12/texture_cache.cpp', 'include/rex/graphics/d3d12/texture_cache.h'})
@@ -69,6 +71,25 @@ def replace(name, before, after):
         raise RuntimeError('Pinned GPU source does not match extension: ' + name)
     file.write_text(text.replace(before, after), encoding='utf-8', newline='\n')
 
+for module in (
+    'cli11', 'libmspack', 'FFmpeg', 'tomlplusplus', 'simde', 'xxHash',
+    'spdlog', 'fmt', 'utfcpp', 'imgui', 'sdl3', 'tracy',
+):
+    (source / 'thirdparty' / module / '.git').mkdir(parents=True, exist_ok=True)
+
+replace('CMakeLists.txt',
+        '''rex_resolve_version(REXGLUE_FULL_VERSION
+    FLOOR_MAJOR ${PROJECT_VERSION_MAJOR}
+    FLOOR_MINOR ${PROJECT_VERSION_MINOR}
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")''',
+        f'''set(REXGLUE_FULL_VERSION "{SDK.version}")
+set(REXGLUE_VERSION_STRING "${{REXGLUE_FULL_VERSION}}" CACHE INTERNAL
+            "Pinned ReXGlue source version" FORCE)
+# Spatial FSR1 uses the bundled EASU and RCAS shader bytecode. The separate
+# temporal FidelityFX runtime remains disabled.
+add_compile_definitions(REX_HAS_FIDELITYFX_SDK=1)''')
+replace('thirdparty/CMakeLists.txt',
+        'libmspack/cabextract/mspack', 'libmspack/libmspack/mspack')
 replace('src/graphics/CMakeLists.txt', 'add_library(rex::gpu-xenos ALIAS rexgpu-xenos)', '')
 replace('include/rex/graphics/d3d12/command_processor.h',
         '  static constexpr uint32_t kQueueFrames = 3;',
@@ -198,6 +219,6 @@ replace('src/graphics/d3d12/command_processor.cpp',
 sdk_marker.write_text(SDK.commit + '\n', encoding='ascii')
 marker.write_text(fingerprint + '\n', encoding='ascii')
 print(
-    f'Pinned GPU source {SDK.commit[:7]} prepared with live-resolution '
-    f'extension and {len(patches)} ReIGlue fixes'
+    f'Pinned ReXGlue source {SDK.commit[:7]} prepared with spatial FSR1, '
+    f'live-resolution extension and {len(patches)} renderer patches'
 )

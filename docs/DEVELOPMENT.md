@@ -37,6 +37,12 @@ The extractor refuses an existing destination and records a SHA-256 for every
 file. Code generation verifies the supported `default.xex` before using
 build-specific function hints.
 
+`tools\build.ps1` uses the pinned binary SDK for code generation, then builds a
+matched `rexruntime.dll` and Xenos plugin from the corresponding SDK source
+under `.tools\live-gpu-source`. Source preparation applies the tracked renderer
+patches and enables the SDK's bundled spatial FSR1 EASU/RCAS shaders. The
+separate temporal FidelityFX runtime remains disabled.
+
 To use an existing Visual Studio 2022 x64 development environment, run
 `tools\bootstrap.ps1 -ToolsOnly`. Exact SDK, compiler, CMake, Ninja, URL, and
 archive pins are in `tools\toolchain.lock.json`. See the
@@ -97,6 +103,8 @@ correct rendering, input, performance, save compatibility, or gameplay.
 
 - Put function-discovery hints in `n3_manifest.toml`.
 - Put host/runtime fixes in `src/`.
+- Put title-independent pinned-renderer adaptations in `tools/gpu/` and
+  regenerate the ignored source tree with `tools/prepare-gpu.py`.
 - Regenerate translated sources; do not edit `generated/default/` manually.
 - `generated/rexglue.cmake` is the only tracked generated integration file.
 - Keep original game data in `private/` and downloaded tools in `.tools/`.

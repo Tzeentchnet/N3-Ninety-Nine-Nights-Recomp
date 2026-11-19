@@ -37,6 +37,8 @@ left/right changes its value, and B returns.
 
 Higher frame-rate modes remain experimental and animations can appear
 accelerated. Display size and internal rendering are independent.
+The source launcher enables spatial FSR1 presentation upscaling by default.
+Packaged direct startup retains the profile setting.
 
 LANGUAGE AND OPTIONAL VOICES
 The supported disc includes English, French, German, Italian, and Spanish text
@@ -55,6 +57,7 @@ n3_import.exe import "path\to\your-disc.iso" "new\game-folder"
 n3.exe --game_data_root "path\to\game-folder"
 n3.exe --n3_text_language spanish
 n3.exe --n3_voice_directory "path\to\SoundRes"
+n3.exe --present_effect fsr
 
 A source checkout also provides an offline loose-file mod stager. It is not
 included in this runtime ZIP. A staged tree still requires the verified
@@ -73,9 +76,10 @@ which is not included.
 
 THIRD-PARTY SOFTWARE
 ReXGlue and its dependencies are credited in THIRD_PARTY.md and licenses/.
-The Xenos plugin includes the project's live-resolution extension and selected
-BSD ReIGlue fixes; matching source, notices, and build scripts are supplied in
-the optional corresponding-source archive. FFmpeg and libmspack include LGPL
+The source-built ReXGlue runtime and Xenos plugin include spatial FSR1, the
+project's live-resolution extension, and selected BSD ReIGlue and upstream
+ReXGlue fixes. Matching source, notices, and build scripts are supplied in the
+optional corresponding-source archive. FFmpeg and libmspack include LGPL
 components. Microsoft C/C++ runtime DLLs are included under Microsoft's
 applicable terms.
 

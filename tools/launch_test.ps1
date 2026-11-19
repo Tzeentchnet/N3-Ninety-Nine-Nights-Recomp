@@ -51,6 +51,7 @@ Assert-NoArgument $default '--game_data_root'
 Assert-ArgumentValue $default '--user_data_root' (Join-Path $root 'private/user')
 Assert-ArgumentValue $default '--cache_root' (Join-Path $root 'private/cache')
 Assert-ArgumentValue $default '--log_file' (Join-Path $root 'logs/runtime-windowed.log')
+Assert-ArgumentValue $default '--present_effect' 'fsr'
 
 $graphics = Invoke-Plan @(
     '-DryRun',
@@ -63,6 +64,7 @@ $graphics = Invoke-Plan @(
     '-Anisotropic', '16',
     '-DisplayResolution', '1080',
     '-RenderResolution', '2160',
+    '-Upscaler', 'Bilinear',
     '-VSync', 'Off'
 )
 Assert-Argument $graphics '--fullscreen'
@@ -77,6 +79,7 @@ Assert-ArgumentValue $graphics '--draw_resolution_scale_x' '3'
 Assert-ArgumentValue $graphics '--draw_resolution_scale_y' '3'
 Assert-ArgumentValue $graphics '--resolution_scale' '3'
 Assert-ArgumentValue $graphics '--n3_live_resolution_request' '3'
+Assert-ArgumentValue $graphics '--present_effect' 'bilinear'
 Assert-Argument $graphics '--no-n3_vsync'
 Assert-True ($graphics.userDirectory -eq (Join-Path $root 'private/profiles/test-profile')) 'Named profile user path is incorrect'
 Assert-True ($graphics.cacheDirectory -eq (Join-Path $root 'private/profiles/test-profile/cache')) 'Named profile cache path is incorrect'
@@ -88,12 +91,14 @@ $window = Invoke-Plan @(
     '-WindowMode', 'Borderless',
     '-Width', '1920',
     '-Height', '1080',
+    '-Upscaler', 'Configured',
     '-VSync', 'On'
 )
 Assert-Argument $window '--fullscreen'
 Assert-Argument $window '--no-fullscreen_exclusive'
 Assert-ArgumentValue $window '--window_width' '1920'
 Assert-ArgumentValue $window '--window_height' '1080'
+Assert-NoArgument $window '--present_effect'
 Assert-Argument $window '--n3_vsync'
 
 $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ('n3-launch-test-' + [guid]::NewGuid().ToString('N'))

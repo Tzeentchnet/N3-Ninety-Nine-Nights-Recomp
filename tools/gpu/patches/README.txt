@@ -1,8 +1,9 @@
-These patches apply title-independent ReIGlue fixes to the pinned ReXGlue SDK
-source before N3 builds its Xenos D3D12 plugin.
+These patches apply title-independent renderer fixes to the pinned ReXGlue SDK
+source before N3 builds its runtime and Xenos D3D12 plugin.
 
-Source: https://github.com/FH1-ReImagined/ReIGlue
 Base: bd833a2ab69d305f99ddf57418fc38ffec8af93d
+
+ReIGlue source: https://github.com/FH1-ReImagined/ReIGlue
 
 - 0008: e1cce0608df6e0a890e14de23dd4756ae793e9d0
   Recheck texture memory validity before installing a watch.
@@ -12,3 +13,13 @@ Base: bd833a2ab69d305f99ddf57418fc38ffec8af93d
   Check both D3D12 fence HRESULTs before waiting.
 
 ReIGlue is BSD 3-Clause licensed. See LICENSES/ReIGlue.txt.
+
+ReXGlue source: https://github.com/rexglue/rexglue-sdk
+
+- 1001: 0d5178ccb8122e37548af5417434ddde51463d6b
+  Write the SV_SampleIndex semantic for sample-rate memexport pixel shaders.
+- 1002: 30eaa07332a5857c7c3a6489329d2b4fbcac494a
+  Correct extreme-FXAA initialization, bindless sampler layout lookup and IDs,
+  3D tiled-depth alignment, and depth render-target encoding comparison.
+
+The ReXGlue fixes retain its BSD 3-Clause terms.

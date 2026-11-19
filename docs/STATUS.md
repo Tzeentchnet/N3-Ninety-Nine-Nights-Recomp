@@ -1930,3 +1930,39 @@ notify markers, no root extraction and no attachment parenting. No native
 writer or receipt consumer exists. Clean-pinned complete applicable corpus,
 Blender-built `0.14.1` ZIP, isolated install, visual, staging and in-game
 release gates remain open; no upload or release is authorized.
+
+## Spatial FSR1 and upstream ReXGlue review
+
+Recorded 19 November 2026.
+
+**Verified, build and configuration:** the launcher exposes `-Upscaler FSR1`,
+`Bilinear`, and `Configured`, with FSR1 selected by default. Its regression
+script passes 80 command-construction checks, including the default FSR1
+override, explicit bilinear fallback, and profile-controlled omission.
+
+The pinned ReXGlue source now builds a matched `rexruntime.dll` and Xenos plugin
+with its existing spatial EASU/RCAS path enabled. The separate temporal
+FidelityFX runtime is disabled. The RelWithDebInfo source build completed and
+all 51 native CTests passed. Binary inspection confirmed the FSR effect and
+controls in the runtime and the FSR EASU/RCAS presentation pipelines in the
+custom plugin. The established headless startup harness survived 20 seconds
+until stopped by the harness.
+
+**Observed, bounded windowed A/B:** isolated 1920 x 1080 FSR1 and bilinear runs
+both reached the same graphics-pipeline and title initialization sequence, then
+exited with code 3 after approximately 20 and 22 seconds respectively without a
+logged renderer error. This does not indicate an FSR-specific failure, but it
+also does not establish sustained windowed operation, image quality, scaling
+quality, performance, or gameplay correctness. An interactive capture and
+visual FSR1/bilinear comparison remain pending.
+
+**Upstream audit:** stable ReXGlue v0.11.0 at `ebac1cf0` is 338 commits beyond
+the pinned `bd833a2` SDK. The latest published Windows asset is development
+nightly `115171b4`, 347 commits beyond the pin and diverged from stable by 13
+commits ahead and four behind. Both include a broad GPU/module reorganization,
+so the pin was retained. Five independently applicable correctness fixes from
+upstream commits `0d5178cc` and `30eaa073` were adapted to the pinned paths and
+are applied reproducibly with the existing renderer patch pipeline. Vulkan-only
+changes and optimizations coupled to the reorganized GPU architecture were
+reviewed but not partially imported. `tools/check-sdk.py` consequently reports
+the intentional stale pin rather than passing a latest-release check.

@@ -19,6 +19,7 @@ The default development launch:
 
 - starts the `RelWithDebInfo` build;
 - forces a normal window, whose runtime default is 1280 x 720;
+- enables spatial FSR1 presentation upscaling;
 - uses `private\game` as the owned extracted game tree;
 - stores saves, settings, remembered game paths, and diagnostics in
   `private\user`;
@@ -42,6 +43,7 @@ reparse points in game, mod, profile, cache, and log paths.
 | `-Anisotropic` | `1`, `2`, `4`, `8`, `16` | Selects the numeric anisotropic-filtering override. |
 | `-DisplayResolution` | `720`, `1080`, `1440`, `2160` | Selects the display/output preset. It cannot be combined with `-Width` or `-Height`. |
 | `-RenderResolution` | `720`, `1440`, `2160` | Selects internal 1x, 2x, or 3x rendering. |
+| `-Upscaler` | `FSR1` (default), `Bilinear`, `Configured` | Selects spatial AMD FidelityFX Super Resolution 1, ordinary bilinear presentation, or the active profile value. |
 | `-VSync` | `Configured`, `On`, `Off` | Leaves the profile value untouched or forces host presentation VSync for this launch. |
 | `-GameDirectory` | Existing directory | Uses an explicit extracted game tree and bypasses remembered-path/native picker behavior. The normal default is `private\game`. |
 | `-Setup` | Switch | Omits the game-root override so the native application can use its remembered path or open its ISO/XEX picker. |
@@ -60,8 +62,10 @@ reparse points in game, mod, profile, cache, and log paths.
 | `-Python` | Command or executable path | Selects the Python interpreter used for `tools\mods.py`. |
 | `-DryRun` | Switch | Prints the resolved launch plan as JSON without creating paths, resetting setup, staging mods, checking the executable, or starting the game. |
 
-Options omitted from the command line remain available to the active profile's
-`n3.toml`. Explicit launcher values override saved values for that process.
+Most options omitted from the command line remain available to the active
+profile's `n3.toml`. The launcher explicitly selects FSR1 by default; use
+`-Upscaler Configured` to leave `present_effect` to the profile. Other explicit
+launcher values override saved values for that process.
 
 ## Window and graphics examples
 
@@ -79,6 +83,7 @@ pwsh -NoProfile -File tools\launch.ps1 `
   -WindowMode Exclusive `
   -DisplayResolution 2160 `
   -RenderResolution 2160 `
+  -Upscaler FSR1 `
   -Anisotropic 16 `
   -VSync On
 
@@ -89,6 +94,14 @@ pwsh -NoProfile -File tools\launch.ps1 `
 
 Higher frame-rate modes remain experimental. A requested limit does not fix the
 known accelerated-animation behavior or establish pacing across the game.
+
+FSR1 is the spatial EASU plus RCAS path already carried by the pinned ReXGlue
+presenter. It scales the guest front buffer to the host output and is independent
+of `-RenderResolution`, which controls internal Xenos rendering. When no
+upscaling is needed, the FSR1 selection retains its contrast-adaptive sharpening
+path. `-Upscaler Bilinear` disables FSR1 for an A/B comparison. This integration
+does not enable the separate experimental temporal FidelityFX runtime or claim
+FSR2/FSR3 support.
 
 ## Profiles and paths
 
@@ -200,8 +213,8 @@ restage it after changing mod sources.
   launches the completed `out\game` tree.
 - An explicit `-UserDirectory`, `-CacheDirectory`, or `-LogFile` takes
   precedence over the corresponding named-profile default.
-- `-WindowMode Configured` and `-VSync Configured` omit command-line overrides,
-  allowing `n3.toml` to decide.
+- `-WindowMode Configured`, `-Upscaler Configured`, and `-VSync Configured`
+  omit their command-line overrides, allowing `n3.toml` to decide.
 
 The launcher reports invalid combinations before creating directories or
 starting external tools.

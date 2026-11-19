@@ -27,6 +27,7 @@ param(
     [ValidateSet('Configured','1','2','4','8','16')][string]$Anisotropic = 'Configured',
     [ValidateSet('Configured','720','1080','1440','2160')][string]$DisplayResolution = 'Configured',
     [ValidateSet('Configured','720','1440','2160')][string]$RenderResolution = 'Configured',
+    [ValidateSet('FSR1','Bilinear','Configured')][string]$Upscaler = 'FSR1',
     [ValidateSet('Configured','On','Off')][string]$VSync = 'Configured',
     [string]$VoiceDirectory,
     [string]$GameDirectory,
@@ -337,6 +338,16 @@ if ($RenderResolution -ne 'Configured') {
     )) {
         $launchArguments.Add($flag)
         $launchArguments.Add($scale)
+    }
+}
+switch ($Upscaler) {
+    'FSR1' {
+        $launchArguments.Add('--present_effect')
+        $launchArguments.Add('fsr')
+    }
+    'Bilinear' {
+        $launchArguments.Add('--present_effect')
+        $launchArguments.Add('bilinear')
     }
 }
 switch ($VSync) {
