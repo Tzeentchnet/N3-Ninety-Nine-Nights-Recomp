@@ -32,9 +32,11 @@ payloads are valid game resources.
 The companion's source manifest is now `0.14.1`, an ungated candidate carrying
 the historical `0.14.0` baseline. Its nine imports remain read-only, with
 zero exports and no native writer or receipt consumer. Synthetic Blender
-source/save-reopen smoke passed on the integration changes; the clean-pinned release gate,
-Blender-built ZIP and isolated install remain open. Extension ZIPs are
-local-only.
+source/save-reopen smoke passed on the integration changes. At add-on commit
+`e90f41354eb40ecf941a11114ad4ba82a1ee54ae`, the Blender-built ZIP and exact
+isolated-install smoke also passed. Verified candidate ZIPs may be published
+only as GitHub prereleases; the clean-pinned corpus, visual, runtime, writer,
+staging, and in-game gates remain open for stable approval.
 
 ## Data flow
 
@@ -186,9 +188,11 @@ notify markers and attachment sockets remain unknown. Unresolved imported
 assets remain detached.
 See its `docs/ROADMAP.md` evidence matrix and detailed runtime/root/attachment
 records, and this repository's [signal and runtime trace](NATIVE-CODE.md).
-Synthetic Blender source/save-reopen smoke passed on the integration changes, but
-the clean-pinned release gate, Blender-built `0.14.1` ZIP and isolated install
-remain open; local CI candidates must not be published.
+Synthetic Blender source/save-reopen smoke passed on the integration changes.
+At add-on commit `e90f41354eb40ecf941a11114ad4ba82a1ee54ae`, the exact
+Blender-built `0.14.1` ZIP also passed source/archive verification, isolated
+installation, synthetic import, and save/reopen. It may be published only as
+a GitHub prerelease with the remaining stable gates disclosed.
 
 A local scan found that every loose `.skin` sample contains exactly one
 NUL-terminated `.bm` reference and at least one `.fx` reference; 205 of 216

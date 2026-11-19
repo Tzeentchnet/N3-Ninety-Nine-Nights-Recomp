@@ -160,10 +160,14 @@ implemented and tested. Profiles, traces and original assets stay local.
 
 The companion manifest is now `0.14.1`, an ungated candidate rather than a
 completed release, with nine read-only imports and zero exports. Synthetic
-Blender 5.2.2 source/save-reopen smoke passed on the integration changes, but the
-clean-pinned release gate, Blender-built ZIP and isolated install remain
-open; ZIPs remain local-only. Its configured CI covers synthetic Python and
-packaging, not Blender, private fixtures, or recomp parity.
+Blender 5.2.2 source/save-reopen smoke passed on the integration changes. At
+add-on commit `e90f41354eb40ecf941a11114ad4ba82a1ee54ae`, the exact
+Blender-built ZIP also passed source/archive verification, isolated
+installation, synthetic import, and save/reopen. Verified candidate ZIPs may
+be published only as GitHub prereleases; clean-pinned corpus, visual, runtime,
+writer, staging, and in-game gates remain open for stable approval. Its
+configured CI covers synthetic Python and packaging, not Blender, private
+fixtures, or recomp parity.
 
 The companion evidence matrix separates the completed character/root source
 inventories from preview-only deformation and partial signal/attachment

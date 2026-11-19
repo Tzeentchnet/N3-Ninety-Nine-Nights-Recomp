@@ -15,13 +15,19 @@ The companion source manifest is now the **0.14.1 ungated candidate**,
 with nine read-only imports and zero exports. The ninth operator creates only
 an explicitly selected, detached attachment diagnostic; it does not infer a
 character, socket, local transform, parent, or constraint. The manifest has
-44 explicit shipped paths and 45 archive files including the implicit
+49 explicit shipped paths and 50 archive files including the implicit
 manifest. Blender 5.2.2 synthetic source/save-reopen smoke passed and a
 private deformation preview ran on the validated integration changes, not as
-clean-pinned release acceptance. No Blender-built `0.14.1` release ZIP or
-isolated install is claimed. Release ZIPs remain local-only; CI runs
-synthetic Python and packaging checks, not Blender or the private corpus.
-The current stager still ignores the optional receipt.
+clean-pinned stable release acceptance. Add-on commit
+`e90f41354eb40ecf941a11114ad4ba82a1ee54ae` produced a Blender-built
+`0.14.1` ZIP with SHA-256
+`0efe0f874de65018af383e132f67aee9a4dc2cfe0aa37a1720b91c57147cea8e`;
+the exact archive passed source/archive verification, isolated installation,
+synthetic import, and save/reopen. This permits GitHub prerelease distribution
+only; the remaining corpus, visual, runtime, writer, staging, and in-game gates
+still block stable approval. CI runs synthetic Python and packaging checks,
+not Blender or the private corpus. The current stager still ignores the
+optional receipt.
 
 The latest local lane passed 456 synthetic tests per Python interpreter.
 Hosted [run 41683738344](https://github.com/Tzeentchnet/N3_Blender/actions/runs/41683738344)

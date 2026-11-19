@@ -1657,10 +1657,11 @@ changes; a clean, explicitly pinned recomp commit is still required for
 release. The companion's 218 synthetic tests passed under ordinary Python
 3.12 and Blender's bundled Python 3.13 without launching Blender; the recomp
 mod and contract suites passed 29 tests. The configured CI checks synthetic
-Python and packaging only, and ZIPs remain local-only. The `0.14.1` Blender
-5.2.2 source/save-reopen, Blender-built archive, and isolated-install gates
-were not run at that foundation checkpoint. Later synthetic source smoke and
-private preview measurements are described below; clean-pinned release
+Python and packaging only, and archive publication was not authorized at that
+foundation checkpoint. The `0.14.1` Blender 5.2.2 source/save-reopen,
+Blender-built archive, and isolated-install gates were not run then. Later
+synthetic source smoke, archive verification, isolated installation, and
+private preview measurements are described below; clean-pinned stable release
 gates remain required. No exporter, native writer, or receipt consumer was
 added.
 
@@ -1850,13 +1851,15 @@ no writer and no Blender receipt consumer. `Clip_###`, `source_fps_unverified`, 
 markers, no root extraction and detached unresolved attachments remain in
 force. The candidate's Blender 5.2.2, complete applicable corpus, visual,
 isolated install, staging and in-game acceptance gates remain open; the CI
-candidate ZIP is local-only.
+candidate ZIP from that historical closeout was not published. Current policy
+permits only a source-matching, verified Blender-built ZIP to be published as
+a GitHub prerelease while stable gates remain open.
 
 ## Current P0 integration evidence
 
 **Observed, source/CI:** the companion `0.14.1` remains an ungated candidate,
-now with nine read-only imports, zero exports, 44 explicit shipped paths and
-45 archive files including the implicit manifest. The ninth is an explicitly
+now with nine read-only imports, zero exports, 49 explicit shipped paths and
+50 archive files including the implicit manifest. The ninth is an explicitly
 selected detached attachment diagnostic, not a binding. The latest local
 lane passed 456 synthetic tests per Python interpreter. Hosted
 [run 41683738344](https://github.com/Tzeentchnet/N3_Blender/actions/runs/41683738344)
@@ -1868,11 +1871,13 @@ began from clean base revisions add-on
 `fd27105854501f2edd701c71f01a9578b78a53bd` and recomp
 `bc062b2b7b148ae5f53cf14bfc69464f1ada2d37`; current changes were validated
 on top and are not included in those hashes. They are not release pins.
-The in-memory CI archive checked immediately before the documentation-only
-follow-up contained 45 files, 248,538 bytes, SHA-256
-`87690f9889c2e61753a4cadb7508a0932738466ba2e388fedcc6481fcdd596cc`.
-Later shipped-document edits change the archive bytes; that fingerprint is
-for the verified pre-follow-up snapshot, not a Blender-built release.
+At add-on commit `e90f41354eb40ecf941a11114ad4ba82a1ee54ae`, Blender
+5.2.2 built the 50-file, 2,923,173-byte `0.14.1` ZIP with SHA-256
+`0efe0f874de65018af383e132f67aee9a4dc2cfe0aa37a1720b91c57147cea8e`.
+The exact archive passed source/archive verification, isolated installation,
+synthetic import, nine-import/zero-export registration, and save/reopen. This
+is prerelease packaging evidence, not stable, visual, runtime, or in-game
+approval.
 Earlier recomp integration checks reported 51/51 CTests in each
 RelWithDebInfo and Release build, 25/25 portable CTests, and 132 Python
 tests; these are not gameplay approval.
@@ -1928,8 +1933,9 @@ root transfer, signal-to-clip/effect linkage, semantic names, socket and
 attachment-local transforms. Keep `Clip_###`, `source_fps_unverified`, no
 notify markers, no root extraction and no attachment parenting. No native
 writer or receipt consumer exists. Clean-pinned complete applicable corpus,
-Blender-built `0.14.1` ZIP, isolated install, visual, staging and in-game
-release gates remain open; no upload or release is authorized.
+visual, runtime, writer, staging and in-game stable release gates remain open.
+The exact verified `0.14.1` candidate ZIP may be published only as a GitHub
+prerelease with those limitations disclosed.
 
 ## Spatial FSR1 and upstream ReXGlue review
 
