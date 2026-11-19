@@ -214,7 +214,20 @@ def prepare_source():
         check_source(STAGING)
         remove_tool_directory(BACKUP)
         if SOURCE.exists():
-            SOURCE.replace(BACKUP)
+            try:
+                SOURCE.replace(BACKUP)
+            except PermissionError:
+                if expected_marker(SOURCE) != marker:
+                    raise
+                (SOURCE / MARKER_NAME).write_text(
+                    json.dumps(marker, indent=2) + "\n", encoding="utf-8"
+                )
+                remove_tool_directory(STAGING)
+                print(
+                    "Prepared source directory is busy; retained the equivalent "
+                    f"existing tree: {SOURCE}"
+                )
+                return
         STAGING.replace(SOURCE)
         remove_tool_directory(BACKUP)
     except Exception:

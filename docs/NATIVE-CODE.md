@@ -9,15 +9,17 @@ replacement is not a performance claim or proof of broader game compatibility.
 
 | Layer | File | Responsibility |
 | --- | --- | --- |
-| Native model | `src/native/frame_clock.h` and `.cpp` | Game timebase frequency, frame deadline, integer ticks per frame and live rate changes |
+| Native model | `src/native/frame_clock.h` and `.cpp` | Game timebase frequency, frame deadline, and integer ticks per game frame |
 | Guest adapter | `src/guest_frame_clock.h` | Read/write the verified big-endian clock fields and enable byte |
-| Runtime hook | `src/frame_rate.cpp` | Clock source, selected FPS, frame-boundary calls, and guest calling convention |
+| Runtime hook | `src/frame_rate.cpp` | Native clock initialization, title pacing, decoupled host-presentation selection, and guest calling convention |
 
-The hook at `0x82248D38` now initializes recognized 30/40/60 Hz game clocks through
-the native model. Unrecognized rates use the retained translated implementation.
-Original mode preserves the game's exact float step bits. Live switching changes
-the period/deadline while preserving the enable byte, including suspended clocks.
-The global guest/audio/movie clock frequency and scalar are unchanged.
+The hook at `0x82248D38` initializes recognized 30/40/60 Hz clock objects through
+the native model using the established original-speed 30 FPS target and matching
+float step. Unrecognized rates use the retained translated implementation. The
+player-facing 30/40/60 setting now limits only ReXGlue's host presentation
+thread. Frame-boundary changes and the title's own presentation interval leave
+the 30 FPS guest clock untouched, including suspended clocks. The global
+guest/audio/movie clock frequency and scalar are unchanged.
 
 The adapter covers this layout for executable version 0.0.0.3:
 
@@ -841,10 +843,10 @@ the final-output reference with state, history, input or output. FP comparisons
 cover rounding, flush and exception controls; they do not require every transient
 volatile register or every sticky exception-status bit to match.
 
-These replacements do not fix accelerated animation at higher FPS. Animation, combat and
-scripted-event update paths still require matched-scene tracing and comparisons
-before replacing or retiming them. Keep those changes separate from extraction
-of an already-understood clock primitive.
+These replacements do not implement higher-rate gameplay. Any future animation,
+combat, or scripted-event retiming still requires matched-scene tracing and
+comparisons. Keep that work separate from extraction of an already-understood
+clock primitive.
 
 `native_bounded_value` checks channel wrapping/capping, percentage and baseline
 edits, modifier mode selection, truncation and positive saturation, 64-bit offset

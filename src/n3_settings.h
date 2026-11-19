@@ -9,7 +9,8 @@ class N3Settings final : public rex::SettingOwner {
  public:
   N3Settings() : SettingOwner("n3") {}
 
-  REX_SETTING(rex::u32, frame_rate, 30, "Frame rate",
+  REX_SETTING(rex::u32, frame_rate, 60,
+              "Display presentation rate; game timing remains at 30 FPS",
               rex::Allowed("0", "30", "40", "60"));
   REX_SETTING(bool, legacy_60fps, false,
               "Compatibility alias for the previous 60 FPS setting",

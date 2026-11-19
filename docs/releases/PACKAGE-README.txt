@@ -31,14 +31,15 @@ An existing extracted game folder remains in its original location.
 GRAPHICS
 Select Graphics below Tutorial on the main menu. Up/down selects a row,
 left/right changes its value, and B returns.
-- Frame rate: 30 (default), 40, or 60 FPS.
+- Presentation rate: 30, 40, or 60 Hz (60 default).
 - Anisotropic filtering: 1x, 2x, 4x, 8x, or 16x.
 - Display resolution: 720p, 1080p, 1440p, or 4K.
 - Render resolution: 720p (1x), 1440p (2x), or 4K (3x).
 - VSync: On or Off.
 
-Higher frame-rate modes remain experimental and animations can appear
-accelerated. Display size and internal rendering are independent.
+Presentation rate does not change the established original-speed 30 FPS game
+clock. The latest game frame is repeated for a 60 Hz host output target; this is
+not true 60 FPS gameplay. Display size and internal rendering are independent.
 Stable ReXGlue 0.11 uses bilinear presentation. FSR1 is not available in this
 milestone.
 
@@ -46,6 +47,9 @@ LANGUAGE AND OPTIONAL VOICES
 The supported disc includes English, French, German, Italian, and Spanish text
 and fonts. Add n3_text_language = "spanish" (or english, french, german,
 italian) to %LOCALAPPDATA%\N3Recompiled\n3.toml, then restart.
+
+The supported USA/Europe disc contains only the English SoundRes voice tree.
+The five text choices do not imply five on-disc voice banks.
 
 For voices from another edition that you own, set n3_voice_directory to its
 complete extracted SoundRes directory. N3 validates the complete file set,

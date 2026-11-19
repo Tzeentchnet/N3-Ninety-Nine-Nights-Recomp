@@ -1,9 +1,11 @@
 #include "frame_rate.h"
 #include "frame_rate_policy.h"
+#include "graphics_settings.h"
 #include "guest_frame_clock.h"
 #include "n3_settings.h"
 #include <rex/ppc.h>
 #include <rex/chrono/clock.h>
+#include <rex/gpu/graphics_system.h>
 #include <rex/memory/utils.h>
 #include <array>
 #include <cmath>
@@ -21,6 +23,8 @@ extern "C" void sub_823AA520(PPCContext&, uint8_t*);
 extern "C" void sub_8223FE70(PPCContext&, uint8_t*);
 extern const PPCFuncMapping kPPCFuncMappings[];
 
+bool SetDisplayHeight(uint32_t) { return true; }
+
 void Require(bool value, const char* text) { if (!value) throw std::runtime_error(text); }
 
 void CheckPhysicalClocks() {
@@ -30,7 +34,7 @@ void CheckPhysicalClocks() {
   const auto saved = Platform::GetCSR();
   SparseGameFixture seed, expected, actual;
   seed.Fill();
-  uint32_t comparisons = 0, native_count = 0, live_changes = 0;
+  uint32_t comparisons = 0, native_count = 0, safe_changes = 0;
   try {
     for (uint32_t rounding = 0; rounding < 4; ++rounding) for (bool flush : {false, true})
       for (uint32_t sample = 0; sample < 24; ++sample)
@@ -92,6 +96,14 @@ void CheckPhysicalClocks() {
             Require(timestamp >= before && timestamp <= after, "Physical clock uses a different time source");
             expected.Store<uint64_t>(object + 24, timestamp);
             if (eligible) {
+              expected.Store<uint32_t>(object + 4, n3::frames::kGameFramesPerSecond);
+              expected.Store<uint32_t>(
+                  object + 8,
+                  n3::frames::StepSecondsBits(n3::frames::kGameFramesPerSecond));
+              expected.Store<uint64_t>(
+                  object + 40,
+                  expected.Load<uint64_t>(object + 16) /
+                      n3::frames::kGameFramesPerSecond);
               Require(std::equal(scratch.begin(), scratch.end(), actual.base + PhysicalOffset(stack - 208)),
                       "Native physical clock changed dead scratch");
               std::copy(scratch.begin(), scratch.end(), expected.base + PhysicalOffset(stack - 208));
@@ -110,23 +122,27 @@ void CheckPhysicalClocks() {
             if (eligible && frequency == 50000000 && fps == 30 && rounding == 0 && !flush) {
               for (auto target : {60u, 40u, 30u}) {
                 *(actual.base + PhysicalOffset(object + 1)) = 0;
-                Require(SetFrameRate(target), "Cannot select physical live clock rate");
+                Require(SetFrameRate(target), "Cannot select physical presentation rate");
                 ApplyFrameRateAtBoundary(actual.base);
-                Require(actual.Load<uint32_t>(object + 4) == target &&
-                        actual.Load<uint32_t>(object + 8) == n3::frames::StepSecondsBits(target) &&
-                        actual.Load<uint64_t>(object + 40) == frequency / target &&
+                Require(actual.Load<uint32_t>(object + 4) ==
+                            n3::frames::kGameFramesPerSecond &&
+                        actual.Load<uint32_t>(object + 8) ==
+                            n3::frames::StepSecondsBits(
+                                n3::frames::kGameFramesPerSecond) &&
+                        actual.Load<uint64_t>(object + 40) ==
+                            frequency / n3::frames::kGameFramesPerSecond &&
                         *(actual.base + PhysicalOffset(object + 1)) == 0,
-                        "Cached physical clock update or suspended enable differs");
+                        "Presentation target changed the cached physical game clock");
                 if (check_unbiased)
                   Require(std::equal(unbiased.begin(), unbiased.end(), actual.base + uint64_t(object)),
-                          "Live physical clock changed unbiased memory");
-                ++live_changes;
+                          "Presentation selection changed unbiased memory");
+                ++safe_changes;
               }
             }
           }
     Platform::SetCSR(saved);
     std::cout << comparisons << " physical clock cases (" << native_count << " native), "
-              << live_changes << " cached live changes passed\n";
+              << safe_changes << " presentation changes preserved native clocks\n";
   } catch (...) { Platform::SetCSR(saved); throw; }
 }
 
@@ -134,6 +150,12 @@ int main() {
   try {
     Require(REX_SETTINGS().Register(N3_SETTINGS()).has_value(),
             "Cannot register N3 settings");
+    rex::gpu::GraphicsSettings graphics;
+    InstallGraphicsSettings(graphics);
+    Require(ConfiguredFrameRate() == 60 && graphics.frame_limit.Get() == 60.0,
+            "Default display presentation target is not 60 FPS");
+    Require(SetFrameRate(40) && graphics.frame_limit.Get() == 40.0,
+            "Display presentation target did not reach the graphics system");
     // Retain the translated initializer as an oracle for the native replacement.
     std::array<uint8_t, 65536> bytes{};
     constexpr uint32_t object = 256;
@@ -171,9 +193,24 @@ int main() {
                 "Native initializer used a different clock source");
         auto expected = original_view.Read();
         expected.frame_started_at = actual.frame_started_at;
+        expected.frames_per_second = n3::frames::kGameFramesPerSecond;
+        expected.step_seconds_bits =
+            n3::frames::StepSecondsBits(n3::frames::kGameFramesPerSecond);
+        expected.ticks_per_frame =
+            expected.ticks_per_second / n3::frames::kGameFramesPerSecond;
         original_view.Write(expected);
-        Require(std::equal(original.begin() + object, original.begin() + object + 48,
-                           replacement.begin() + object), "Native and translated clock objects differ");
+        const auto mismatch =
+            std::mismatch(original.begin() + object,
+                          original.begin() + object + 48,
+                          replacement.begin() + object);
+        if (mismatch.first != original.begin() + object + 48) {
+          const auto offset = mismatch.first - (original.begin() + object);
+          throw std::runtime_error(
+              "Native and translated clock objects differ at byte " +
+              std::to_string(offset) + ": expected " +
+              std::to_string(*mismatch.first) + ", actual " +
+              std::to_string(*mismatch.second));
+        }
         Require(native.r3.u64 == translated.r3.u64 && native.r1.u64 == translated.r1.u64 &&
                 native.r30.u64 == translated.r30.u64 && native.r31.u64 == translated.r31.u64 &&
                 native.lr == translated.lr, "Native initializer broke its guest calling convention");
@@ -206,39 +243,60 @@ int main() {
       Require(ticks == frequency / target && bytes[object + 1] == 1, "Translated clock period was not initialized correctly");
       return target;
     };
-    Require(run(0, 40) == 40 && read(object + 8) == std::bit_cast<uint32_t>(0.025f), "Original mode changed");
+    Require(run(0, 40) == n3::frames::kGameFramesPerSecond &&
+                read(object + 8) ==
+                    n3::frames::StepSecondsBits(n3::frames::kGameFramesPerSecond),
+            "Uncapped presentation changed the established game clock");
     for (const auto target : {30u, 40u, 60u}) {
       for (const auto native : {30u, 40u, 60u}) {
-        Require(run(target, native) == target && read(object + 8) == n3::frames::StepSecondsBits(target), "Selected FPS step was not applied");
+        Require(run(target, native) == n3::frames::kGameFramesPerSecond &&
+                    read(object + 8) ==
+                        n3::frames::StepSecondsBits(n3::frames::kGameFramesPerSecond),
+                "Display target changed the established 30 FPS game clock");
       }
     }
     Require(run(60, 24) == 24, "Unexpected clock was overwritten");
-    Require(run(30, 40) == 30, "Cannot initialize live-switch test");
+    Require(run(30, 40) == n3::frames::kGameFramesPerSecond,
+            "Cannot initialize presentation-switch test");
     for (const auto target : {60u, 40u, 30u, 40u, 60u, 30u}) {
-      Require(SetFrameRate(target), "Cannot request live FPS change");
-      const auto old = read(object + 4);
-      Require(old != target, "Test must switch between different targets");
+      Require(SetFrameRate(target), "Cannot request live presentation change");
+      const auto old_fps = read(object + 4);
+      const auto old_step = read(object + 8);
+      const auto old_ticks =
+          rex::memory::load_and_swap<uint64_t>(bytes.data() + object + 40);
       const auto enabled = bytes[object + 1];
       ApplyFrameRateAtBoundary(bytes.data());
-      Require(read(object + 4) == target && read(object + 8) == n3::frames::StepSecondsBits(target), "Live clock step/target mismatch");
-      Require(rex::memory::load_and_swap<uint64_t>(bytes.data() + object + 40) == frequency / target, "Live clock deadline period mismatch");
-      Require(bytes[object + 1] == enabled, "Live switching changed clock enable state");
+      Require(read(object + 4) == old_fps && read(object + 8) == old_step &&
+                  rex::memory::load_and_swap<uint64_t>(
+                      bytes.data() + object + 40) == old_ticks,
+              "Live presentation change rewrote the game clock");
+      Require(bytes[object + 1] == enabled,
+              "Live presentation change changed clock enable state");
+      Require(graphics.frame_limit.Get() == static_cast<double>(target),
+              "Live presentation change did not update the graphics limit");
     }
     bytes[object + 1] = 0;
-    Require(SetFrameRate(60), "Cannot switch suspended clock");
+    Require(SetFrameRate(60), "Cannot change presentation while the clock is suspended");
     ApplyFrameRateAtBoundary(bytes.data());
-    Require(bytes[object + 1] == 0, "Suspended clock was enabled by live switching");
-    Require(!SetFrameRate(24) && !SetFrameRate(0) && ConfiguredFrameRate() == 60, "Invalid menu FPS accepted");
+    Require(bytes[object + 1] == 0,
+            "Presentation change enabled a suspended game clock");
+    Require(!SetFrameRate(24) && SetFrameRate(0) &&
+                ConfiguredFrameRate() == 0 && graphics.frame_limit.Get() == 0.0,
+            "Presentation target validation is incorrect");
     Require(REX_SETTINGS().SetText("n3.frame_rate", "40").has_value(),
             "Cannot set FPS through the shared registry");
     ApplyFrameRateAtBoundary(bytes.data());
-    Require(read(object + 4) == 40 && ConfiguredFrameRate() == 40, "SDK overlay and native menu settings diverged");
+    Require(read(object + 4) == n3::frames::kGameFramesPerSecond &&
+                ConfiguredFrameRate() == 40 &&
+                graphics.frame_limit.Get() == 40.0,
+            "SDK overlay and native presentation settings diverged");
     Require(rex::Clock::GetGuestTickFrequency() == frequency &&
             rex::Clock::GetGuestTimeScalar() == scalar,
             "Global guest/audio clock was changed");
     for (const auto interval : {0u, 1u, 2u, 3u, 4u, 0x80000000u}) {
       Require(n3::frames::PresentInterval(interval, 30) == interval, "Original presentation interval changed");
-      Require(n3::frames::PresentInterval(interval, 60) == (interval == 2 ? 1u : interval), "Unexpected presentation mode changed");
+      Require(n3::frames::PresentInterval(interval, 60) == interval,
+              "60 FPS display target changed the title's presentation interval");
     }
     bool registered = false, presentation_registered = false, trace_registered = false, boundary_registered = false;
     for (auto* mapping = kPPCFuncMappings; mapping->address; ++mapping) {
@@ -251,8 +309,9 @@ int main() {
     const auto& setting = N3_SETTINGS().frame_rate;
     Require(setting.GetConstraints().life == rex::SettingLife::kLive &&
                !setting.GetConstraints().debug_only &&
-               setting.GetDefaultText() == "30",
+               setting.GetDefaultText() == "60",
             "FPS mode is not available as a live player setting");
-    std::cout << "Native/translated clock equivalence, live 30/40/60 switching, global clocks, interval policy, and hook registration passed\n";
+    ShutdownGraphicsSettings();
+    std::cout << "30 FPS game-clock policy, decoupled 30/40/60 presentation, global clocks, interval policy, and hook registration passed\n";
   } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

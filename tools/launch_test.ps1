@@ -52,6 +52,7 @@ Assert-ArgumentValue $default '--app.user_root' (Join-Path $root 'private/user')
 Assert-ArgumentValue $default '--app.cache_root' (Join-Path $root 'private/cache')
 Assert-ArgumentValue $default '--app.log_root' (Join-Path $root 'logs')
 Assert-ArgumentValue $default '--gpu.driver' 'd3d12'
+Assert-ArgumentValue $default '--n3.frame_rate' '60'
 
 $graphics = Invoke-Plan @(
     '-DryRun',
@@ -83,6 +84,9 @@ Assert-True ($graphics.userDirectory -eq (Join-Path $root 'private/profiles/test
 Assert-True ($graphics.cacheDirectory -eq (Join-Path $root 'private/profiles/test-profile/cache')) 'Named profile cache path is incorrect'
 Assert-True ($graphics.logFile -eq (Join-Path $root 'private/profiles/test-profile/logs/n3.log')) 'Named profile log path is incorrect'
 
+$uncapped = Invoke-Plan @('-DryRun', '-Setup', '-FrameRate', 'Uncapped')
+Assert-ArgumentValue $uncapped '--n3.frame_rate' '0'
+
 $window = Invoke-Plan @(
     '-DryRun',
     '-Setup',
@@ -102,8 +106,37 @@ Assert-Argument $window '--gpu.vsync'
 $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ('n3-launch-test-' + [guid]::NewGuid().ToString('N'))
 $game = Join-Path $temporary 'game'
 $mods = Join-Path $temporary 'mods'
-New-Item -ItemType Directory -Path $game,$mods | Out-Null
+$englishVoice = Join-Path $game 'data\Sound\ENG\SoundRes'
+$frenchVoice = Join-Path $game 'data\Sound\FRA\SoundRes'
+$customVoice = Join-Path $temporary 'custom-voice'
+New-Item -ItemType Directory -Path $game,$mods,$englishVoice,$frenchVoice,$customVoice -Force |
+    Out-Null
 try {
+    $discDefaultVoice = Invoke-Plan @(
+        '-DryRun',
+        '-GameDirectory', $game,
+        '-VoiceLanguage', 'DiscDefault'
+    )
+    Assert-ArgumentValue $discDefaultVoice '--n3.voice_directory' $englishVoice
+    Assert-True ($discDefaultVoice.voiceLanguage -eq 'DiscDefault') 'Disc-default voice choice changed'
+    Assert-True (($discDefaultVoice.availableVoiceLanguages -join ',') -eq
+        'English (ENG),French (FRA)') 'Disc voice discovery changed'
+
+    $frenchDiscVoice = Invoke-Plan @(
+        '-DryRun',
+        '-GameDirectory', $game,
+        '-VoiceLanguage', 'French'
+    )
+    Assert-ArgumentValue $frenchDiscVoice '--n3.voice_directory' $frenchVoice
+    Assert-True ($frenchDiscVoice.voiceDirectory -eq $frenchVoice) 'Selected disc voice path changed'
+
+    $customVoicePlan = Invoke-Plan @(
+        '-DryRun',
+        '-GameDirectory', $game,
+        '-VoiceDirectory', $customVoice
+    )
+    Assert-ArgumentValue $customVoicePlan '--n3.voice_directory' $customVoice
+
     $modded = Invoke-Plan @(
         '-DryRun',
         '-GameDirectory', $game,
@@ -122,6 +155,9 @@ try {
     Assert-Fails @('-DryRun', '-Setup', '-DisplayResolution', '1080', '-Width', '1920') '-DisplayResolution cannot be combined'
     Assert-Fails @('-DryRun', '-Setup', '-UseEnabledMods', '-Mod', 'author.first') 'mutually exclusive'
     Assert-Fails @('-DryRun', '-Setup', '-ResetGameSelection', '-UseEnabledMods') 'Mod staging requires'
+    Assert-Fails @('-DryRun', '-GameDirectory', $game, '-VoiceLanguage', 'Italian') "Voice language 'Italian' is not present"
+    Assert-Fails @('-DryRun', '-GameDirectory', $game, '-VoiceLanguage', 'English', '-VoiceDirectory', $customVoice) '-VoiceLanguage and -VoiceDirectory are mutually exclusive'
+    Assert-Fails @('-DryRun', '-Setup', '-VoiceLanguage', 'English') '-VoiceLanguage requires an extracted game directory'
 } finally {
     Remove-Item -LiteralPath $temporary -Recurse -Force
 }

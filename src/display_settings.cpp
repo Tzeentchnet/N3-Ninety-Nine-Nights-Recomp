@@ -7,7 +7,15 @@
 namespace {
 std::optional<rex::ScopeGuard> display_height_watch;
 
+bool IsSupportedDisplayHeight(uint32_t height) {
+  return height == 720 || height == 1080 || height == 1440 || height == 2160;
+}
+
 void ApplyDisplayHeight(rex::ui::IUISystem& ui, uint32_t height, bool selected) {
+  if (!IsSupportedDisplayHeight(height)) {
+    REXLOG_WARN("Ignoring unsupported display height: {}", height);
+    return;
+  }
   const uint32_t width = height * 16 / 9;
   auto& settings = ui.GetSettings();
   if (selected && settings.fullscreen.Get()) {
@@ -21,7 +29,7 @@ void ApplyDisplayHeight(rex::ui::IUISystem& ui, uint32_t height, bool selected) 
 
 uint32_t ConfiguredDisplayHeight() { return N3_SETTINGS().display_resolution.Get(); }
 bool SetDisplayHeight(uint32_t height) {
-  if (height != 720 && height != 1080 && height != 1440 && height != 2160) return false;
+  if (!IsSupportedDisplayHeight(height)) return false;
   return N3_SETTINGS().display_resolution.Set(height).has_value();
 }
 

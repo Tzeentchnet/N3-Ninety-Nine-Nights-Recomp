@@ -16,11 +16,7 @@ extern thread_local bool n3_frame_rate_native_used;
 #endif
 
 namespace {
-std::atomic<uint32_t> requested_fps{30};
-std::atomic<uint32_t> active_fps{30};
-uint32_t frame_clock = 0;
-uint32_t native_fps = 40;
-uint32_t native_step = n3::frames::StepSecondsBits(40);
+std::atomic<uint32_t> simulation_fps{n3::frames::kGameFramesPerSecond};
 uint32_t Read32(uint8_t* base, uint32_t address) {
   return rex::memory::load_and_swap<uint32_t>(n3::guest::GuestHostAddress(base, address));
 }
@@ -50,11 +46,12 @@ void TracePresent() {
   if (elapsed >= 2000000) {
     const auto summary = intervals.Summarize();
     REXLOG_INFO(
-        "N3 frame pacing: target {} | {} intervals, {:.1f} fps | mean {:.2f} ms, "
-        "p95 {:.2f} ms, p99 {:.2f} ms, max {:.2f} ms | >2x mean {}",
-        ConfiguredFrameRate(), summary.samples, summary.frames_per_second,
-        summary.mean_ms, summary.p95_ms, summary.p99_ms, summary.maximum_ms,
-        summary.long_intervals);
+        "N3 title frame pacing: native target {}, display target {} | {} intervals, "
+        "{:.1f} fps | mean {:.2f} ms, p95 {:.2f} ms, p99 {:.2f} ms, max {:.2f} ms | "
+        ">2x mean {}",
+        simulation_fps.load(), ConfiguredFrameRate(), summary.samples,
+        summary.frames_per_second, summary.mean_ms, summary.p95_ms,
+        summary.p99_ms, summary.maximum_ms, summary.long_intervals);
     intervals.Clear();
     start = now;
   }
@@ -63,7 +60,7 @@ void PacePresent() {
   using Clock = std::chrono::steady_clock;
   thread_local uint32_t previous_target = 0;
   thread_local Clock::time_point deadline{};
-  const auto target = ConfiguredFrameRate();
+  const auto target = simulation_fps.load();
   if (!target) { previous_target = 0; return; }
   const auto period = std::chrono::nanoseconds(1000000000 / target);
   auto now = Clock::now();
@@ -96,15 +93,10 @@ extern "C" void sub_82248D38(PPCContext& ctx, uint8_t* base) {
   auto state = view.Read();
   const auto original = state.frames_per_second;
   if (n3::frames::SupportsClock(original)) {
-    // Scene changes may reinitialize the already-overridden clock.
-    if (clock != frame_clock) {
-      frame_clock = clock;
-      native_fps = original;
-      native_step = state.step_seconds_bits;
-    }
-    const auto target = requested_fps.load();
-    state.frames_per_second = target ? target : native_fps;
-    state.step_seconds_bits = target ? n3::frames::StepSecondsBits(target) : native_step;
+    state.frames_per_second = n3::frames::kGameFramesPerSecond;
+    state.step_seconds_bits =
+        n3::frames::StepSecondsBits(n3::frames::kGameFramesPerSecond);
+    simulation_fps.store(n3::frames::kGameFramesPerSecond);
     // The pinned Xbox import returns a 32-bit frequency. Keep that behavior,
     // and keep audio/movie/global clock scaling untouched.
     const auto frequency = static_cast<uint32_t>(rex::Clock::GetGuestTickFrequency());
@@ -112,7 +104,6 @@ extern "C" void sub_82248D38(PPCContext& ctx, uint8_t* base) {
                                          rex::Clock::QueryGuestTickCount())) {
       view.Write(state);
       view.Enable();
-      active_fps.store(target);
       REXLOG_DEBUG("Native frame clock initialized: {} FPS, {} ticks/second, {} ticks/frame",
                    state.frames_per_second, state.ticks_per_second, state.ticks_per_frame);
       // The original's final timebase helper returns success in r3. Other
@@ -155,41 +146,26 @@ void InitializeFrameRate() {
     target = 60;
     (void)N3_SETTINGS().frame_rate.Set(60);
   }
-  requested_fps.store(target);
-  active_fps.store(target);
-  frame_clock = 0;
-  REXLOG_INFO("N3 frame-rate target: {}", target);
+  simulation_fps.store(n3::frames::kGameFramesPerSecond);
+  REXLOG_INFO(
+      "N3 display presentation target: {} FPS; game timing remains at 30 FPS",
+      target);
 }
 
 uint32_t ConfiguredFrameRate() {
   const auto configured = N3_SETTINGS().frame_rate.Get();
-  return !configured || n3::frames::SupportsClock(configured) ? configured : requested_fps.load();
+  return n3::frames::SupportsPresentationRate(configured) ? configured : 60;
 }
 
 bool SetFrameRate(uint32_t fps) {
-  if (!n3::frames::SupportsClock(fps)) return false;
+  if (!n3::frames::SupportsPresentationRate(fps)) return false;
   if (!N3_SETTINGS().frame_rate.Set(fps)) return false;
   (void)N3_SETTINGS().legacy_60fps.Set(false);
-  requested_fps.store(fps);
   return true;
 }
 
 void ApplyFrameRateAtBoundary(uint8_t* base) {
-  const auto configured = N3_SETTINGS().frame_rate.Get();
-  if (!configured || n3::frames::SupportsClock(configured)) requested_fps.store(configured);
-  const auto target = requested_fps.load();
-  if (!frame_clock || target == active_fps.load() ||
-      !n3::guest::FitsLinearGuestRange(frame_clock, 48)) return;
-  const auto fps = target ? target : native_fps;
-  const n3::guest::FrameClockView view(base, frame_clock);
-  auto state = view.Read();
-  if (!n3::native::ChangeFrameClockRate(state, fps,
-      target ? n3::frames::StepSecondsBits(fps) : native_step,
-      rex::Clock::QueryGuestTickCount())) return;
-  // Start a fresh deadline without enabling a clock the game has suspended.
-  view.Write(state);
-  active_fps.store(target);
-  REXLOG_INFO("N3 frame-rate target applied: {}", fps);
+  (void)base;
 }
 
 extern "C" void __imp__sub_8223FE70(PPCContext& ctx, uint8_t* base);

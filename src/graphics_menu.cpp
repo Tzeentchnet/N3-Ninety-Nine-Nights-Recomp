@@ -94,8 +94,8 @@ bool InstallGraphicsMenu(rex::kernel::TitleRuntime& runtime,
       "\r\n1977\t\"@(DPad_Small) Select  @(B) Back\""
       "\r\n1978\t\"Render resolution (restart required)\"\r\n1979\t\"Display resolution\""
       "\r\n1980\t\"1x\"\r\n1981\t\"2x\"\r\n1982\t\"4x\"\r\n1983\t\"8x\"\r\n1984\t\"16x\""
-      "\r\n1989\t\"Filtering\"\r\n1990\t\"30 FPS\"\r\n1991\t\"40 FPS\"\r\n1992\t\"60 FPS\""
-      "\r\n1997\t\"Frame rate\"\r\n1998\t\"Anisotropic filtering\"\r\n1999\t\"Graphics\"\r\n";
+      "\r\n1989\t\"Filtering\"\r\n1990\t\"30 Hz display\"\r\n1991\t\"40 Hz display\"\r\n1992\t\"60 Hz display\""
+      "\r\n1997\t\"Presentation rate\"\r\n1998\t\"Anisotropic filtering\"\r\n1999\t\"Graphics\"\r\n";
     for (const auto* lang : {"ENG", "FRA", "GER", "ITA", "SPA"}) {
       std::string lower = lang; for (auto& c : lower) c = char(c + ('a' - 'A'));
       const auto file = cache / "Text" / lang / ("defaulttexttable0000_" + lower + ".txt");

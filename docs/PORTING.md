@@ -138,11 +138,14 @@ translated initializer. Direct3D 12 remains the default; Vulkan remains an
 opt-in development backend pending broader gameplay, image, performance, and
 driver validation.
 
-First establish original-speed timing: trace animation, combat and scripted
-event updates at the same gameplay point across 30/40/60 FPS. The current clock
-hooks do not establish correct animation speed. Extract understood routines into
-typed native modules with explicit guest-memory adapters, units and ownership;
-compare outputs against the retained translated implementation before switching.
+The current 30/40/60 choices are host presentation targets and deliberately keep
+the title on the established original-speed 30 FPS game-clock policy.
+Establishing true higher-rate gameplay still requires matched traces of
+animation, combat, scripted-event updates, and render production at the same
+gameplay point, followed by understood interpolation or time-step changes.
+Extract those routines into typed native modules with explicit guest-memory
+adapters, units and ownership; compare outputs against the retained translated
+implementation before switching.
 
 Offline loose-file staging now provides the first asset-override boundary; see
 [Modding](MODDING.md). The separate Blender 5.2 add-on's 0.14.0 baseline has

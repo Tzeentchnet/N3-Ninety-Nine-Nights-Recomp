@@ -1,0 +1,72 @@
+diff --git a/src/base/settings/setting.cpp b/src/base/settings/setting.cpp
+index 98ec51e..ef08bed 100644
+--- a/src/base/settings/setting.cpp
++++ b/src/base/settings/setting.cpp
+@@ -155,7 +155,7 @@ Result<void> SettingBase::Check(std::string_view text) const {
+     if (c.max && numeric > *c.max)
+       return fail(std::format("is above {}", *c.max));
+   }
+-  if (!c.allowed.empty() && state_->type == SettingType::kString &&
++  if (!c.allowed.empty() &&
+       std::ranges::find(c.allowed, std::string(text)) == c.allowed.end()) {
+     return fail("is not an accepted value");
+   }
+diff --git a/src/ui/overlay/settings_overlay.cpp b/src/ui/overlay/settings_overlay.cpp
+index ae87647..7584abb 100644
+--- a/src/ui/overlay/settings_overlay.cpp
++++ b/src/ui/overlay/settings_overlay.cpp
+@@ -465,7 +465,7 @@ bool SettingsOverlayDialog::Draw(ImGuiIO& io) {
+         if (ImGui::Checkbox("##v", &v)) {
+           WarnIfFailed(name, settings_.SetText(name, v ? "true" : "false"));
+         }
+-      } else if (var->GetType() == rex::SettingType::kString && !constraints.allowed.empty()) {
++      } else if (!constraints.allowed.empty()) {
+         const auto& opts = constraints.allowed;
+         int cur_idx = 0;
+         for (int i = 0; i < static_cast<int>(opts.size()); ++i) {
+@@ -493,18 +493,21 @@ bool SettingsOverlayDialog::Draw(ImGuiIO& io) {
+                  var->GetType() == rex::SettingType::kU64) {
+         if (var->GetType() == rex::SettingType::kU32 || var->GetType() == rex::SettingType::kU64) {
+           u64 v = rex::string::from_string<u64>(current_val);
+-          if (ImGui::InputScalar("##v", ImGuiDataType_U64, &v)) {
++          if (ImGui::InputScalar("##v", ImGuiDataType_U64, &v, nullptr, nullptr, nullptr,
++                                 ImGuiInputTextFlags_EnterReturnsTrue)) {
+             WarnIfFailed(name, settings_.SetText(name, ClampUnsignedText(constraints, v)));
+           }
+         } else {
+           i64 v = rex::string::from_string<i64>(current_val);
+-          if (ImGui::InputScalar("##v", ImGuiDataType_S64, &v)) {
++          if (ImGui::InputScalar("##v", ImGuiDataType_S64, &v, nullptr, nullptr, nullptr,
++                                 ImGuiInputTextFlags_EnterReturnsTrue)) {
+             WarnIfFailed(name, settings_.SetText(name, ClampIntegerText(constraints, v)));
+           }
+         }
+       } else if (var->GetType() == rex::SettingType::kF64) {
+         f64 v = rex::string::from_string<f64>(current_val);
+-        if (ImGui::InputDouble("##v", &v, 0.0, 0.0, "%.4f")) {
++        if (ImGui::InputDouble("##v", &v, 0.0, 0.0, "%.4f",
++                               ImGuiInputTextFlags_EnterReturnsTrue)) {
+           if (constraints.min)
+             v = std::max(v, *constraints.min);
+           if (constraints.max)
+diff --git a/tests/unit/base/settings_test.cpp b/tests/unit/base/settings_test.cpp
+index e0d5230..c42a1d1 100644
+--- a/tests/unit/base/settings_test.cpp
++++ b/tests/unit/base/settings_test.cpp
+@@ -32,6 +32,7 @@ class AudioOwner final : public rex::SettingOwner {
+   AudioOwner() : SettingOwner("audio") {}
+   REX_SETTING(rex::f64, gain, 1.0, "Gain", rex::Range{0.0, 4.0});
+   REX_SETTING(rex::i32, count, 3, "Count");
++  REX_SETTING(rex::i32, channels, 2, "Channels", rex::Allowed("2", "6", "8"));
+   REX_SETTING(std::string, mode, "fast", "Mode", rex::Allowed("fast", "slow"));
+   REX_SETTING(bool, flag, false, "Flag");
+ };
+@@ -209,6 +210,8 @@ REX_TEST_CASE("settings: range, allowed texts and types are checked", "[base][se
+     REQUIRE_FALSE(audio.gain.Set(4.5));
+     REQUIRE_FALSE(audio.gain.Set(-0.1));
+     REQUIRE(audio.gain.Set(4.0));
++    REQUIRE_FALSE(audio.channels.Set(4));
++    REQUIRE(audio.channels.Set(6));
+     REQUIRE_FALSE(audio.mode.Set("medium"));
+     REQUIRE(audio.mode.Set("slow"));
+     REQUIRE_FALSE(REX_SETTINGS().SetText("audio.count", "twelve"));

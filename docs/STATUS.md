@@ -14,8 +14,9 @@ route. Full-game coverage remains unvalidated.
   [game-build.json](game-build.json).
 - **Validated route:** opening mission, following cutscene, and save/load on the
   tested opening path.
-- **Known limitation:** full-game coverage is incomplete, and higher frame-rate
-  modes can accelerate animation.
+- **Known limitation:** full-game coverage is incomplete. The default 60 Hz
+  host presentation target repeats frames from the established 30 FPS game
+  clock; true 60 FPS simulation and unique rendering are not implemented.
 
 ## Verified
 
@@ -105,14 +106,15 @@ their pinned revision manifest accompany the release. The picker and progress
 dialog still need a completed visual interaction check; importer and path logic
 have native automated coverage.
 
-## Graphics menu and live frame-rate control
+## Graphics menu and presentation-rate control
 
 The development build adds Graphics below Tutorial on the main menu and a
 separate native page derived from the Options layout. The page contains 30,
-40, and 60 FPS choices plus 1x / 2x / 4x / 8x / 16x anisotropic
-filtering. New installations default to 30 FPS. Settings apply without a restart
-and persist through the existing local profile configuration. Original Options
-retains its audio, camera, vibration, and contrast controls.
+40, and 60 Hz presentation choices plus 1x / 2x / 4x / 8x / 16x anisotropic
+filtering. New installations default to a 60 Hz host presentation target.
+Settings apply without a restart and persist through the existing local profile
+configuration. Original Options retains its audio, camera, vibration, and
+contrast controls.
 
 Anisotropic filtering now uses only numeric choices. 1x explicitly disables
 anisotropy; the other choices select their matching sampler limits. Old Game
@@ -143,16 +145,17 @@ use English across the supported menu-language tables.
 | `0x821A8030` | Configure all four native selectors on every Graphics entry, including cached layout reuse |
 | `0x821A8370` | Focus the first Graphics control after the entry transition completes |
 | `0x821A8B30` | Apply Graphics selector changes without changing audio/camera settings |
-| `0x82248D38` | Initialize the selected supported clock target and matching step |
-| `0x8223FE70` | Apply a changed target, step, period, and deadline before the next game update |
-| `0x823AA3B0` | Lift an explicit two-vblank interval for targets above 30, restoring requested state afterward |
-| `0x823AA520` | Pace presentations, including menus that bypass the frame clock; optional timing trace |
+| `0x82248D38` | Initialize recognized clock objects with the established 30 FPS game target and matching step |
+| `0x8223FE70` | Preserve the 30 FPS game clock when the host presentation target changes |
+| `0x823AA3B0` | Preserve the title's requested presentation interval |
+| `0x823AA520` | Pace title frame production at 30 FPS; optional timing trace |
 
-The live clock update retains the enable/suspend flags and global guest clock.
-The original native clock constructor uses 40 Hz and a 0.025-second step;
-`-FrameRate Original` preserves that native policy and skips the added limiter.
-The older `n3_60fps` flag is retained as a hidden compatibility alias. The shared
-`n3_frame_rate` setting can also be changed through the SDK overlay.
+The selected `n3.frame_rate` now controls ReXGlue's independent host presenter.
+The title's frame clock and simulation step remain at the established 30 FPS
+policy; enable/suspend flags, presentation interval, and global guest clock keep
+their existing behavior. With a 60 Hz target, ReXGlue can present the latest
+completed title image again between game frames. The older `n3_60fps` flag is
+retained as a hidden compatibility alias.
 
 Anisotropic choices map to the SDK's hot-reloadable `anisotropic_override` enum,
 not literal sample counts: 16x is enum 5. D3D12 evaluates the override while
@@ -161,19 +164,20 @@ parameters change. The override affects eligible mipmapped linear-filtered
 textures; it does not force filtering onto every texture.
 
 The native regressions execute the actual translated clock initializer and
-switch repeatedly among 30/40/60 without restarting. They check period/step
-consistency, suspended-clock preservation, global-clock preservation, shared
-registry updates, rejected rates, and strong hook registration. Layout tests
-cover source/metadata preservation, malformed input, truncation, and duplicate
-extension rejection. The supported local title/options transformations also
-pass against the private game files.
+switch the host target repeatedly among 30/40/60 without restarting. They prove
+that the guest FPS, float step, period, suspended-clock state, and global clocks
+remain unchanged while the graphics presentation limit follows the selection.
+They also cover shared-registry updates, rejected rates, and strong hook
+registration. Layout tests cover source/metadata preservation, malformed input,
+truncation, and duplicate extension rejection. The supported local title/options
+transformations also pass against the private game files.
 
 The main-menu Graphics entry opens its separate native page. The original two controls
 respond to navigation after focus is assigned at transition completion and
 hidden controls are disabled. The final layout keeps selected labels on one
-line. Live switching to 40 and 60 FPS works, and 16x filtering persists as SDK
-enum 5 in the local profile. These are tested menu/settings outcomes, not
-full-game rendering or animation validation.
+line. Live switching to 40 and 60 Hz presentation works, and 16x filtering
+persists as SDK enum 5 in the local profile. These are tested menu/settings
+outcomes, not true higher-rate simulation or full-game rendering validation.
 
 Re-entering Graphics previously bypassed selector initialization when the native
 layout cache skipped a fresh file load. Initialization now follows the explicit
@@ -249,21 +253,19 @@ corrections and the nonblocking VSync menu control.
 
 ## Frame-rate validation limits
 
-Higher frame-rate modes remain experimental. Earlier 60 FPS gameplay testing
-reported smooth menus/gameplay and normal video playback; a sampled trace
-measured approximately 60.02 guest presentations per second. Guest present-call
-counts do not independently establish unique rendered frames. The updated
-presentation limiter measures approximately 30 presentations per second in the
-initial 30 FPS menu/startup check. A live switch to 40 FPS measures approximately
-40 presentations per second on the Graphics page. Broader scene measurements
-and filtering image-quality comparisons remain pending.
+The current 60 Hz mode is deliberately a host presentation target, not a guest
+simulation-rate override. ReXGlue repeats the latest completed title image at
+the capped host cadence while N3 retains the established original-speed 30 FPS
+game clock and existing presentation interval. This removes the known cause of
+doubled gameplay speed, but it does not create 60 unique title frames or
+establish smoother animation.
 
-Animations appear accelerated at 60 FPS. Correct animation/combat timing is not
-established. The configured step reaches the engine worker through `0x8225FBE8`,
-`0x82316A78`, and `0x8230E560`; separate paths also use integer frame counters and
-fixed increments. No unverified animation multiplier or shared-constant patch
-has been applied. Matched gameplay comparisons with original pacing are still
-needed, together with later-scene, scripted-event, performance, and audio tests.
+True higher-rate gameplay remains future work. The native step reaches the
+engine worker through `0x8225FBE8`, `0x82316A78`, and `0x8230E560`; separate
+paths also use integer frame counters and fixed increments. No unverified
+animation multiplier or shared-constant patch has been applied. Matched
+gameplay comparisons are still needed together with later-scene, scripted-event,
+performance, presentation-cadence, and audio tests.
 
 ## Application icon
 
@@ -484,9 +486,9 @@ change is made.
 
 ## Next validation work
 
-1. Measure original-mode gameplay in the same scene and correct the accelerated
-   animation paths in experimental 60 FPS. Then compare combat, cutscenes, and
-   audio across missions.
+1. Measure the same gameplay scene under 30/40/60 host presentation targets and
+   confirm that combat, cutscenes, and audio retain the established 30 FPS game
+   timing across missions.
 2. Repeat the opening route on the packaged Release build and other PCs.
 3. Exercise later missions, characters, rendering effects, and large enemy counts.
 4. Extend save/load coverage across later missions, repeated restarts, and profiles.
@@ -1992,10 +1994,10 @@ stable source.
 Bootstrap now prepares that source transactionally under
 `.tools\rexglue-source`, initializes every stable submodule, pins
 Vulkan-Headers at `9fbc2a782ee3f8a4db64e7d991e23da75e893f44` and Vulkan Memory
-Allocator at `0f1a757da579831283413295cc7f3b47eb521c77`, and applies the two
+Allocator at `0f1a757da579831283413295cc7f3b47eb521c77`, and applies the four
 tracked patches under `tools\rexglue\patches`. The corresponding-source bundle
-contains the stable tree, all 17 dependency trees, both patches, build metadata,
-and source manifests.
+contains the stable tree, all 17 dependency trees, all four patches, build
+metadata, and source manifests.
 
 The v0.11 migration includes typed settings and lifecycle integration, modular
 runtime loading, v0.11 VFS/UI/clock/PPC interfaces, the v0.11 physical-address
@@ -2035,3 +2037,57 @@ bounded runs on one machine. They do not establish correct images, sustained
 performance, other-driver compatibility, save compatibility, or gameplay
 correctness. The opening route, cutscene, first mission, and save/load checks
 must be repeated on the final v0.11 package.
+
+## 30 FPS game timing, 60 Hz presentation, voice discovery, and F5 settings
+
+Recorded 19 November 2026.
+
+The default 1280 x 720 launch now targets 60 host presentations per second while
+holding N3's guest frame clock, float simulation step, and deadline period at
+the established original-speed 30 FPS policy and leaving the title presentation
+interval unchanged. ReXGlue's capped present loop polls for newly completed
+title frames without blocking, then presents the latest image at the selected
+30/40/60 cadence. At a 30-title-frame rate, 60 Hz therefore means duplicated
+host presentations, not 60 unique gameplay frames. The old setting-dependent
+clock override that caused doubled gameplay speed is no longer used.
+
+The F5 settings overlay now renders all `Allowed` settings, including numeric
+display presets, as complete drop-down choices. ReXGlue validates numeric
+allowed lists rather than accepting arbitrary intermediate values. Remaining
+free-form numeric fields commit only on Enter. N3 also rejects unsupported
+display heights before posting a window resize, so typing the first digit of a
+larger number cannot request a 1 x 1 window.
+
+The development launcher adds `-VoiceLanguage` and discovers complete
+`data\Sound\<code>\SoundRes` trees below the selected extracted game. It rejects
+unavailable choices and reports what it found, while `-VoiceDirectory` retains
+the existing validated external-pack path. The verified supported extraction
+contains only `data\Sound\ENG\SoundRes`; its French, German, Italian, and Spanish
+resources are text/font data, not alternate voice banks.
+
+The reconstructed ReXGlue tree applies all four tracked patches cleanly. The
+launcher regression passes 98 checks, the SDK/package checks pass 15 tests, and
+the RelWithDebInfo source build passes all 51 native CTests in 13.71 seconds.
+Focused ReXGlue tests pass 13 assertions for numeric allowed-value validation
+and 5 assertions for capped presenter polling. The frame-rate regression
+normalizes recognized 30/40/60 clock initializers to the 30 FPS game policy and
+switches the host presentation target without mutating the initialized clock.
+
+**D3D12 bounded hardware result:** the RTX 5070 run remained alive for 25
+seconds at the requested 60 Hz host target. Its title-pacing windows were
+normally 29.9-30.0 frames per second, and a DPI-aware follow-up measured the
+window client area at 1280 x 720. No access-violation or device-loss signature
+was logged.
+
+**Vulkan bounded hardware result:** the validation-layer run remained alive for
+25 seconds, created a 1280 x 720 swapchain, measured a 1280 x 720 client area,
+and logged a 30 FPS native frame-clock initialization under the 60 Hz host
+target. Neither of the previously fixed presentation VUIDs, any other VUID, an
+access violation, nor a device-loss signature appeared. Title production during
+this debug validation run was below 30 frames per second, so this result does
+not establish Vulkan performance or sustained 60 Hz presentation throughput.
+
+These checks do not establish gameplay speed across a complete mission, visual
+correctness, 60 unique game frames per second, or interactive F5 keyboard
+navigation. The settings validator and editor paths are covered, but a manual
+F5 interaction pass remains pending.

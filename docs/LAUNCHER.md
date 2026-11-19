@@ -19,6 +19,8 @@ The default development launch:
 
 - starts the `RelWithDebInfo` build;
 - forces a normal window, whose runtime default is 1280 x 720;
+- targets 60 host presentations per second while retaining the established
+  original-speed 30 FPS game timing;
 - selects the D3D12 renderer;
 - uses `private\game` as the owned extracted game tree;
 - stores saves, settings, remembered game paths, and diagnostics in
@@ -37,9 +39,10 @@ reparse points in game, mod, profile, cache, and log paths.
 | `-WindowMode` | `Windowed` (default), `Borderless`, `Exclusive`, `Configured` | Forces a normal window, borderless fullscreen, exclusive fullscreen, or leaves the saved ReXGlue fullscreen settings untouched. |
 | `-Width`, `-Height` | Positive pixels | Override one or both window dimensions for this launch. |
 | `-Monitor` | `0` through `16` | Selects the ReXGlue monitor index. |
-| `-FrameRate` | `Configured` (default), `Original`, `30`, `40`, `60` | Leaves the profile value untouched or overrides `n3.frame_rate`; `Original` uses the original game timing value `0`. |
+| `-FrameRate` | `60` (default), `30`, `40`, `Uncapped`, `Configured`, `Original` | Selects the host presentation limit without changing the established 30 FPS game clock. `Configured` leaves the profile untouched, `Uncapped` uses `0`, and `Original` remains as a legacy alias for `Uncapped`. |
 | `-TextLanguage` | `Configured` (default), `English`, `French`, `German`, `Italian`, `Spanish` | Leaves the profile value untouched or selects the matching original PAL text resources. |
-| `-VoiceDirectory` | Existing directory | Mounts a validated alternate `SoundRes` directory read only. |
+| `-VoiceLanguage` | `Configured` (default), `DiscDefault`, `English`, `French`, `German`, `Italian`, `Spanish` | Resolves a complete `data\Sound\<code>\SoundRes` bank that is actually present in the selected extracted game tree. An unavailable language is rejected with the discovered choices. |
+| `-VoiceDirectory` | Existing directory | Mounts a validated external `SoundRes` directory read only. It is mutually exclusive with `-VoiceLanguage`. |
 | `-Anisotropic` | `Configured` (default), `1`, `2`, `4`, `8`, `16` | Leaves the profile value untouched or selects the numeric anisotropic-filtering override. |
 | `-DisplayResolution` | `Configured` (default), `720`, `1080`, `1440`, `2160` | Leaves the profile value untouched or selects the display/output preset. It cannot be combined with `-Width` or `-Height`. |
 | `-RenderResolution` | `Configured` (default), `720`, `1440`, `2160` | Leaves the profile value untouched or selects internal 1x, 2x, or 3x rendering. |
@@ -93,11 +96,32 @@ pwsh -NoProfile -File tools\launch.ps1 `
 
 # Inspect the exact arguments without launching.
 pwsh -NoProfile -File tools\launch.ps1 `
-  -DryRun -Setup -WindowMode Configured -FrameRate Original
+  -DryRun -Setup -WindowMode Configured -FrameRate Uncapped
+
+# Select an on-disc voice bank after checking the dry-run discovery list.
+pwsh -NoProfile -File tools\launch.ps1 `
+  -DryRun -GameDirectory 'D:\Games\N3' -VoiceLanguage English
 ```
 
-Higher frame-rate modes remain experimental. A requested limit does not fix the
-known accelerated-animation behavior or establish pacing across the game.
+The 60 FPS setting controls ReXGlue's host presentation thread. N3 continues to
+use the project's established original-speed 30 FPS game-clock policy and keeps
+the title presentation interval unchanged, so selecting 60 no longer doubles
+gameplay speed. When the title supplies 30 unique frames per second, the
+presenter repeats the latest frame to maintain the requested host cadence. This
+is a 60 Hz output target, not true 60 FPS simulation, animation, or unique
+rendering.
+
+In the F5 settings overlay, settings with enumerated numeric choices, including
+`n3.display_resolution`, use a drop-down. Other numeric fields apply only after
+Enter, so a partial value such as the first `1` in `1280` cannot resize the
+window.
+
+The supported USA/Europe disc contains five text/font languages but only an
+English `SoundRes` voice tree. `-VoiceLanguage` discovers files rather than
+assuming that matching voice banks exist; on the supported disc,
+`DiscDefault` and `English` resolve, while unavailable selections fail
+explicitly. `-VoiceDirectory` remains available for a compatible complete voice
+bank from another user-owned edition.
 
 Stable ReXGlue 0.11 uses bilinear presentation and no longer exposes the
 v0.10 `present_effect`/FSR1 path. `-RenderResolution` still controls internal

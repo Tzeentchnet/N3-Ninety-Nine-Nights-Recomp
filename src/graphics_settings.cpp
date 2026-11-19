@@ -2,19 +2,51 @@
 #include "frame_rate.h"
 #include "display_settings.h"
 #include "graphics_filtering.h"
+#include "n3_settings.h"
 #include <rex/gpu/graphics_system.h>
+#include <rex/logging.h>
 #include <array>
 #include <algorithm>
+#include <optional>
+#include <string>
 
 namespace {
 rex::gpu::GraphicsSettings* graphics_settings = nullptr;
+std::optional<rex::ScopeGuard> frame_rate_watch;
+
+void ApplyPresentationRate(rex::gpu::GraphicsSettings& settings, uint32_t fps,
+                           rex::SettingLayer source) {
+  const auto target_layer =
+      source == rex::SettingLayer::kDefault ? rex::SettingLayer::kTitle : source;
+  const auto result =
+      settings.frame_limit.SetText(target_layer, std::to_string(fps));
+  if (!result) {
+    REXLOG_WARN("Could not apply N3 display presentation target: {}",
+                result.error().GetDescription());
+    return;
+  }
+  if (fps) {
+    REXLOG_INFO("Display presentation limited to {} FPS; game timing remains at 30 FPS", fps);
+  } else {
+    REXLOG_INFO("Display presentation limit disabled; game timing remains at 30 FPS");
+  }
+}
 }
 
 void InstallGraphicsSettings(rex::gpu::GraphicsSettings& settings) {
   graphics_settings = &settings;
+  frame_rate_watch.emplace(N3_SETTINGS().frame_rate.OnChange(
+      [&settings](const rex::u32& fps) {
+        ApplyPresentationRate(settings, fps, N3_SETTINGS().frame_rate.GetLayer());
+      }));
+  if (N3_SETTINGS().frame_rate.GetLayer() >= settings.frame_limit.GetLayer()) {
+    ApplyPresentationRate(settings, ConfiguredFrameRate(),
+                          N3_SETTINGS().frame_rate.GetLayer());
+  }
 }
 
 void ShutdownGraphicsSettings() {
+  frame_rate_watch.reset();
   graphics_settings = nullptr;
 }
 

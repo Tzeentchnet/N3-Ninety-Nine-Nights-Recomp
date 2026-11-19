@@ -22,8 +22,9 @@ param(
     [ValidateRange(320,7680)][int]$Width = 1280,
     [ValidateRange(240,4320)][int]$Height = 720,
     [ValidateRange(0,16)][int]$Monitor = 0,
-    [ValidateSet('Configured','Original','30','40','60')][string]$FrameRate = 'Configured',
+    [ValidateSet('Configured','Uncapped','Original','30','40','60')][string]$FrameRate = '60',
     [ValidateSet('Configured','English','German','French','Spanish','Italian')][string]$TextLanguage = 'Configured',
+    [ValidateSet('Configured','DiscDefault','English','German','French','Spanish','Italian')][string]$VoiceLanguage = 'Configured',
     [ValidateSet('Configured','1','2','4','8','16')][string]$Anisotropic = 'Configured',
     [ValidateSet('Configured','720','1080','1440','2160')][string]$DisplayResolution = 'Configured',
     [ValidateSet('Configured','720','1440','2160')][string]$RenderResolution = 'Configured',
@@ -51,6 +52,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+$voiceLanguageCodes = [ordered]@{
+    'English' = 'ENG'
+    'German' = 'GER'
+    'French' = 'FRA'
+    'Spanish' = 'SPA'
+    'Italian' = 'ITA'
+}
 
 function Resolve-AbsolutePath([string]$Path) {
     return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
@@ -104,6 +112,34 @@ function Resolve-ReadFile([string]$Path, [string]$Label) {
         throw "$Label is not a file: $resolved"
     }
     return $resolved
+}
+
+function Get-DiscVoiceBanks([string]$GamePath) {
+    $soundPath = Join-Path $GamePath 'data\Sound'
+    if (!(Test-Path -LiteralPath $soundPath -PathType Container)) {
+        return @()
+    }
+    $banks = [System.Collections.Generic.List[object]]::new()
+    foreach ($languageDirectory in Get-ChildItem -LiteralPath $soundPath -Directory) {
+        $soundRes = Join-Path $languageDirectory.FullName 'SoundRes'
+        if (!(Test-Path -LiteralPath $soundRes -PathType Container)) {
+            continue
+        }
+        $resolved = Resolve-ReadDirectory $soundRes 'Disc voice directory'
+        $displayName = $languageDirectory.Name
+        foreach ($entry in $voiceLanguageCodes.GetEnumerator()) {
+            if ($entry.Value -ieq $languageDirectory.Name) {
+                $displayName = $entry.Key
+                break
+            }
+        }
+        $banks.Add([pscustomobject]@{
+            name = $displayName
+            code = $languageDirectory.Name.ToUpperInvariant()
+            directory = $resolved
+        })
+    }
+    return @($banks | Sort-Object code)
 }
 
 function Resolve-WritableFile([string]$Path, [string]$Label, [bool]$CreateParent) {
@@ -178,6 +214,12 @@ if ($DisplayResolution -ne 'Configured' -and
     ($PSBoundParameters.ContainsKey('Width') -or $PSBoundParameters.ContainsKey('Height'))) {
     throw '-DisplayResolution cannot be combined with -Width or -Height'
 }
+if ($VoiceLanguage -ne 'Configured' -and $VoiceDirectory) {
+    throw '-VoiceLanguage and -VoiceDirectory are mutually exclusive'
+}
+if ($Setup -and $VoiceLanguage -ne 'Configured') {
+    throw '-VoiceLanguage requires an extracted game directory and cannot be combined with -Setup'
+}
 
 $modsPath = if ($ModsDirectory) {
     Resolve-ReadDirectory $ModsDirectory 'ModsDirectory'
@@ -231,6 +273,27 @@ $baseGamePath = $null
 if (!$Setup) {
     $requestedGame = if ($GameDirectory) { $GameDirectory } else { Join-Path $root 'private/game' }
     $baseGamePath = Resolve-ReadDirectory $requestedGame 'GameDirectory'
+}
+$voiceBanks = if ($baseGamePath) { @(Get-DiscVoiceBanks $baseGamePath) } else { @() }
+$voicePath = $null
+if ($VoiceLanguage -ne 'Configured') {
+    $voiceCode = if ($VoiceLanguage -eq 'DiscDefault') {
+        'ENG'
+    } else {
+        $voiceLanguageCodes[$VoiceLanguage]
+    }
+    $selectedVoice = $voiceBanks | Where-Object code -IEQ $voiceCode | Select-Object -First 1
+    if (!$selectedVoice) {
+        $available = if ($voiceBanks.Count) {
+            ($voiceBanks | ForEach-Object { "$($_.name) ($($_.code))" }) -join ', '
+        } else {
+            'none'
+        }
+        throw "Voice language '$VoiceLanguage' is not present in the selected game data. Available disc voice languages: $available"
+    }
+    $voicePath = $selectedVoice.directory
+} elseif ($VoiceDirectory) {
+    $voicePath = Resolve-ReadDirectory $VoiceDirectory 'VoiceDirectory'
 }
 
 $gamePath = $baseGamePath
@@ -307,7 +370,7 @@ if ($PSBoundParameters.ContainsKey('Width') -or $PSBoundParameters.ContainsKey('
 }
 if ($FrameRate -ne 'Configured') {
     $launchArguments.Add('--n3.frame_rate')
-    $launchArguments.Add($(if ($FrameRate -eq 'Original') { '0' } else { $FrameRate }))
+    $launchArguments.Add($(if ($FrameRate -in @('Uncapped','Original')) { '0' } else { $FrameRate }))
 }
 if ($TextLanguage -ne 'Configured') {
     $launchArguments.Add('--n3.text_language')
@@ -348,8 +411,7 @@ switch ($VSync) {
     'On' { $launchArguments.Add('--gpu.vsync') }
     'Off' { $launchArguments.Add('--no-gpu.vsync') }
 }
-if ($VoiceDirectory) {
-    $voicePath = Resolve-ReadDirectory $VoiceDirectory 'VoiceDirectory'
+if ($voicePath) {
     $launchArguments.Add('--n3.voice_directory')
     $launchArguments.Add($voicePath)
 }
@@ -373,6 +435,9 @@ $plan = [ordered]@{
     profile = $(if ($Profile) { $Profile } else { $null })
     setup = [bool]$Setup
     resetGameSelection = [bool]$ResetGameSelection
+    voiceLanguage = $VoiceLanguage
+    voiceDirectory = $voicePath
+    availableVoiceLanguages = @($voiceBanks | ForEach-Object { "$($_.name) ($($_.code))" })
     stageMods = $stageMods
     stageOnly = [bool]$StageOnly
     modSelection = $(if ($UseEnabledMods) { 'enabled.txt' } elseif ($selectedMods.Count) { 'explicit' } else { 'none' })

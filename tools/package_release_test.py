@@ -45,6 +45,8 @@ class PackageReleaseTests(unittest.TestCase):
             [
                 "0001-pin-vulkan-dependencies.patch",
                 "0002-fix-renderer-synchronization.patch",
+                "0003-defer-settings-edits.patch",
+                "0004-repeat-capped-presents.patch",
             ],
         )
 

@@ -1,0 +1,62 @@
+diff --git a/src/gpu/present_thread.cpp b/src/gpu/present_thread.cpp
+index f743ad5..140b488 100644
+--- a/src/gpu/present_thread.cpp
++++ b/src/gpu/present_thread.cpp
+@@ -38,7 +38,9 @@ void SleepUntil(std::chrono::steady_clock::time_point deadline, const std::stop_
+ void GraphicsSystem::State::PresentLoop(const std::stop_token& stop) {
+   auto next_present = std::chrono::steady_clock::now();
+   while (!stop.stop_requested()) {
+-    const rex::gpu::FrameStatus status = driver->WaitForFrame(kFrameWaitMs);
++    const f64 limit = owner.GetSettings().frame_limit.Get();
++    const rex::gpu::FrameStatus status =
++        driver->WaitForFrame(limit > 0.0 ? 0 : kFrameWaitMs);
+     if (status.new_frame) {
+       CountFrame();
+     }
+@@ -69,7 +71,6 @@ void GraphicsSystem::State::PresentLoop(const std::stop_token& stop) {
+     }
+     driver->EndPresent();
+ 
+-    const f64 limit = owner.GetSettings().frame_limit.Get();
+     const auto now = std::chrono::steady_clock::now();
+     if (limit > 0.0) {
+       const auto period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+diff --git a/tests/unit/gpu/graphics_system_test.cpp b/tests/unit/gpu/graphics_system_test.cpp
+index ef1e4d2..9ec7fcb 100644
+--- a/tests/unit/gpu/graphics_system_test.cpp
++++ b/tests/unit/gpu/graphics_system_test.cpp
+@@ -60,6 +60,7 @@ struct FakeData {
+   std::atomic<bool> every_wait_is_new_frame{true};
+   std::atomic<rex::u32> new_frames{0};
+   std::atomic<rex::u32> presents{0};
++  std::atomic<rex::u32> last_wait_timeout{0};
+   std::atomic<rex::u32> ring_calls{0};
+   std::atomic<rex::u32> write_back_calls{0};
+   std::atomic<rex::u32> last_write_index{0};
+@@ -85,6 +86,7 @@ struct FakeData {
+     every_wait_is_new_frame = true;
+     new_frames = 0;
+     presents = 0;
++    last_wait_timeout = 0;
+     ring_calls = 0;
+     write_back_calls = 0;
+     last_write_index = 0;
+@@ -115,8 +117,9 @@ class FakeDriver final : public rex::gpu::IXenosGraphicsDriver {
+   rex::Result<void> Initialize(rex::IDriverContext&) override { return {}; }
+   void Shutdown() override {}
+ 
+-  rex::gpu::FrameStatus WaitForFrame(rex::u32) override {
++  rex::gpu::FrameStatus WaitForFrame(rex::u32 timeout_ms) override {
+     std::this_thread::sleep_for(1ms);
++    g_fake.last_wait_timeout = timeout_ms;
+     g_fake.Log("wait");
+     const bool fresh = g_fake.every_wait_is_new_frame.load();
+     if (fresh) {
+@@ -300,6 +303,7 @@ REX_TEST_CASE("frame limit paces presents", "[gpu]") {
+   GraphicsApp app("fake", false, "50");
+   REQUIRE(app.StartApp());
+   REQUIRE(WaitFor([] { return g_fake.presents.load() >= 1; }));
++  CHECK(g_fake.last_wait_timeout.load() == 0);
+   const rex::u32 first = g_fake.presents.load();
+   const auto start = std::chrono::steady_clock::now();
+   std::this_thread::sleep_for(2s);
