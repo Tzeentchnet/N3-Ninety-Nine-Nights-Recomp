@@ -27,7 +27,7 @@ route. Full-game coverage remains unvalidated.
 - Generated 13,762 function assignments across 87 translated C++ source files.
 - Windows x64 Release and RelWithDebInfo compile and link succeed with Clang 20.1.8.
 - Runtime initializes Direct3D 12, input, audio, and XEX imports.
-- Five JavaScript extractor tests and all 53 current native regression suites
+- Six JavaScript extractor tests and all 54 current native regression suites
   pass.
 - A 30-second boot test survived until the harness stopped it, without the prior
   unregistered-function or floating-point failure.
@@ -124,6 +124,42 @@ import completed with responsive progress and a verified output; importer and
 path logic also have native automated coverage. Other storage failures and
 cancellation timings remain bounded rather than exhaustively validated.
 
+## One-click source setup
+
+An existing source checkout now has a top-level `setup.cmd` entry point that
+uses built-in Windows PowerShell 5.1 to display a responsive setup wizard.
+The wizard selects the owned ISO, build type, parallelism, and shortcut
+preference; requires explicit Microsoft development-tool license consent; and
+shows stage progress plus command output. It installs checksum-pinned portable
+PowerShell 7.7.0, Python 3.14.10, Node.js 22.23.5, 7-Zip 25.01, and MinGit
+2.56.1 under `.tools`, verifies the on-disc `default.xex` before a large import,
+then runs the existing pinned compiler bootstrap and native build. No
+administrator access or global development-tool installation is required.
+
+Setup-owned tool replacements and game extraction use staging paths. Existing
+verified downloads, portable tools, `private\game`, and compiler outputs are
+reused. The desktop shortcut still targets `tools\launch.ps1`, now with
+`-Settings`; the native launcher forwards the source checkout's explicit game,
+user, config, cache, and log paths to `n3.exe`.
+
+The portable-tool install and reuse paths completed from Windows PowerShell
+5.1, including MinGit 2.56.1. Portable Node verified the supported read-only
+ISO and passed all six extractor tests. Portable Python imported both repository
+and tooling modules. With global development-tool paths removed, the complete
+headless setup path reused the verified extraction, bootstrapped the compiler
+stack, built the runtime, and passed all 54 native suites. The actual wizard
+controls completed the same incremental pipeline and opened the native
+launcher. Offline setup planning passed 37 checks under Windows PowerShell 5.1
+and portable PowerShell 7; development launcher planning passed 136 checks. The
+wizard was rendered and inspected at the development system's current DPI.
+
+The full wizard validation reused an existing verified `private\game`; it did
+not repeat the new setup-owned 5.8 GB staging/rename path from an empty checkout.
+The real ISO pre-verification, lower-level extractor, and earlier full imports
+are covered separately. Interrupted network transfers, every storage failure,
+enterprise download policy, other Windows builds, DPI/accessibility variants,
+and clean-machine performance remain bounded rather than exhaustively tested.
+
 ## Installed settings launcher and controller remapping
 
 The Windows package now builds `n3_launcher.exe` as its documented default
@@ -142,8 +178,8 @@ configuration through its actual Save button. Direct `n3.exe` then logged
 `N3 display presentation target: 40 FPS` from a launcher-selected value before
 the harness stopped that validation process. The value was restored to 60
 afterward. The actual Play button started `n3.exe` and closed the launcher.
-The final native build passed all 53 suites, the development-launcher
-regression passed 115 checks, and all 7 release-package tests passed.
+The current native build passes all 54 suites, the development-launcher
+regression passes 136 checks, and all 7 release-package tests pass.
 
 All five pages were rendered and captured from the running Win32 application
 at the development system's current DPI; the visible controls fit the fixed

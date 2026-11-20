@@ -5,6 +5,7 @@
 #include <shobjidl.h>
 
 #include "launcher_config.h"
+#include "launcher_options.h"
 
 #include <algorithm>
 #include <array>
@@ -26,6 +27,7 @@ namespace {
 namespace fs = std::filesystem;
 using n3::launcher::DefaultLauncherValues;
 using n3::launcher::LauncherConfig;
+using n3::launcher::LauncherOptions;
 using n3::launcher::LauncherValues;
 using n3::launcher::WindowMode;
 
@@ -214,14 +216,18 @@ ComboOptions DigitalOptions() {
 
 class LauncherWindow {
  public:
-  LauncherWindow(HINSTANCE instance, fs::path executable, LauncherConfig config)
+  LauncherWindow(HINSTANCE instance, fs::path executable, LauncherOptions options,
+                 LauncherConfig config)
       : instance_(instance),
         executable_(std::move(executable)),
         install_directory_(executable_.parent_path()),
-        config_path_(install_directory_ / L"n3.toml"),
-        game_path_link_(UserRoot() / L"game-path.txt"),
+        options_(std::move(options)),
+        config_path_(*options_.config_file),
+        game_path_link_(*options_.user_root / L"game-path.txt"),
         config_(std::move(config)) {
-    remembered_game_path_ = ReadRememberedGamePath(game_path_link_);
+    remembered_game_path_ = n3::launcher::SelectGameRoot(
+        options_.game_root, ReadRememberedGamePath(game_path_link_));
+    options_.game_root = remembered_game_path_;
   }
 
   HWND Create() {
@@ -995,7 +1001,10 @@ class LauncherWindow {
       throw std::runtime_error(
           "n3.exe is missing from the launcher installation folder");
     }
-    std::wstring command_line = L"\"" + game.wstring() + L"\"";
+    const auto arguments =
+        n3::launcher::RuntimeArguments(options_, reset_game_data_);
+    std::wstring command_line =
+        n3::launcher::BuildWindowsCommandLine(game, arguments);
     STARTUPINFOW startup{sizeof(startup)};
     PROCESS_INFORMATION process{};
     if (!CreateProcessW(game.c_str(), command_line.data(), nullptr, nullptr,
@@ -1083,6 +1092,7 @@ class LauncherWindow {
   bool font_owned_ = false;
   fs::path executable_;
   fs::path install_directory_;
+  LauncherOptions options_;
   fs::path config_path_;
   fs::path game_path_link_;
   LauncherConfig config_;
@@ -1153,9 +1163,29 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
       throw std::runtime_error("Cannot initialize Windows controls");
     }
     const fs::path executable = ExecutablePath();
-    LauncherConfig config =
-        LauncherConfig::Load(executable.parent_path() / L"n3.toml");
-    LauncherWindow window(instance, executable, std::move(config));
+    int argument_count = 0;
+    LPWSTR* raw_arguments = CommandLineToArgvW(GetCommandLineW(), &argument_count);
+    if (!raw_arguments) {
+      throw std::runtime_error("Cannot read launcher arguments");
+    }
+    std::vector<std::wstring> arguments;
+    for (int index = 1; index < argument_count; ++index) {
+      arguments.emplace_back(raw_arguments[index]);
+    }
+    LocalFree(raw_arguments);
+    LauncherOptions options = n3::launcher::ParseLauncherOptions(arguments);
+    if (!options.config_file) {
+      options.config_file = executable.parent_path() / L"n3.toml";
+    }
+    if (!options.user_root) options.user_root = UserRoot();
+    for (auto* path : {&options.config_file, &options.user_root,
+                       &options.game_root, &options.cache_root,
+                       &options.log_root}) {
+      if (*path) **path = fs::absolute(**path).lexically_normal();
+    }
+    LauncherConfig config = LauncherConfig::Load(*options.config_file);
+    LauncherWindow window(instance, executable, std::move(options),
+                          std::move(config));
     HWND hwnd = window.Create();
     ShowWindow(hwnd, show_command);
     UpdateWindow(hwnd);

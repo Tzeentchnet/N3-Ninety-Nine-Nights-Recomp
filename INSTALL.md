@@ -44,143 +44,114 @@ page and the F4 advanced overlay.
 
 ## Build and install from source
 
-### Requirements
+Use the release package above if you only want to play. A source installation
+downloads the compiler stack, translates the owned executable, compiles the
+runtime, and runs its regression tests.
 
-- Windows 10/11 x64
-- Git
-- [PowerShell 7](https://github.com/PowerShell/PowerShell)
-- Node.js 18 or newer
-- Python 3.10 or newer
-- [7-Zip](https://www.7-zip.org/), normally installed at
-  `C:\Program Files\7-Zip\7z.exe`
-- An internet connection for the pinned toolchain downloads
-- Several GB for tools and build outputs, plus approximately 5.8 GB for the
-  extracted game
-- A Direct3D 12-capable GPU and current driver
+The one-click source setup requires:
 
-An Xbox-compatible controller is recommended. Vulkan is available as an
-optional development backend and requires a current Vulkan-capable driver.
+- Windows 10/11 x64;
+- an existing clone or downloaded source checkout in a stable writable folder;
+- your supported USA/Europe ISO;
+- an internet connection;
+- several GB for portable tools and build outputs, plus approximately 5.8 GB
+  for the extracted game; and
+- a Direct3D 12-capable GPU with a current driver.
 
-### 1. Clone the repository
+Git, PowerShell 7, Python, Node.js, 7-Zip, Visual Studio, CMake, Ninja, and
+Clang do not need to be installed globally. Setup downloads checksum-pinned
+portable copies under the ignored `.tools\` directory and does not require
+administrator access. You must explicitly accept Microsoft's Visual Studio 2022
+development-tool license before its portable headers and libraries are
+downloaded.
 
-Open PowerShell 7 and run:
+### 1. Obtain the source
+
+Clone with Git if it is already installed:
 
 ```powershell
 git clone https://github.com/Tzeentchnet/N3-Ninety-Nights-Recomp.git
 Set-Location N3-Ninety-Nights-Recomp
 ```
 
-Keep the checkout in a stable, writable location. The optional desktop
-shortcut points back to this directory.
+You can instead download GitHub's source archive and extract it. Keep the
+checkout in a stable location because the optional desktop shortcut points
+back to it.
 
-### 2. Bootstrap the pinned toolchain
+### 2. Run the setup wizard
 
-The normal bootstrap downloads verified project-local copies of ReXGlue,
-Clang, CMake, Ninja, and the Microsoft build tools:
+Double-click:
+
+```text
+setup.cmd
+```
+
+Then:
+
+1. Select the supported ISO unless a verified `private\game` is already
+   present.
+2. Choose the build type and parallel-job count.
+3. Review and accept the Microsoft development-tool license.
+4. Leave desktop-shortcut creation enabled if desired.
+5. Select **Install and build**.
+
+The wizard:
+
+1. downloads and verifies portable PowerShell, Python, Node.js, 7-Zip, and
+   MinGit;
+2. verifies `default.xex` in the ISO before the large import;
+3. imports and hashes the disc into ignored `private\game`;
+4. downloads and verifies ReXGlue, Clang, CMake, Ninja, and the portable
+   Microsoft build tools;
+5. generates translated sources, compiles the runtime, and runs all native
+   tests; and
+6. opens the native settings launcher.
+
+Progress and command output remain visible throughout. Downloads and valid
+completed stages are reused on retry. A failed new game import removes only
+the setup-owned staging directory; existing `private\game` data is never
+overwritten. The last structured setup log is:
+
+```text
+.tools\setup-state\last-setup.jsonl
+```
+
+The resulting executables are under
+`out\build\win-amd64-relwithdebinfo\`. The desktop shortcut opens the native
+settings launcher while retaining `private\game`, `private\user`,
+`private\cache`, and profile-local logs.
+
+### Manual source workflow
+
+Developers can still run the individual stages. Install PowerShell 7,
+Python 3.10 or newer, Node.js 18 or newer, and 7-Zip, then run:
 
 ```powershell
 pwsh -NoProfile -File tools\bootstrap.ps1 `
   -AcceptVisualStudioLicense `
   -Python python
-```
 
-`-AcceptVisualStudioLicense` records that you accept Microsoft's
-development-tool license. Downloads stay under the ignored `.tools\`
-directory.
+node tools\disc.mjs verify `
+  'D:\Games\N3.iso' `
+  default.xex `
+  0fe8973b6ff45d3f8bd03a51a8c0d8cdf278b3d43e793497777e075f4e94a804
 
-If 7-Zip is installed elsewhere, pass its executable explicitly:
-
-```powershell
-pwsh -NoProfile -File tools\bootstrap.ps1 `
-  -AcceptVisualStudioLicense `
-  -SevenZip 'D:\Tools\7-Zip\7z.exe' `
-  -Python python
-```
-
-To use an existing Visual Studio 2022 x64 development environment instead of
-the portable Microsoft tools, open its x64 developer shell and run:
-
-```powershell
-pwsh -NoProfile -File tools\bootstrap.ps1 -ToolsOnly -Python python
-```
-
-### 3. Prepare your game data
-
-The standard development layout extracts the owned disc to `private\game`:
-
-```powershell
 node tools\disc.mjs extract `
   'D:\Games\N3.iso' `
   'private\game' `
   'private\disc-manifest.json'
-```
 
-Replace the example ISO path with your own. The destination must not already
-exist. The extractor verifies the supported executable and writes a manifest
-containing a SHA-256 for every extracted file.
-
-Alternatively, skip this step and use the native ISO/XEX picker after building,
-as described under [First launch](#5-first-launch).
-
-Game data remains under ignored `private\` paths and must not be committed.
-
-### 4. Build
-
-Build the default `RelWithDebInfo` configuration:
-
-```powershell
 pwsh -NoProfile -File tools\build.ps1
+pwsh -NoProfile -File tools\launch.ps1 -Settings
 ```
 
-The build script regenerates translated sources, compiles the native runtime,
-and runs the native regression suite. The resulting executable is:
+Source translation requires the supported `private\game\default.xex`, so disc
+verification and extraction must finish before the build. Original game data
+remains ignored and must never be committed.
 
-```text
-out\build\win-amd64-relwithdebinfo\n3.exe
-```
-
-### 5. First launch
-
-If you extracted the disc to `private\game`, run:
-
-```powershell
-pwsh -NoProfile -File tools\launch.ps1
-```
-
-If you skipped manual extraction, run the native setup flow:
-
-```powershell
-pwsh -NoProfile -File tools\launch.ps1 -Setup
-```
-
-Select your owned ISO or the `default.xex` from an existing extraction. ISO
-import validates the game and places the extraction under the active local
-profile without changing the source image.
-
-The development launcher defaults to:
-
-- a 1280 x 720 window;
-- Direct3D 12;
-- spatial FSR1 presentation;
-- a 60 Hz host presentation target with the original-speed 30 FPS game clock;
-- `private\user` for saves and settings;
-- `private\cache` for caches; and
-- `logs\runtime-windowed.log` for the runtime log.
-
-See the [launcher guide](docs/LAUNCHER.md) for resolution, renderer, language,
-profile, and mod options.
-
-### 6. Optional desktop shortcut
-
-After a successful build, create a desktop shortcut to the stable development
-launcher:
-
-```powershell
-pwsh -NoProfile -File tools\install-shortcut.ps1
-```
-
-The shortcut uses the current checkout and its
-`RelWithDebInfo` build. Re-run the command if you move the repository.
+To use an existing Visual Studio 2022 x64 development environment instead of
+the portable Microsoft tools, open its x64 developer shell and run
+`tools\bootstrap.ps1 -ToolsOnly`.
 
 ## Updating a source installation
 
@@ -188,15 +159,13 @@ From the repository root:
 
 ```powershell
 git pull --ff-only
-pwsh -NoProfile -File tools\bootstrap.ps1 `
-  -AcceptVisualStudioLicense `
-  -Python python
-pwsh -NoProfile -File tools\build.ps1
+.\setup.cmd
 ```
 
-Bootstrap revalidates the pinned dependencies and downloads replacements only
-when needed. Keep `private\` if you want to retain extracted game data, saves,
-settings, and profiles.
+Setup revalidates pinned dependencies and downloads replacements only when
+needed. Keep `private\` to retain extracted game data, saves, settings, and
+profiles. Advanced users may continue to run `tools\bootstrap.ps1` and
+`tools\build.ps1` separately.
 
 ## Resetting game selection
 
@@ -223,7 +192,10 @@ the remembered game import, saves, caches, and logs.
 
 ## Troubleshooting and support
 
-- If bootstrap cannot find 7-Zip, use the `-SevenZip` option shown above.
+- Review `.tools\setup-state\last-setup.jsonl` if the setup wizard fails.
+- The setup wizard requires the built-in Windows `tar.exe`; supported Windows
+  10/11 installations include it.
+- Manual bootstrap can use `-SevenZip` to select a nonstandard 7-Zip path.
 - If the build says the SDK or prepared source is missing or stale, rerun
   `tools\bootstrap.ps1`.
 - If the game is rejected, confirm that it is the supported USA/Europe

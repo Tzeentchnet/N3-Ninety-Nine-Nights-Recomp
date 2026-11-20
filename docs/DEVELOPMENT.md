@@ -6,36 +6,28 @@ This guide covers a local Windows build of the maintained fork. Read
 ## Requirements
 
 - Windows 10/11 x64
-- PowerShell 7
-- Node.js 18 or newer for disc extraction
-- Python 3.10 or newer for tooling
-- 7-Zip for the pinned LLVM installer
 - Several GB for downloaded tools, pinned SDK sources, and native build outputs
 - Approximately 5.8 GB for an extracted owned game image
 
+The source setup wizard uses built-in Windows PowerShell to download pinned
+portable PowerShell, Python, Node.js, 7-Zip, and MinGit before installing the
+compiler stack. No global development tools or administrator access are
+required.
 Bootstrap keeps downloaded tools in `.tools/`; it does not install Visual
 Studio globally. Original game data stays under ignored `private/` paths.
 
 ## Fresh checkout
 
-```powershell
-# AcceptVisualStudioLicense accepts Microsoft's development-tool license.
-pwsh -NoProfile -File tools\bootstrap.ps1 `
-  -AcceptVisualStudioLicense `
-  -Python python
-
-node tools\disc.mjs extract `
-  "path\to\your-disc.iso" `
-  private\game `
-  private\disc-manifest.json
-
-pwsh -NoProfile -File tools\build.ps1
-pwsh -NoProfile -File tools\launch.ps1
-```
+Double-click `setup.cmd`, select the owned ISO, accept Microsoft's
+development-tool license, and select **Install and build**. The wizard verifies
+the supported executable before importing, installs the checksum-pinned
+project-local tools, builds and tests the recompilation, optionally creates the
+desktop shortcut, and opens the native settings launcher.
 
 The extractor refuses an existing destination and records a SHA-256 for every
-file. Code generation verifies the supported `default.xex` before using
-build-specific function hints.
+file. Source code generation requires and verifies the supported
+`private\game\default.xex` before using build-specific function hints, so a
+from-source build cannot defer game extraction until after compilation.
 
 `tools\build.ps1` uses the pinned binary SDK for code generation, then builds
 the modular runtime and D3D12, Vulkan, and null Xenos drivers from the exact
@@ -65,10 +57,16 @@ archive pins are in `tools\toolchain.lock.json`. See the
 [porting roadmap](PORTING.md#sdk-and-build-baseline) for the enforced ReXGlue
 identity and source-provenance flow.
 
+For manual or CI workflows, install Git, PowerShell 7, Python, Node.js, and
+7-Zip, then run `tools\bootstrap.ps1`, `tools\disc.mjs verify` and `extract`,
+and `tools\build.ps1` individually. The setup-tool and compiler archive
+identities are both pinned in `tools\toolchain.lock.json`.
+
 ## Launcher and profiles
 
 ```powershell
 pwsh -NoProfile -File tools\launch.ps1
+pwsh -NoProfile -File tools\launch.ps1 -Settings
 pwsh -NoProfile -File tools\launch.ps1 -DryRun -Setup
 pwsh -NoProfile -File tools\launch.ps1 -Profile test
 ```
@@ -77,6 +75,8 @@ The default launcher uses a 1280 x 720 window, `private\game`,
 `private\user`, `private\cache`, and `logs\runtime-windowed.log`.
 See the [launcher guide](LAUNCHER.md) for graphics overrides, profile isolation,
 native ISO/XEX setup, remembered-path reset, custom paths, and mod staging.
+The desktop shortcut uses `-Settings`, so it opens the native settings launcher
+while retaining the source checkout's private paths.
 
 ## Targeted checks
 
@@ -86,7 +86,8 @@ Run the smallest check that covers a change:
 # Disc extraction
 node --test tools\disc.test.mjs
 
-# Offline mod staging and launcher arguments
+# Offline source setup, mod staging, and launcher arguments
+pwsh -NoProfile -File tools\setup_test.ps1
 python -m unittest tools.mods_test
 pwsh -NoProfile -File tools\launch_test.ps1
 

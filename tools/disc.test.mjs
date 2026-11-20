@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import childProcess from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { Disc } from './disc.mjs';
 
 function fixture(t, change = () => {}) {
@@ -40,8 +42,29 @@ test('walk nested XDVDFS entries and extract exact bytes with a hash', t => {
     const hash = disc.extract(entries[0], path.join(root, 'output'));
     assert.equal(fs.readFileSync(path.join(root, 'output/data/hello.txt'), 'utf8'), 'hello');
     assert.equal(hash, crypto.createHash('sha256').update('hello').digest('hex'));
+    assert.equal(disc.hash(entries[0]), hash);
     assert.throws(() => disc.extract(entries[0], path.join(root, 'output')), /EEXIST/);
   } finally { disc.close(); }
+});
+
+test('verify command accepts only the expected entry hash', t => {
+  const { filename } = fixture(t);
+  const expected = crypto.createHash('sha256').update('hello').digest('hex');
+  const script = fileURLToPath(new URL('./disc.mjs', import.meta.url));
+  const valid = childProcess.spawnSync(
+    process.execPath,
+    [script, 'verify', filename, 'data/hello.txt', expected],
+    { encoding: 'utf8' },
+  );
+  assert.equal(valid.status, 0, valid.stderr);
+  assert.match(valid.stdout, /Verified data\/hello\.txt/);
+  const invalid = childProcess.spawnSync(
+    process.execPath,
+    [script, 'verify', filename, 'data/hello.txt', '0'.repeat(64)],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(invalid.status, 0);
+  assert.match(invalid.stderr, /Unsupported data\/hello\.txt SHA-256/);
 });
 
 test('reject path traversal names', t => {

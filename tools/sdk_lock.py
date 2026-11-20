@@ -35,6 +35,17 @@ class SdkSourceDependency:
     commit: str
 
 
+@dataclass(frozen=True)
+class SetupToolLock:
+    name: str
+    version: str
+    archive_name: str
+    url: str
+    sha256: str
+    executable: str
+    archive_root: str | None
+
+
 def load_toolchain_lock(path=LOCK_PATH):
     try:
         document = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -147,6 +158,69 @@ def load_sdk_source_dependencies(path=LOCK_PATH):
             )
         dependencies.append(dependency)
     return tuple(dependencies)
+
+
+def load_setup_tool_locks(path=LOCK_PATH):
+    document = load_toolchain_lock(path)
+    try:
+        records = document["setup_tools"]
+    except KeyError as error:
+        raise ValueError("Toolchain lock has no setup tools") from error
+    expected_names = {"powershell", "python", "node", "seven_zip", "git"}
+    if not isinstance(records, dict) or set(records) != expected_names:
+        raise ValueError(
+            "Setup tools must pin PowerShell, Python, Node.js, 7-Zip, and Git"
+        )
+    tools = []
+    for name, record in records.items():
+        try:
+            tool = SetupToolLock(
+                name=name,
+                version=record["version"],
+                archive_name=record["archive_name"],
+                url=record["url"],
+                sha256=record["sha256"],
+                executable=record["executable"],
+                archive_root=record.get("archive_root"),
+            )
+        except (KeyError, TypeError) as error:
+            raise ValueError(f"Setup tool {name!r} is incomplete: {error}") from error
+        required = (
+            tool.name,
+            tool.version,
+            tool.archive_name,
+            tool.url,
+            tool.sha256,
+            tool.executable,
+        )
+        if not all(isinstance(value, str) and value for value in required):
+            raise ValueError(f"Setup tool {name!r} fields must be nonempty strings")
+        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", tool.version):
+            raise ValueError(f"Setup tool {name!r} has an invalid version")
+        if not re.fullmatch(r"[0-9a-f]{64}", tool.sha256):
+            raise ValueError(f"Setup tool {name!r} has an invalid SHA-256")
+        parsed = urlsplit(tool.url)
+        if (
+            parsed.scheme != "https"
+            or PurePosixPath(unquote(parsed.path)).name != tool.archive_name
+        ):
+            raise ValueError(
+                f"Setup tool {name!r} URL must identify its HTTPS archive"
+            )
+        executable = PurePosixPath(tool.executable.replace("\\", "/"))
+        if executable.is_absolute() or ".." in executable.parts:
+            raise ValueError(f"Setup tool {name!r} executable must be relative")
+        if tool.archive_root is not None:
+            root = PurePosixPath(tool.archive_root.replace("\\", "/"))
+            if (
+                not isinstance(tool.archive_root, str)
+                or not tool.archive_root
+                or root.is_absolute()
+                or ".." in root.parts
+            ):
+                raise ValueError(f"Setup tool {name!r} archive root must be relative")
+        tools.append(tool)
+    return tuple(tools)
 
 
 def verify_latest_release(lock, releases):

@@ -1,5 +1,9 @@
 [CmdletBinding()]
-param([string]$Name = 'N3 Recompiled')
+param(
+    [string]$Name = 'N3 Recompiled',
+    [string]$PowerShell,
+    [switch]$DryRun
+)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 if ($Name.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or !$Name.Trim()) {
@@ -7,16 +11,36 @@ if ($Name.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or !$Name.Trim
 }
 $desktop = [Environment]::GetFolderPath('DesktopDirectory')
 if (!$desktop -or !(Test-Path -LiteralPath $desktop -PathType Container)) { throw 'Desktop folder not found.' }
-$hostExecutable = (Get-Command pwsh -ErrorAction Stop).Source
+$hostExecutable = if ($PowerShell) {
+    $resolved = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PowerShell)
+    if (!(Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        throw "PowerShell executable not found: $resolved"
+    }
+    $resolved
+} else {
+    (Get-Command pwsh -CommandType Application -ErrorAction Stop |
+        Select-Object -First 1).Source
+}
 $shortcutPath = Join-Path $desktop "$Name.lnk"
+$arguments = '-NoLogo -NoProfile -WindowStyle Hidden -File "' +
+    (Join-Path $PSScriptRoot 'launch.ps1') + '" -Settings'
+if ($DryRun) {
+    [ordered]@{
+        shortcut = $shortcutPath
+        target = $hostExecutable
+        arguments = $arguments
+        workingDirectory = $root
+    } | ConvertTo-Json
+    return
+}
 $shell = New-Object -ComObject WScript.Shell
 try {
     $shortcut = $shell.CreateShortcut($shortcutPath)
     try {
         $shortcut.TargetPath = $hostExecutable
-        $shortcut.Arguments = '-NoLogo -NoProfile -WindowStyle Hidden -File "' + (Join-Path $PSScriptRoot 'launch.ps1') + '"'
+        $shortcut.Arguments = $arguments
         $shortcut.WorkingDirectory = $root
-        $shortcut.Description = 'Launch the current N3 Recompiled build in a 1280 x 720 window'
+        $shortcut.Description = 'Open settings and play the current N3 Recompiled build'
         $shortcut.IconLocation = (Join-Path $root 'resources/n3.ico') + ',0'
         $shortcut.Save()
     } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut) }

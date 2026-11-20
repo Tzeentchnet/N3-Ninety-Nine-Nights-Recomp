@@ -125,6 +125,24 @@ $customVoice = Join-Path $temporary 'custom-voice'
 New-Item -ItemType Directory -Path $game,$mods,$englishVoice,$frenchVoice,$customVoice -Force |
     Out-Null
 try {
+    $settings = Invoke-Plan @(
+        '-DryRun',
+        '-Settings',
+        '-GameDirectory', $game,
+        '-Profile', 'settings-test'
+    )
+    Assert-True ([bool]$settings.settings) 'Settings mode was not retained'
+    Assert-True ($settings.executable -eq
+        (Join-Path $root 'out/build/win-amd64-relwithdebinfo/n3_launcher.exe')) `
+        'Settings mode selected the wrong executable'
+    Assert-ArgumentValue $settings '--game-root' $game
+    Assert-ArgumentValue $settings '--user-root' (Join-Path $root 'private/profiles/settings-test')
+    Assert-ArgumentValue $settings '--config-file' (Join-Path $root 'private/profiles/settings-test/n3.toml')
+    Assert-ArgumentValue $settings '--cache-root' (Join-Path $root 'private/profiles/settings-test/cache')
+    Assert-ArgumentValue $settings '--log-root' (Join-Path $root 'private/profiles/settings-test/logs')
+    Assert-NoArgument $settings '--gpu.driver'
+    Assert-NoArgument $settings '--title.game_root'
+
     $discDefaultVoice = Invoke-Plan @(
         '-DryRun',
         '-GameDirectory', $game,
@@ -171,6 +189,7 @@ try {
     Assert-Fails @('-DryRun', '-GameDirectory', $game, '-VoiceLanguage', 'Italian') "Voice language 'Italian' is not present"
     Assert-Fails @('-DryRun', '-GameDirectory', $game, '-VoiceLanguage', 'English', '-VoiceDirectory', $customVoice) '-VoiceLanguage and -VoiceDirectory are mutually exclusive'
     Assert-Fails @('-DryRun', '-Setup', '-VoiceLanguage', 'English') '-VoiceLanguage requires an extracted game directory'
+    Assert-Fails @('-DryRun', '-Settings', '-GameDirectory', $game, '-FrameRate', '40') '-Settings cannot be combined'
 } finally {
     Remove-Item -LiteralPath $temporary -Recurse -Force
 }

@@ -16,6 +16,10 @@ development backend.
 No game assets, executable, generated game translations, or downloaded
 toolchains are included. You must supply your own supported game data.
 
+For a source checkout on Windows 10/11, double-click `setup.cmd` for the
+project-local toolchain, verified ISO import, compile/test, shortcut, and
+settings-launcher flow. A release ZIP remains the simpler compiler-free option.
+
 ## Project information
 
 - [Installation and first-run setup](INSTALL.md)

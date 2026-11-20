@@ -35,6 +35,44 @@
     "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.1/ninja-win.zip",
     "sha256": "26a40fa8595694dec2fad4911e62d29e10525d2133c9a4230b66397774ae25bf"
   },
+  "setup_tools": {
+    "powershell": {
+      "version": "7.7.0",
+      "archive_name": "PowerShell-7.7.0-win-x64.zip",
+      "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.7.0/PowerShell-7.7.0-win-x64.zip",
+      "sha256": "7c74e03b20a75b59715847439d046a6214b1863ee79b187872980f139bb4a05f",
+      "executable": "pwsh.exe"
+    },
+    "python": {
+      "version": "3.14.10",
+      "archive_name": "python-3.14.10-embed-amd64.zip",
+      "url": "https://www.python.org/ftp/python/3.14.10/python-3.14.10-embed-amd64.zip",
+      "sha256": "90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159",
+      "executable": "python.exe"
+    },
+    "node": {
+      "version": "22.23.5",
+      "archive_name": "node-v22.23.5-win-x64.zip",
+      "archive_root": "node-v22.23.5-win-x64",
+      "url": "https://nodejs.org/download/release/v22.23.5/node-v22.23.5-win-x64.zip",
+      "sha256": "4a191082e9706866830379d577d2cc8a50c776fcd9436a8d061b063ed0d9a0e3",
+      "executable": "node.exe"
+    },
+    "seven_zip": {
+      "version": "25.01",
+      "archive_name": "7z2501-x64.exe",
+      "url": "https://www.7-zip.org/a/7z2501-x64.exe",
+      "sha256": "78afa2a1c773caf3cf7edf62f857d2a8a5da55fb0fff5da416074c0d28b2b55f",
+      "executable": "7z.exe"
+    },
+    "git": {
+      "version": "2.56.1",
+      "archive_name": "MinGit-2.56.1-64-bit.zip",
+      "url": "https://github.com/git-for-windows/git/releases/download/v2.56.1.windows.1/MinGit-2.56.1-64-bit.zip",
+      "sha256": "4a92850b6e917da4fd010669b614b55dccf5b0ec333a534cc4be4700dfefdafd",
+      "executable": "cmd/git.exe"
+    }
+  },
   "msvc_downloader": {
     "revision": "49b58850aa5e5c1e65f090d4651ee76607883e11",
     "url": "https://gist.githubusercontent.com/mmozeiko/7f3162ec2988e81e56d5c4e22cde9977/raw/49b58850aa5e5c1e65f090d4651ee76607883e11/portable-msvc.py",

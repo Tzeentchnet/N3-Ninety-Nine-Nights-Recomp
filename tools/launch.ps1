@@ -1,10 +1,13 @@
 <#
 .SYNOPSIS
-Launches a development build with isolated profiles, graphics overrides, setup,
-or staged mods.
+Opens the native settings launcher or starts a development build with isolated
+profiles, graphics overrides, setup, or staged mods.
 
 .EXAMPLE
 pwsh -NoProfile -File tools/launch.ps1
+
+.EXAMPLE
+pwsh -NoProfile -File tools/launch.ps1 -Settings
 
 .EXAMPLE
 pwsh -NoProfile -File tools/launch.ps1 -Profile testing -WindowMode Borderless -FrameRate 40
@@ -33,6 +36,7 @@ param(
     [ValidateSet('Configured','On','Off')][string]$VSync = 'Configured',
     [string]$VoiceDirectory,
     [string]$GameDirectory,
+    [switch]$Settings,
     [switch]$Setup,
     [switch]$ResetGameSelection,
     [string]$Profile,
@@ -198,6 +202,18 @@ if ($ListMods -and ($stageMods -or $CopyModBase -or $StageOnly)) {
 }
 if ($Setup -and $PSBoundParameters.ContainsKey('GameDirectory')) {
     throw '-Setup and -GameDirectory are mutually exclusive'
+}
+if ($Settings) {
+    $settingsConflicts = @(
+        'WindowMode', 'Width', 'Height', 'Monitor', 'FrameRate',
+        'TextLanguage', 'VoiceLanguage', 'Anisotropic', 'DisplayResolution',
+        'RenderResolution', 'Renderer', 'Upscaler', 'VSync', 'VoiceDirectory',
+        'Setup', 'ResetGameSelection', 'ListMods', 'UseEnabledMods', 'Mod',
+        'ModsDirectory', 'ModOrder', 'CopyModBase', 'StageOnly'
+    ) | Where-Object { $PSBoundParameters.ContainsKey($_) }
+    if ($settingsConflicts) {
+        throw "-Settings cannot be combined with: $($settingsConflicts -join ', ')"
+    }
 }
 if ($Setup -and $stageMods) {
     throw 'Mod staging requires an explicit or default extracted game directory, not -Setup'
@@ -433,10 +449,28 @@ $launchArguments.Add($cachePath)
 $launchArguments.Add('--app.log_root')
 $launchArguments.Add($logRoot)
 
+if ($Settings) {
+    $executable = Join-Path $root "out/build/$preset/n3_launcher.exe"
+    $launchArguments.Clear()
+    if ($gamePath) {
+        $launchArguments.Add('--game-root')
+        $launchArguments.Add($gamePath)
+    }
+    $launchArguments.Add('--user-root')
+    $launchArguments.Add($userPath)
+    $launchArguments.Add('--config-file')
+    $launchArguments.Add((Join-Path $userPath 'n3.toml'))
+    $launchArguments.Add('--cache-root')
+    $launchArguments.Add($cachePath)
+    $launchArguments.Add('--log-root')
+    $launchArguments.Add($logRoot)
+}
+
 $plan = [ordered]@{
     schemaVersion = 1
     executable = $executable
     configuration = $Configuration
+    settings = [bool]$Settings
     windowMode = $WindowMode
     renderer = $Renderer
     upscaler = $Upscaler
@@ -468,7 +502,7 @@ if ($StageOnly) {
     return
 }
 if (!(Test-Path -LiteralPath $executable -PathType Leaf)) {
-    throw 'Build n3.exe first with tools/build.ps1.'
+    throw "Build $(Split-Path $executable -Leaf) first with tools/build.ps1."
 }
 
 $info = [Diagnostics.ProcessStartInfo]::new()
@@ -483,4 +517,6 @@ $process = [Diagnostics.Process]::Start($info)
 $process.WaitForExit()
 $code = $process.ExitCode
 $process.Dispose()
-if ($code) { throw "n3.exe exited with code $code. See $logPath." }
+if ($code) {
+    throw "$(Split-Path $executable -Leaf) exited with code $code. See $logPath."
+}

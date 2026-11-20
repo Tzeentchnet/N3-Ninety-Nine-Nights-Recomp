@@ -9,6 +9,12 @@ builds. It selects the build, applies one-launch graphics overrides, isolates
 profiles, delegates first-run setup to the native application, and can stage
 loose-file mods before starting the game.
 
+For a fresh source checkout, run the one-click `setup.cmd` wizard documented in
+[Installation and first-run setup](../INSTALL.md). The desktop shortcut created
+by that wizard calls `tools\launch.ps1 -Settings`, which opens the native
+settings launcher with the same private development paths used by direct
+development launches.
+
 The launcher is not included in release packages. Running a packaged `n3.exe`
 directly uses the application's normal `%LOCALAPPDATA%\N3Recompiled` profile and
 native first-run setup instead.
@@ -55,6 +61,7 @@ reparse points in game, mod, profile, cache, and log paths.
 | `-Upscaler` | `FSR1` (default), `Bilinear`, `Configured` | Selects spatial AMD FidelityFX Super Resolution 1 EASU+RCAS presentation, selects the bilinear fallback, or leaves the active profile value untouched. |
 | `-VSync` | `Configured`, `On`, `Off` | Leaves the profile value untouched or forces host presentation VSync for this launch. |
 | `-GameDirectory` | Existing directory | Uses an explicit extracted game tree and bypasses remembered-path/native picker behavior. The normal default is `private\game`. |
+| `-Settings` | Switch | Opens `n3_launcher.exe` instead of starting the game directly. It forwards the selected game, user, configuration, cache, and log paths. One-launch graphics/language overrides, setup/reset, and mod options are rejected in this mode. |
 | `-Setup` | Switch | Omits the game-root override so the native application can use its remembered path or open its ISO/XEX picker. |
 | `-ResetGameSelection` | Switch | Deletes only the active profile's `game-path.txt` and implies `-Setup`, forcing native selection on the next real launch. |
 | `-Profile` | Letters, digits, `.`, `_`, `-` | Uses isolated defaults below `private\profiles\<name>`. |
@@ -108,6 +115,9 @@ pwsh -NoProfile -File tools\launch.ps1 `
 # Inspect the exact arguments without launching.
 pwsh -NoProfile -File tools\launch.ps1 `
   -DryRun -Setup -WindowMode Configured -FrameRate Uncapped
+
+# Open the native settings launcher with development paths.
+pwsh -NoProfile -File tools\launch.ps1 -Settings
 
 # Select an on-disc voice bank after checking the dry-run discovery list.
 pwsh -NoProfile -File tools\launch.ps1 `
@@ -259,6 +269,8 @@ restage it after changing mod sources.
   `-GameDirectory`.
 - Setup/reset cannot accompany mod staging because staging needs an existing
   extracted source tree.
+- `-Settings` cannot accompany one-launch graphics/language overrides,
+  setup/reset, mod discovery, or mod staging.
 - `-DisplayResolution` cannot accompany `-Width` or `-Height`.
 - `-UseEnabledMods` and `-Mod` are mutually exclusive.
 - `-ModOrder` requires `-UseEnabledMods`.

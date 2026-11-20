@@ -112,17 +112,40 @@ export class Disc {
     fs.closeSync(fd);
     return hash.digest('hex');
   }
+
+  hash(entry) {
+    const hash = crypto.createHash('sha256');
+    for (let done = 0; done < entry.size;) {
+      const chunk = this.read(entry.offset + done, Math.min(1024 * 1024, entry.size - done));
+      hash.update(chunk);
+      done += chunk.length;
+    }
+    return hash.digest('hex');
+  }
 }
 
 function main() {
   const [command, filename, destination, manifestPath] = process.argv.slice(2);
-  if (!['list', 'extract'].includes(command) || !filename ||
+  if (!['list', 'verify', 'extract'].includes(command) || !filename ||
+      (command === 'verify' && (!destination || !manifestPath)) ||
       (command === 'extract' && (!destination || !manifestPath))) {
-    throw new Error('Usage: node tools/disc.mjs list <iso> | extract <iso> <new-output-dir> <manifest.json>');
+    throw new Error('Usage: node tools/disc.mjs list <iso> | verify <iso> <entry-path> <sha256> | extract <iso> <new-output-dir> <manifest.json>');
   }
   const disc = new Disc(filename);
   try {
     const files = disc.entries();
+    if (command === 'verify') {
+      if (!/^[0-9a-f]{64}$/i.test(manifestPath)) throw new Error('Expected SHA-256 must contain 64 hexadecimal characters');
+      const requested = destination.replaceAll('\\', '/').toLowerCase();
+      const entry = files.find(file => file.path.toLowerCase() === requested);
+      if (!entry) throw new Error(`Disc entry not found: ${destination}`);
+      const actual = disc.hash(entry);
+      if (actual !== manifestPath.toLowerCase()) {
+        throw new Error(`Unsupported ${destination} SHA-256: ${actual}`);
+      }
+      console.log(`Verified ${entry.path}: ${actual}`);
+      return;
+    }
     if (command === 'extract') {
       if (fs.existsSync(destination)) throw new Error('Use a new output directory to avoid mixing disc revisions');
       let count = 0;

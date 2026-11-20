@@ -83,3 +83,9 @@ mod staging, and one-process command-line overrides. It explicitly places its
 configuration under `private\user` or `private\profiles\<name>` and does not
 overwrite the installation-folder `n3.toml`. See the
 [development launcher guide](LAUNCHER.md).
+
+`tools\launch.ps1 -Settings` opens this same native settings interface while
+forwarding the selected source-checkout game, user, cache, log, and
+configuration paths. The one-click source setup wizard and installed desktop
+shortcut use that mode, so Save and Play remain on the private development
+profile instead of `%LOCALAPPDATA%`.

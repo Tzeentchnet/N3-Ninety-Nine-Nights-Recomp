@@ -44,6 +44,17 @@ class SdkLockTests(unittest.TestCase):
             dependencies["vulkan_memory_allocator"].commit,
             "0f1a757da579831283413295cc7f3b47eb521c77",
         )
+        setup_tools = {
+            tool.name: tool for tool in sdk_lock.load_setup_tool_locks()
+        }
+        self.assertEqual(set(setup_tools), {
+            "powershell", "python", "node", "seven_zip", "git"
+        })
+        self.assertEqual(setup_tools["powershell"].version, "7.7.0")
+        self.assertEqual(setup_tools["python"].version, "3.14.10")
+        self.assertEqual(setup_tools["node"].version, "22.23.5")
+        self.assertEqual(setup_tools["seven_zip"].version, "25.01")
+        self.assertEqual(setup_tools["git"].version, "2.56.1")
 
     def test_rejects_version_commit_mismatch(self):
         document = copy.deepcopy(self.document)
@@ -68,6 +79,26 @@ class SdkLockTests(unittest.TestCase):
         document["sdk_source_dependencies"]["vulkan_headers"]["commit"] = "main"
         with self.assertRaisesRegex(ValueError, "full lowercase Git commit"):
             sdk_lock.load_sdk_source_dependencies(self.write_lock(document))
+
+    def test_rejects_incomplete_setup_tools(self):
+        document = copy.deepcopy(self.document)
+        del document["setup_tools"]["node"]
+        with self.assertRaisesRegex(ValueError, "must pin"):
+            sdk_lock.load_setup_tool_locks(self.write_lock(document))
+
+    def test_rejects_setup_tool_url_name_mismatch(self):
+        document = copy.deepcopy(self.document)
+        document["setup_tools"]["python"]["url"] = (
+            "https://www.python.org/ftp/python/3.14.10/wrong.zip"
+        )
+        with self.assertRaisesRegex(ValueError, "HTTPS archive"):
+            sdk_lock.load_setup_tool_locks(self.write_lock(document))
+
+    def test_rejects_unsafe_setup_tool_path(self):
+        document = copy.deepcopy(self.document)
+        document["setup_tools"]["node"]["executable"] = "../node.exe"
+        with self.assertRaisesRegex(ValueError, "must be relative"):
+            sdk_lock.load_setup_tool_locks(self.write_lock(document))
 
     def test_accepts_stable_release_naming(self):
         document = copy.deepcopy(self.document)
