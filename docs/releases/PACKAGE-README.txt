@@ -2,10 +2,11 @@ N3 Recompiled - Windows x64
 
 GET STARTED
 1. Extract the entire Windows x64 ZIP to a writable folder.
-2. Double-click n3.exe. It starts in a 1280 x 720 window.
-3. Select an ISO made from your own supported Ninety-Nine Nights disc, or
+2. Double-click n3_launcher.exe, choose settings, and select Play.
+3. The game starts in a 1280 x 720 window by default.
+4. Select an ISO made from your own supported Ninety-Nine Nights disc, or
    select default.xex in an already extracted copy with data beside it.
-4. For an ISO, confirm the one-time import (about 5.8 GB of free space).
+5. For an ISO, confirm the one-time import (about 5.8 GB of free space).
    The original ISO is unchanged. Setup remembers the local game folder.
 
 No original executable, game assets, saves, disc image, mods, or developer logs
@@ -23,14 +24,29 @@ REQUIREMENTS
 Other executable revisions are rejected. Title updates are not validated.
 
 LOCAL FILES
-Saves, configuration, remembered game location, imported disc data, caches,
-and logs default to %LOCALAPPDATA%\N3Recompiled. Keep this folder when updating.
-Replace the application folder with a freshly extracted release to update.
+The launcher saves n3.toml in this writable application folder. Directly
+starting n3.exe uses that same configuration. Saves, remembered game location,
+imported disc data, caches, and logs default to
+%LOCALAPPDATA%\N3Recompiled. Keep both n3.toml and that folder when updating.
 An existing extracted game folder remains in its original location.
 
+INSTALLED LAUNCHER
+Open n3_launcher.exe for normal play. Its tabs configure:
+- Play and game-data reselection.
+- Graphics, display mode, renderer, presentation, filtering, and VSync.
+- Text/subtitle language, spoken-audio source, volume, and mute behavior.
+- Physical controller backend, deadzones, remapping, and axis inversion.
+- Keyboard/mouse controller emulation and every game binding.
+
+Reset page changes only the visible page until you choose Save or Play. Save
+keeps the launcher open. Play saves first, starts n3.exe, and closes the
+launcher. Change on next Play resets only the remembered game-data location;
+it does not remove imported files, saves, or settings.
+
 GRAPHICS
-Select Graphics below Tutorial on the main menu. Up/down selects a row,
-left/right changes its value, and B returns.
+Use the launcher's Graphics tab before play. The in-game Graphics page below
+Tutorial remains available: up/down selects a row, left/right changes its
+value, and B returns.
 - Presentation rate: 30, 40, or 60 Hz (60 default).
 - Anisotropic filtering: 1x, 2x, 4x, 8x, or 16x.
 - Display resolution: 720p, 1080p, 1440p, or 4K.
@@ -47,17 +63,31 @@ DLSS upscaling, and frame generation are not included.
 
 LANGUAGE AND OPTIONAL VOICES
 The supported disc includes English, French, German, Italian, and Spanish text
-and fonts. Add n3_text_language = "spanish" (or english, french, german,
-italian) to %LOCALAPPDATA%\N3Recompiled\n3.toml, then restart.
+and fonts. Select the text/subtitle language in the launcher's Language & Audio
+tab, then start or restart the game.
 
 The supported USA/Europe disc contains only the English SoundRes voice tree.
 The five text choices do not imply five on-disc voice banks.
 
-For voices from another edition that you own, set n3_voice_directory to its
-complete extracted SoundRes directory. N3 validates the complete file set,
-XACT bank metadata, sound-bank payloads, and preload list before mounting it
-read only. Other editions' executables are not supported. No alternate text or
-voice files are included.
+For voices from another edition that you own, browse to its complete extracted
+SoundRes directory in the launcher. N3 validates the complete file set, XACT
+bank metadata, sound-bank payloads, and preload list before mounting it read
+only. Other editions' executables are not supported. No alternate text or voice
+files are included.
+
+INPUT
+The Controller tab remaps physical buttons, triggers, sticks, and axes. Each
+row names the game control; the selected value names its physical source. The
+Keyboard & Mouse tab maps keys and mouse movement to the same game controls.
+Bindings accept comma-separated alternatives and chords such as Shift+Up.
+
+F4 ADVANCED SETTINGS
+Press F4 while the game window is focused to toggle ReXGlue's advanced settings
+overlay. It provides searchable settings and a Save to config button. That
+button writes the same application-folder n3.toml used by the launcher.
+Allowed choices use drop-downs; free-form numeric/text values commit on Enter.
+Some advanced changes require a restart. hid.keybind_* entries are
+keyboard/mouse emulation; n3.controller.* entries are physical pad remapping.
 
 OPTIONAL COMMAND LINE
 n3_import.exe inspect "path\to\your-disc.iso"

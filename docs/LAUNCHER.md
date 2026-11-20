@@ -1,5 +1,9 @@
 # Development launcher
 
+Packaged installations use the native settings application documented in
+[Installed launcher and in-game settings](SETTINGS.md). This page describes the
+PowerShell launcher for source checkouts and development profiles.
+
 `tools/launch.ps1` is the supported entry point for local Windows development
 builds. It selects the build, applies one-launch graphics overrides, isolates
 profiles, delegates first-run setup to the native application, and can stage
@@ -118,7 +122,7 @@ presenter repeats the latest frame to maintain the requested host cadence. This
 is a 60 Hz output target, not true 60 FPS simulation, animation, or unique
 rendering.
 
-In the F5 settings overlay, settings with enumerated numeric choices, including
+In the F4 settings overlay, settings with enumerated numeric choices, including
 `n3.display_resolution`, use a drop-down. Other numeric fields apply only after
 Enter, so a partial value such as the first `1` in `1280` cannot resize the
 window.
@@ -134,7 +138,7 @@ The stable ReXGlue 0.11 base is patched with the earlier vendor-neutral spatial
 FSR1 EASU+RCAS presentation path on both D3D12 and Vulkan. FSR1 operates on the
 final guest color image, including N3's baked-in HUD. It sharpens at native
 size, upscales when the host output is larger, and uses bilinear presentation
-for any final resize that EASU cannot perform. The F5 setting
+for any final resize that EASU cannot perform. The F4 setting
 `gpu.xenos.present_fsr1_sharpness_reduction` controls RCAS sharpness in stops;
 lower values are sharper and changes require a restart.
 

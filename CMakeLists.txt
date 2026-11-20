@@ -49,6 +49,8 @@ add_library(n3_voice_data STATIC src/voice_pack.cpp)
 target_include_directories(n3_voice_data PUBLIC src)
 add_library(n3_animation_trace_model STATIC src/animation_trace_model.cpp)
 target_include_directories(n3_animation_trace_model PUBLIC src)
+add_library(n3_controller STATIC src/controller_remap.cpp)
+target_include_directories(n3_controller PUBLIC src)
 add_executable(n3_import tools/import_main.cpp)
 target_link_libraries(n3_import PRIVATE n3_game_data)
 if(BUILD_TESTING)
@@ -136,6 +138,9 @@ if(BUILD_TESTING)
     target_compile_definitions(n3_text_language_test PRIVATE
         N3_MANIFEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/n3_manifest.toml")
     add_test(NAME text_language_policy COMMAND n3_text_language_test)
+    add_executable(n3_controller_remap_test tests/controller_remap_test.cpp)
+    target_link_libraries(n3_controller_remap_test PRIVATE n3_controller)
+    add_test(NAME controller_remap_policy COMMAND n3_controller_remap_test)
 endif()
 if(NOT N3_BUILD_GAME)
     message(STATUS "Building portable native components only; no game runtime")
@@ -173,12 +178,18 @@ if(NOT "${REXGLUE_VERSION_STRING}" STREQUAL "${N3_EXPECTED_REXGLUE_VERSION}")
         "toolchain.lock.json requires ${N3_EXPECTED_REXGLUE_VERSION}")
 endif()
 
+add_library(n3_launcher_config STATIC src/launcher_config.cpp)
+target_include_directories(n3_launcher_config PUBLIC src)
+target_link_libraries(n3_launcher_config PUBLIC rex::sdk
+    PRIVATE n3_controller tomlplusplus)
+
 # Sources
 set(N3_SOURCES
     src/main.cpp
     src/app_icon.cpp
     src/crash_diagnostics.cpp
     src/runtime_fixes.cpp
+    src/controller_remap_hooks.cpp
     src/shape_bounds_hooks.cpp
     src/vector_ops_hooks.cpp
     src/engine_primitives_hooks.cpp
@@ -211,8 +222,18 @@ set(N3_SOURCES
 if(WIN32)
     enable_language(RC)
     configure_file(resources/n3.rc.in ${CMAKE_CURRENT_BINARY_DIR}/n3.rc @ONLY)
+    configure_file(resources/n3_launcher.rc.in
+        ${CMAKE_CURRENT_BINARY_DIR}/n3_launcher.rc @ONLY)
     add_executable(n3 WIN32 ${N3_SOURCES})
     target_sources(n3 PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/n3.rc)
+    add_executable(n3_launcher WIN32 src/launcher_main.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/n3_launcher.rc)
+    target_compile_definitions(n3_launcher PRIVATE UNICODE _UNICODE
+        WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(n3_launcher PRIVATE n3_launcher_config
+        comctl32 ole32 shell32 uuid)
+    rexglue_apply_target_settings(n3_launcher)
+    rexglue_link_host_allocator(n3_launcher)
 else()
     add_executable(n3 ${N3_SOURCES})
 endif()
@@ -227,7 +248,7 @@ else()
     target_sources(n3 PRIVATE src/text_language.cpp)
 endif()
 
-target_link_libraries(n3 PRIVATE n3_native n3_game_data n3_menu_assets n3_voice_data n3_animation_trace_model
+target_link_libraries(n3 PRIVATE n3_native n3_game_data n3_menu_assets n3_voice_data n3_animation_trace_model n3_controller
     comdlg32 ole32 uuid shell32)
 
 function(n3_configure_sdk_test target_name)
@@ -236,6 +257,10 @@ function(n3_configure_sdk_test target_name)
 endfunction()
 
 if(BUILD_TESTING)
+    add_executable(n3_launcher_config_test tests/launcher_config_test.cpp)
+    target_link_libraries(n3_launcher_config_test PRIVATE n3_launcher_config)
+    n3_configure_sdk_test(n3_launcher_config_test)
+    add_test(NAME launcher_configuration COMMAND n3_launcher_config_test)
     add_executable(n3_animation_trace_hooks_test tests/animation_trace_hooks_test.cpp
         src/animation_trace_hooks.cpp)
     if(WIN32)

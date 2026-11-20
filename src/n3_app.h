@@ -11,6 +11,7 @@
 #include "graphics_notification.h"
 #include "graphics_settings.h"
 #include "n3_settings.h"
+#include "controller_settings.h"
 #include "profile_config.h"
 #include "voice_override.h"
 
@@ -27,6 +28,7 @@ class N3App final : public rex::app::TitleApp {
  protected:
   rex::Result<void> OnConfigure(rex::SettingsRegistry& settings) override {
     REX_TRY_VOID(settings.Register(N3_SETTINGS()));
+    REX_TRY_VOID(settings.Register(N3_CONTROLLER_SETTINGS()));
     settings.AddAlias("n3_frame_rate", "n3.frame_rate");
     settings.AddAlias("n3_60fps", "n3.legacy_60fps");
     settings.AddAlias("frame_pacing_trace", "n3.frame_pacing_trace");
@@ -43,7 +45,7 @@ class N3App final : public rex::app::TitleApp {
     try {
       ConfigureGameDataPaths();
       REX_TRY_VOID(REX_PATHS().config_file.Set(
-          std::filesystem::path("{app.user_root}/n3.toml")));
+          std::filesystem::path("{app.root}/n3.toml")));
       REX_TRY_VOID(log_root.Set(std::filesystem::path("{app.user_root}/logs")));
       RepairLegacyProfileConfig(REX_PATHS().config_file.Get());
     } catch (const std::exception& error) {

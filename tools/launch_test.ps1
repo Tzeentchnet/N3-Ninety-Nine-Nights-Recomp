@@ -49,6 +49,7 @@ Assert-True ([bool]$default.setup) 'Setup plan did not retain setup mode'
 Assert-Argument $default '--no-ui.fullscreen'
 Assert-NoArgument $default '--title.game_root'
 Assert-ArgumentValue $default '--app.user_root' (Join-Path $root 'private/user')
+Assert-ArgumentValue $default '--app.config_file' (Join-Path $root 'private/user/n3.toml')
 Assert-ArgumentValue $default '--app.cache_root' (Join-Path $root 'private/cache')
 Assert-ArgumentValue $default '--app.log_root' (Join-Path $root 'logs')
 Assert-ArgumentValue $default '--gpu.driver' 'd3d12'
@@ -92,6 +93,7 @@ Assert-Argument $graphics '--no-gpu.vsync'
 Assert-True ($graphics.userDirectory -eq (Join-Path $root 'private/profiles/test-profile')) 'Named profile user path is incorrect'
 Assert-True ($graphics.cacheDirectory -eq (Join-Path $root 'private/profiles/test-profile/cache')) 'Named profile cache path is incorrect'
 Assert-True ($graphics.logFile -eq (Join-Path $root 'private/profiles/test-profile/logs/n3.log')) 'Named profile log path is incorrect'
+Assert-ArgumentValue $graphics '--app.config_file' (Join-Path $root 'private/profiles/test-profile/n3.toml')
 
 $uncapped = Invoke-Plan @('-DryRun', '-Setup', '-FrameRate', 'Uncapped')
 Assert-ArgumentValue $uncapped '--n3.frame_rate' '0'

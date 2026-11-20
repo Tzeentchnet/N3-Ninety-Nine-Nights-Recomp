@@ -22,6 +22,7 @@ PACKAGE_DOCUMENTS = {
 }
 PACKAGE_BINARIES = (
     "n3.exe",
+    "n3_launcher.exe",
     "n3_import.exe",
     "SDL3.dll",
     "rexapp.dll",

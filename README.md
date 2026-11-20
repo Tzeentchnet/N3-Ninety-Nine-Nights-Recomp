@@ -21,6 +21,7 @@ toolchains are included. You must supply your own supported game data.
 - [Installation and first-run setup](INSTALL.md)
 - [Fork relationship and differences](docs/FORK.md)
 - [Current development status](docs/STATUS.md)
+- [Installed launcher and in-game settings](docs/SETTINGS.md)
 - [Development and build guide](docs/DEVELOPMENT.md)
 - [Documentation index](docs/README.md)
 

@@ -11,6 +11,7 @@ a section explicitly says otherwise.
 | [Fork relationship](FORK.md) | Upstream baseline, fork-only changes, remotes, and release ownership |
 | [Development status](STATUS.md) | Observed milestones, validation evidence, unresolved issues, and explicit limits |
 | [Development and build](DEVELOPMENT.md) | Bootstrap, game extraction, builds, targeted checks, and release workflow |
+| [Installed launcher and F4 settings](SETTINGS.md) | Packaged graphics, language, audio, controller, keyboard/mouse, shared configuration, and advanced overlay |
 | [Development launcher](LAUNCHER.md) | Window and graphics overrides, profiles, native setup, paths, and mod staging |
 | [Native engine modules](NATIVE-CODE.md) | Typed C++ replacements, guest adapters, equivalence boundaries, and test coverage |
 | [Game-code conversion plan](CONVERSION-PLAN.md) | Converted domains, remaining generated code, and criteria for future native modules |

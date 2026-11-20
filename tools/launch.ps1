@@ -426,6 +426,8 @@ if ($gamePath) {
 }
 $launchArguments.Add('--app.user_root')
 $launchArguments.Add($userPath)
+$launchArguments.Add('--app.config_file')
+$launchArguments.Add((Join-Path $userPath 'n3.toml'))
 $launchArguments.Add('--app.cache_root')
 $launchArguments.Add($cachePath)
 $launchArguments.Add('--app.log_root')

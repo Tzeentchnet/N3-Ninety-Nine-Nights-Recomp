@@ -20,23 +20,27 @@ A packaged build does not require Git, Node.js, Python, or development tools.
 
 1. Download the Windows x64 ZIP from the project Releases page.
 2. Extract the entire ZIP to a writable folder.
-3. Double-click `n3.exe`.
-4. Select either:
+3. Double-click `n3_launcher.exe`, choose settings, and select **Play**.
+4. In the native game-data prompt, select either:
    - an ISO made from your supported disc; or
    - `default.xex` inside an already extracted game directory.
 5. If you selected an ISO, confirm the one-time import. It requires
    approximately 5.8 GB of free space and does not modify the source image.
 
-The application remembers the validated game directory. Saves, configuration,
-imported game data, caches, and logs default to:
+The launcher stores the shared `n3.toml` beside `n3_launcher.exe`; directly
+starting `n3.exe` uses the same settings. The application remembers the
+validated game directory. Saves, imported game data, caches, and logs default
+to:
 
 ```text
 %LOCALAPPDATA%\N3Recompiled
 ```
 
 To update a packaged installation, close the game and replace the application
-folder with a freshly extracted release. Keep the profile directory above if
-you want to retain saves and settings.
+folder with a freshly extracted release. Retain the installation's `n3.toml`
+and the profile directory above if you want to keep settings and saves. See
+[Installed launcher and in-game settings](docs/SETTINGS.md) for every launcher
+page and the F4 advanced overlay.
 
 ## Build and install from source
 
@@ -212,9 +216,10 @@ For a source installation:
 2. Delete the `N3 Recompiled` desktop shortcut if you created it.
 3. Delete the repository directory.
 
-For a packaged installation, delete the extracted application directory.
+For a packaged installation, delete the extracted application directory,
+including its `n3.toml`.
 Remove `%LOCALAPPDATA%\N3Recompiled` separately only if you also want to delete
-the remembered game import, saves, settings, caches, and logs.
+the remembered game import, saves, caches, and logs.
 
 ## Troubleshooting and support
 

@@ -18,6 +18,7 @@ SPEC.loader.exec_module(package_release)
 class PackageReleaseTests(unittest.TestCase):
     def test_package_uses_modular_v011_renderers(self):
         binaries = set(package_release.PACKAGE_BINARIES)
+        self.assertIn("n3_launcher.exe", binaries)
         self.assertIn("rexgpu-xenos-d3d12.dll", binaries)
         self.assertIn("rexgpu-xenos-vulkan.dll", binaries)
         self.assertIn("rexgpu-xenos-null.dll", binaries)

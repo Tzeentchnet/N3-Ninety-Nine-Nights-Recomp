@@ -27,7 +27,7 @@ route. Full-game coverage remains unvalidated.
 - Generated 13,762 function assignments across 87 translated C++ source files.
 - Windows x64 Release and RelWithDebInfo compile and link succeed with Clang 20.1.8.
 - Runtime initializes Direct3D 12, input, audio, and XEX imports.
-- Five JavaScript extractor tests and all 51 current native regression suites
+- Five JavaScript extractor tests and all 53 current native regression suites
   pass.
 - A 30-second boot test survived until the harness stopped it, without the prior
   unregistered-function or floating-point failure.
@@ -48,6 +48,16 @@ route. Full-game coverage remains unvalidated.
   5,770,038,003 bytes, saved the verified game path, and started the game without
   a Windows application-hang event. This single run does not validate every
   storage failure, cancellation timing, Windows version, or gameplay route.
+- A native installed launcher exposes curated Play, Graphics, Language & Audio,
+  Controller, and Keyboard & Mouse pages. It saves an installation-folder
+  `n3.toml`; direct `n3.exe` startup was observed loading a distinctive 40 Hz
+  value from that same file. Development profiles retain an explicit private
+  config path.
+- Physical-controller remapping now covers every digital game control, triggers,
+  stick selection, and four axis inversions at the title's sole
+  `XamInputGetState` wrapper. Native policy tests cover identity, disabled and
+  duplicated sources, swaps, unknown button bits, and signed-axis limits.
+  Actual play with a mapped physical controller remains unvalidated.
 - Import cancellation cleans up its newly created output; existing destinations
   are rejected without alteration. Wrong revisions and malformed disc entries
   are rejected. Explicit and remembered game folders are revalidated.
@@ -101,16 +111,59 @@ previously observed presentation glitch.
 The first Windows x64 alpha adds native first-launch selection of an ISO or an
 extracted `default.xex`, executable hash verification, optional one-time disc
 import, and a remembered local game path. Direct EXE startup defaults to a
-1280 x 720 window. Explicit runtime settings retain precedence. Release profiles
-default to `%LOCALAPPDATA%\N3Recompiled`; development launcher profiles stay
-under `private/`.
+1280 x 720 window. Explicit runtime settings retain precedence. Packaged saves, remembered game data, imports, caches, and logs default to
+`%LOCALAPPDATA%\N3Recompiled`; packaged settings use `n3.toml` in the writable
+application folder. Development launcher profiles and their explicit config
+files stay under `private/`.
 
 The package uses an explicit file allowlist, includes runtime dependencies and
 third-party notices, omits PDBs and local game/profile/log data, and checks binary
 strings for build-machine identifiers. Corresponding SDK/dependency sources and
-their pinned revision manifest accompany the release. The picker and progress
-dialog still need a completed visual interaction check; importer and path logic
-have native automated coverage.
+their pinned revision manifest accompany the release. One full interactive ISO
+import completed with responsive progress and a verified output; importer and
+path logic also have native automated coverage. Other storage failures and
+cancellation timings remain bounded rather than exhaustively validated.
+
+## Installed settings launcher and controller remapping
+
+The Windows package now builds `n3_launcher.exe` as its documented default
+entry point. The native launcher exposes game-data reselection; window,
+renderer, resolution, scaling, filtering and VSync controls; text/subtitle and
+spoken-audio selection; audio gain and mute behavior; physical-controller
+mapping; and all keyboard/mouse controller bindings. Save and launch failures
+are reported. The configuration model parses and validates curated values,
+checks keyboard/mouse names with the runtime input-source parser, updates nested
+TOML atomically, and retains unrelated settings.
+
+Packaged launcher and direct-game starts share `{app.root}/n3.toml`.
+`tools\launch.ps1` now passes an explicit profile-local `--app.config_file`, so
+source-development profiles remain isolated. The launcher saved a 1,919-byte
+configuration through its actual Save button. Direct `n3.exe` then logged
+`N3 display presentation target: 40 FPS` from a launcher-selected value before
+the harness stopped that validation process. The value was restored to 60
+afterward. The actual Play button started `n3.exe` and closed the launcher.
+The final native build passed all 53 suites, the development-launcher
+regression passed 115 checks, and all 7 release-package tests passed.
+
+All five pages were rendered and captured from the running Win32 application
+at the development system's current DPI; the visible controls fit the fixed
+window. The Play page, shared path, Graphics, Language & Audio, Controller, and
+Keyboard & Mouse surfaces were inspected. This is one Windows/DPI observation,
+not broad accessibility, localization, monitor-scaling, or hardware coverage.
+
+The physical pad adapter replaces translated wrapper `sub_8252E5F0`, calls the
+original `XamInputGetState` import, and remaps only successful 16-byte guest
+states. Defaults are identity mappings and unknown button bits are retained.
+Policy coverage includes button swaps, disabled and duplicated inputs, trigger
+and stick swaps, and saturating inversion of `-32768`. The current attached
+`0x1532/0x0208` device had no SDL gamepad mapping, so no real mapped-controller
+gameplay pass was possible. Rumble routing, input latency, multiple users, and
+a complete gameplay route remain unvalidated.
+
+The F4 advanced overlay and the installed launcher write the same packaged
+configuration. The overlay's `hid.keybind_*` values describe keyboard/mouse
+emulation, while `n3.controller.*` describes physical remapping. The launcher
+is the curated interface and F4 remains the advanced runtime editor.
 
 ## Graphics menu and presentation-rate control
 
@@ -2046,7 +2099,7 @@ performance, other-driver compatibility, save compatibility, or gameplay
 correctness. The opening route, cutscene, first mission, and save/load checks
 must be repeated on the final v0.11 package.
 
-## 30 FPS game timing, 60 Hz presentation, voice discovery, and F5 settings
+## 30 FPS game timing, 60 Hz presentation, voice discovery, and F4 settings
 
 Recorded 19 November 2026.
 
@@ -2059,7 +2112,7 @@ title frames without blocking, then presents the latest image at the selected
 host presentations, not 60 unique gameplay frames. The old setting-dependent
 clock override that caused doubled gameplay speed is no longer used.
 
-The F5 settings overlay now renders all `Allowed` settings, including numeric
+The F4 settings overlay now renders all `Allowed` settings, including numeric
 display presets, as complete drop-down choices. ReXGlue validates numeric
 allowed lists rather than accepting arbitrary intermediate values. Remaining
 free-form numeric fields commit only on Enter. N3 also rejects unsupported
@@ -2097,9 +2150,9 @@ this debug validation run was below 30 frames per second, so this result does
 not establish Vulkan performance or sustained 60 Hz presentation throughput.
 
 These checks do not establish gameplay speed across a complete mission, visual
-correctness, 60 unique game frames per second, or interactive F5 keyboard
+correctness, 60 unique game frames per second, or interactive F4 keyboard
 navigation. The settings validator and editor paths are covered, but a manual
-F5 interaction pass remains pending.
+F4 interaction pass remains pending.
 
 ## Spatial FSR1 on stable ReXGlue 0.11
 
