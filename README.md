@@ -1,5 +1,10 @@
 # N3 Recompiled
 
+> [!TIP]
+> **Blender importer:** [N3 Blender](https://github.com/Tzeentchnet/N3_Blender)
+> provides Blender 5.2 tools for researching and importing
+> **N3: Ninety-Nine Nights** assets.
+
 <img src="resources/n3-icon.png" width="128" height="128" alt="N3 Recompiled icon">
 
 A native Windows recompilation of **N3: Ninety-Nine Nights** using
