@@ -187,6 +187,9 @@ if ($Mod) {
 }
 
 $stageMods = [bool]$UseEnabledMods -or $selectedMods.Count -gt 0
+if ($ResetGameSelection) {
+    $Setup = $true
+}
 if ($UseEnabledMods -and $selectedMods.Count) {
     throw '-UseEnabledMods and -Mod are mutually exclusive'
 }
@@ -195,9 +198,6 @@ if ($ListMods -and ($stageMods -or $CopyModBase -or $StageOnly)) {
 }
 if ($Setup -and $PSBoundParameters.ContainsKey('GameDirectory')) {
     throw '-Setup and -GameDirectory are mutually exclusive'
-}
-if ($ResetGameSelection -and !$Setup) {
-    throw '-ResetGameSelection requires -Setup'
 }
 if ($Setup -and $stageMods) {
     throw 'Mod staging requires an explicit or default extracted game directory, not -Setup'

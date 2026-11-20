@@ -56,6 +56,11 @@ Assert-ArgumentValue $default '--gpu.xenos.present_effect' 'fsr1'
 Assert-ArgumentValue $default '--n3.frame_rate' '60'
 Assert-True ($default.upscaler -eq 'FSR1') 'Default launcher upscaler is not FSR1'
 
+$reset = Invoke-Plan @('-DryRun', '-ResetGameSelection')
+Assert-True ([bool]$reset.setup) 'Game-selection reset did not imply setup mode'
+Assert-True ([bool]$reset.resetGameSelection) 'Game-selection reset was not retained'
+Assert-NoArgument $reset '--title.game_root'
+
 $graphics = Invoke-Plan @(
     '-DryRun',
     '-Setup',

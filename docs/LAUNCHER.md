@@ -197,7 +197,9 @@ pwsh -NoProfile -File tools\launch.ps1 -Setup
 If the active profile has a valid remembered game folder, the application uses
 it. Otherwise, the native picker accepts either an owned ISO or `default.xex`
 inside an extracted game tree. ISO import verifies the supported executable and
-places the extraction under the active profile. The source image is unchanged.
+places the extraction under the active profile. A modal progress window keeps
+the application responsive, reports preparation and copy progress, and supports
+cancellation with partial-import cleanup. The source image is unchanged.
 
 To discard only the remembered selection and force the picker:
 

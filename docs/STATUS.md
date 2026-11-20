@@ -42,6 +42,12 @@ route. Full-game coverage remains unvalidated.
   The harness stops that child; this check does not establish visual correctness.
 - Native ISO import produces all 3,342 files with matching SHA-256 hashes against
   the original verified extraction. No game material is bundled with the release.
+- Native setup now performs ISO copying on a worker while the UI continues
+  processing messages and displays preparation, byte progress, and cancellation
+  cleanup status. An interactive import produced all 3,342 files /
+  5,770,038,003 bytes, saved the verified game path, and started the game without
+  a Windows application-hang event. This single run does not validate every
+  storage failure, cancellation timing, Windows version, or gameplay route.
 - Import cancellation cleans up its newly created output; existing destinations
   are rejected without alteration. Wrong revisions and malformed disc entries
   are rejected. Explicit and remembered game folders are revalidated.
