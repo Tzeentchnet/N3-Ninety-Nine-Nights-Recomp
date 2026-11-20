@@ -7,6 +7,7 @@ a section explicitly says otherwise.
 
 | Document | Contents |
 | --- | --- |
+| [Installation and first-run setup](../INSTALL.md) | Release-package installation, source bootstrap, game-data setup, build, launch, updates, and removal |
 | [Fork relationship](FORK.md) | Upstream baseline, fork-only changes, remotes, and release ownership |
 | [Development status](STATUS.md) | Observed milestones, validation evidence, unresolved issues, and explicit limits |
 | [Development and build](DEVELOPMENT.md) | Bootstrap, game extraction, builds, targeted checks, and release workflow |

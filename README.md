@@ -18,6 +18,7 @@ toolchains are included. You must supply your own supported game data.
 
 ## Project information
 
+- [Installation and first-run setup](INSTALL.md)
 - [Fork relationship and differences](docs/FORK.md)
 - [Current development status](docs/STATUS.md)
 - [Development and build guide](docs/DEVELOPMENT.md)
