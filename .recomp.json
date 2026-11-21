@@ -1,0 +1,31 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "N3: Ninety-Nine Nights",
+  "system": "Xbox 360",
+  "type": "recomp",
+  "original": {
+    "region": "USA/Europe",
+    "revision": "0.0.0.3",
+    "serial": "4D5307DB"
+  },
+  "project": "N3 Recompiled",
+  "status": "in-progress",
+  "targets": [
+    "Windows"
+  ],
+  "toolchain": "Rexglue",
+  "approach": "Static recompilation of PowerPC game code with ReXGlue and a native Direct3D 12 Xenos renderer.",
+  "maintainers": [
+    {
+      "name": "Tzeentchnet",
+      "link": "https://github.com/Tzeentchnet"
+    }
+  ],
+  "links": [
+    {
+      "label": "Development status",
+      "url": "https://github.com/Tzeentchnet/N3-Ninety-Nine-Nights-Recomp/blob/main/docs/STATUS.md"
+    }
+  ],
+  "notes": "The opening mission, following cutscene, and save/load work on the tested route; full-game coverage remains unvalidated."
+}
